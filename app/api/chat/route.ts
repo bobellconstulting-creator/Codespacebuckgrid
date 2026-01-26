@@ -19,6 +19,11 @@ export async function POST(req: NextRequest) {
     const imageDataUrl = body.imageDataUrl
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
+    
+    // Validate image size to prevent oversized payloads
+    if (imageDataUrl && imageDataUrl.length >= 3_000_000) {
+      return NextResponse.json({ error: 'Image too large' }, { status: 413 })
+    }
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -40,10 +45,23 @@ export async function POST(req: NextRequest) {
       }),
     })
 
+    if (!res.ok) {
+      console.error('Upstream error:', res.status, res.statusText)
+      const errorText = await res.text()
+      console.error('Upstream error body:', errorText)
+      
+      // In non-production, include raw response
+      if (process.env.NODE_ENV !== 'production') {
+        return NextResponse.json({ error: 'Upstream service error', raw: errorText }, { status: 502 })
+      }
+      return NextResponse.json({ error: 'Upstream service error' }, { status: 502 })
+    }
+
     const data = await res.json()
     const reply = data?.choices?.[0]?.message?.content || 'No reply.'
     return NextResponse.json({ reply })
   } catch (err) {
+    console.error('Server error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
