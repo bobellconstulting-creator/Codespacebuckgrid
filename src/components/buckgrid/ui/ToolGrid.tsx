@@ -11,14 +11,14 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
     <>
       <div className={styles.gridTools}>
         {tools.map(t => (
-          <button key={t.id} className={`${styles.btnTool} ${activeToolId === t.id ? styles.btnToolActive : ''}`} onClick={() => onSelectTool(t)}>
+          <button key={t.id} className={`${styles.btnTool} ${activeToolId === t.id ? styles.btnToolActive : ''}`} onClick={() => onSelectTool(t)} aria-pressed={activeToolId === t.id} aria-label={`Select ${t.name} tool`}>
             <span>{t.icon}</span> <span>{t.name}</span>
           </button>
         ))}
       </div>
-      <input type="range" min={10} max={150} value={brushSize} onChange={e => onBrushSize(Number(e.target.value))} style={{ width: '100%', accentColor: '#FF6B00' }} />
-      <button onClick={onLockBorder} style={{ width: '100%', background: '#FF6B00', color: '#000', padding: 12, borderRadius: 8, fontWeight: 900, cursor: 'pointer' }}>LOCK BORDER</button>
-      <button onClick={onWipeAll} style={{ width: '100%', color: '#555', background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>WIPE ALL</button>
+      <input type="range" min={10} max={150} value={brushSize} onChange={e => onBrushSize(Number(e.target.value))} style={{ width: '100%', accentColor: '#FF6B00' }} aria-label="Brush size" />
+      <button onClick={onLockBorder} style={{ width: '100%', background: '#FF6B00', color: '#000', padding: 12, borderRadius: 8, fontWeight: 900, cursor: 'pointer' }} aria-label="Lock border">LOCK BORDER</button>
+      <button onClick={onWipeAll} style={{ width: '100%', color: '#555', background: 'none', border: 'none', padding: 8, cursor: 'pointer' }} aria-label="Wipe all drawings">WIPE ALL</button>
     </>
   )
 }

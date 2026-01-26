@@ -14,6 +14,13 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
 
   useImperativeHandle(ref, () => ({ addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]) }), [])
 
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight
+    }
+  }, [chat])
+
   const send = async () => {
     if (!input.trim() || loading) return
     setLoading(true); setChat(p => [...p, { role: 'user', text: input }]); setInput('')
@@ -25,9 +32,21 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: input, imageDataUrl: canvas.toDataURL('image/jpeg', 0.6) })
       })
+      
+      // Handle non-JSON responses
+      const contentType = res.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        setChat(p => [...p, { role: 'tony', text: 'Invalid response from server.' }])
+        setLoading(false)
+        return
+      }
+      
       const data = await res.json()
-      setChat(p => [...p, { role: 'tony', text: data.reply }])
-    } catch { setChat(p => [...p, { role: 'tony', text: 'Capture failed.' }]) }
+      setChat(p => [...p, { role: 'tony', text: data.reply || data.error || 'No reply.' }])
+    } catch (err) { 
+      console.error('Chat error:', err)
+      setChat(p => [...p, { role: 'tony', text: 'Capture failed.' }]) 
+    }
     setLoading(false)
   }
 
@@ -39,12 +58,29 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
       </div>
       {isOpen && (
         <>
-          <div ref={containerRef} className="chatArea">
+          <div ref={containerRef} className="chatArea" role="log" aria-live="polite">
             {chat.map((m, i) => (
               <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? '#FF6B00' : '#222', padding: '8px 12px', borderRadius: '10px', fontSize: '11px', maxWidth: '85%' }}>{m.text}</div>
             ))}
           </div>
-          <div style={{ padding: 10, display: 'flex', gap: 6 }}><input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} style={{ flex: 1, background: '#000', border: '1px solid #333', color: '#fff', padding: 8, borderRadius: 6 }} /><button onClick={send} style={{background: '#FF6B00', border: 'none', borderRadius: 4, cursor: 'pointer'}}>➤</button></div>
+          <div style={{ padding: 10, display: 'flex', gap: 6 }}>
+            <input 
+              value={input} 
+              onChange={e => setInput(e.target.value)} 
+              onKeyDown={e => e.key === 'Enter' && send()} 
+              placeholder="Type message..."
+              aria-label="Chat message"
+              style={{ flex: 1, background: '#000', border: '1px solid #333', color: '#fff', padding: 8, borderRadius: 6 }} 
+            />
+            <button 
+              onClick={send} 
+              disabled={loading}
+              aria-label="Send message"
+              style={{background: '#FF6B00', border: 'none', borderRadius: 4, cursor: loading ? 'wait' : 'pointer', opacity: loading ? 0.5 : 1}}
+            >
+              ➤
+            </button>
+          </div>
         </>
       )}
     </div>
