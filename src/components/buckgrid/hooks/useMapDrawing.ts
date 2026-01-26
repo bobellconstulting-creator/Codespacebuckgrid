@@ -10,6 +10,7 @@ export type MapApi = {
   lockBoundary: () => number | null
   wipeAll: () => void
   getCaptureElement: () => HTMLElement | null
+  getGeoJSON: () => any
 }
 
 function calculateAreaAcres(pts: LatLngLike[]) {
@@ -90,7 +91,39 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         boundaryLayerRef.current?.clearLayers()
         boundaryPointsRef.current = []
       },
-      getCaptureElement: () => containerRef.current
+      getCaptureElement: () => containerRef.current,
+      getGeoJSON: () => {
+        const layers: any[] = []
+        
+        // Add boundary layer
+        if (boundaryPointsRef.current.length > 0) {
+          layers.push({
+            type: 'Feature',
+            properties: { type: 'boundary', acres: calculateAreaAcres(boundaryPointsRef.current) },
+            geometry: {
+              type: 'Polygon',
+              coordinates: [boundaryPointsRef.current.map(p => [p.lng, p.lat])]
+            }
+          })
+        }
+        
+        // Add drawn items
+        drawnItemsRef.current?.eachLayer((layer: any) => {
+          if (layer.toGeoJSON) {
+            const geoJSON = layer.toGeoJSON()
+            geoJSON.properties = { 
+              color: layer.options?.color || '#fff',
+              weight: layer.options?.weight || 1
+            }
+            layers.push(geoJSON)
+          }
+        })
+        
+        return {
+          type: 'FeatureCollection',
+          features: layers
+        }
+      }
     }, 
     handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } } 
   }

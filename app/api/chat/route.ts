@@ -11,8 +11,8 @@ type ChatRequestBody = {
 
 export async function POST(req: NextRequest) {
   try {
-    const key = process.env.OPENROUTER_KEY
-    if (!key) return NextResponse.json({ error: 'Missing OPENROUTER_KEY' }, { status: 500 })
+    const key = process.env.OPENROUTER_API_KEY
+    if (!key) return NextResponse.json({ error: 'Missing OPENROUTER_API_KEY' }, { status: 500 })
 
     const body = (await req.json()) as ChatRequestBody
     const message = body.message?.trim() || ''
