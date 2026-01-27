@@ -6,9 +6,26 @@ import { useMapDrawing, type MapApi } from '../hooks/useMapDrawing'
 
 export type MapContainerHandle = MapApi
 
-const MapContainer = forwardRef<MapContainerHandle, { activeTool: Tool, brushSize: number }>(({ activeTool, brushSize }, ref) => {
+const MapContainer = forwardRef<MapContainerHandle, { 
+  activeTool: Tool, 
+  brushSize: number, 
+  isDrawMode: boolean,
+  onModeChange: (mode: 'PAN' | 'DRAW') => void,
+  onBlockMessage: () => void,
+  suggestedMarks?: any[],
+  onFeatureCreated?: (feature: { type: string, name: string, acres: number, note?: string, geometry?: any, coordinates?: [number, number] }) => void
+}>(({ activeTool, brushSize, isDrawMode, onModeChange, onBlockMessage, suggestedMarks, onFeatureCreated }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { api, handlers } = useMapDrawing({ containerRef, activeTool, brushSize })
+  const { api, handlers } = useMapDrawing({ 
+    containerRef, 
+    activeTool, 
+    brushSize, 
+    isDrawMode,
+    onModeChange,
+    onBlockMessage,
+    suggestedMarks,
+    onFeatureCreated
+  })
   useImperativeHandle(ref, () => api, [api])
 
   return (
