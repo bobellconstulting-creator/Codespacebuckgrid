@@ -1,11 +1,17 @@
 'use client'
 
-import React, { forwardRef, useCallback, useImperativeHandle, useRef, useState, useEffect } from 'react'
+import React, { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 
 export type TonyChatHandle = { addTonyMessage: (text: string) => void }
 
-const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElement | null }>(({ getCaptureTarget }, ref) => {
+type TonyChatProps = {
+  getCaptureTarget: () => HTMLElement | null
+  getBoundaryGeoJSON: () => object | null
+  onSuggestedFeatures: (fc: any) => void
+}
+
+const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, getBoundaryGeoJSON, onSuggestedFeatures }, ref) => {
   const [chat, setChat] = useState([{ role: 'tony', text: "Ready. Lock the border and let's start the audit." }])
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(true)
@@ -20,13 +26,21 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
     try {
       const target = getCaptureTarget()
       const canvas = await html2canvas(target!, { useCORS: true, scale: 1 })
+      const boundaryGeoJSON = getBoundaryGeoJSON()
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input, imageDataUrl: canvas.toDataURL('image/jpeg', 0.6) })
+        body: JSON.stringify({
+          message: input,
+          imageDataUrl: canvas.toDataURL('image/jpeg', 0.6),
+          boundaryGeoJSON
+        })
       })
       const data = await res.json()
       setChat(p => [...p, { role: 'tony', text: data.reply }])
+      if (data.suggested_features?.features?.length) {
+        onSuggestedFeatures(data.suggested_features)
+      }
     } catch { setChat(p => [...p, { role: 'tony', text: 'Capture failed.' }]) }
     setLoading(false)
   }
@@ -43,8 +57,9 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
             {chat.map((m, i) => (
               <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? '#FF6B00' : '#222', padding: '8px 12px', borderRadius: '10px', fontSize: '11px', maxWidth: '85%' }}>{m.text}</div>
             ))}
+            {loading && <div style={{ alignSelf: 'flex-start', background: '#222', padding: '8px 12px', borderRadius: '10px', fontSize: '11px', opacity: 0.6 }}>Analyzing...</div>}
           </div>
-          <div style={{ padding: 10, display: 'flex', gap: 6 }}><input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} style={{ flex: 1, background: '#000', border: '1px solid #333', color: '#fff', padding: 8, borderRadius: 6 }} /><button onClick={send} style={{background: '#FF6B00', border: 'none', borderRadius: 4, cursor: 'pointer'}}>➤</button></div>
+          <div style={{ padding: 10, display: 'flex', gap: 6 }}><input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder={loading ? 'Analyzing...' : 'Ask Tony...'} disabled={loading} style={{ flex: 1, background: '#000', border: '1px solid #333', color: '#fff', padding: 8, borderRadius: 6 }} /><button onClick={send} disabled={loading} style={{background: loading ? '#666' : '#FF6B00', border: 'none', borderRadius: 4, cursor: loading ? 'default' : 'pointer'}}>➤</button></div>
         </>
       )}
     </div>

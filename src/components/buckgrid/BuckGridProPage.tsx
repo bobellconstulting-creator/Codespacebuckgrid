@@ -21,6 +21,14 @@ export default function BuckGridProPage() {
     setActiveTool(TOOLS[0])
   }, [])
 
+  const handleSuggestedFeatures = useCallback((fc: any) => {
+    mapRef.current?.renderSuggestedFeatures(fc)
+  }, [])
+
+  const getBoundaryGeoJSON = useCallback(() => {
+    return mapRef.current?.getBoundaryGeoJSON() ?? null
+  }, [])
+
   return (
     <div style={{ height: '100dvh', width: '100vw', background: '#000', overflow: 'hidden', position: 'fixed' }}>
       <MapContainer ref={mapRef} activeTool={activeTool} brushSize={brushSize} />
@@ -28,7 +36,7 @@ export default function BuckGridProPage() {
         <div style={{ fontSize: 11, fontWeight: 900, color: '#FF6B00', letterSpacing: 1 }}>BUCKGRID PRO</div>
         <ToolGrid tools={TOOLS} activeToolId={activeTool.id} brushSize={brushSize} onSelectTool={setActiveTool} onBrushSize={setBrushSize} onLockBorder={onLockBorder} onWipeAll={() => { mapRef.current?.wipeAll(); setPropertyAcres(0); }} />
       </div>
-      <TonyChat ref={chatRef} getCaptureTarget={() => mapRef.current?.getCaptureElement() ?? null} />
+      <TonyChat ref={chatRef} getCaptureTarget={() => mapRef.current?.getCaptureElement() ?? null} getBoundaryGeoJSON={getBoundaryGeoJSON} onSuggestedFeatures={handleSuggestedFeatures} />
       <div className="glass" style={{ position: 'absolute', left: 10, bottom: 10, padding: '10px 15px', borderRadius: 10, borderLeft: '4px solid #FF6B00' }}>
         <div style={{ fontSize: 22, fontWeight: 900, color: '#FF6B00' }}>{propertyAcres} <span style={{ fontSize: 10, color: '#888' }}>ACRES</span></div>
       </div>
