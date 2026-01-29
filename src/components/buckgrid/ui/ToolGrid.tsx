@@ -8,18 +8,20 @@ type Props = { tools: Tool[], activeToolId: string, brushSize: number, onSelectT
 
 function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, onLockBorder, onWipeAll }: Props) {
   return (
-    <>
-      <div className={styles.gridTools}>
+    <div className={styles.dockWrap}>
+      <div className={styles.dockRow}>
         {tools.map(t => (
-          <button key={t.id} className={`${styles.btnTool} ${activeToolId === t.id ? styles.btnToolActive : ''}`} onClick={() => onSelectTool(t)}>
-            <span>{t.icon}</span> <span>{t.name}</span>
+          <button key={t.id} className={`${styles.dockBtn} ${activeToolId === t.id ? styles.dockBtnActive : ''}`} onClick={() => onSelectTool(t)} title={t.name}>
+            <span className={styles.dockIcon}>{t.icon}</span>
           </button>
         ))}
+        <div className={styles.dockDivider} />
+        <input type="range" min={1} max={45} step={1} value={brushSize} onChange={e => onBrushSize(Number(e.target.value))} className={styles.dockSlider} title={`Brush: ${brushSize}`} />
+        <div className={styles.dockDivider} />
+        <button onClick={onLockBorder} className={styles.dockLock}>LOCK</button>
+        <button onClick={onWipeAll} className={styles.dockWipe}>✕</button>
       </div>
-      <input type="range" min={1} max={45} step={1} value={brushSize} onChange={e => onBrushSize(Number(e.target.value))} style={{ width: '100%', accentColor: '#FF6B00' }} />
-      <button onClick={onLockBorder} style={{ width: '100%', background: '#FF6B00', color: '#000', padding: 12, borderRadius: 8, fontWeight: 900, cursor: 'pointer' }}>LOCK BORDER</button>
-      <button onClick={onWipeAll} style={{ width: '100%', color: '#555', background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>WIPE ALL</button>
-    </>
+    </div>
   )
 }
 

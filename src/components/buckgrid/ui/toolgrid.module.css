@@ -1,26 +1,91 @@
-.gridTools {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin: 10px 0;
+.dockWrap {
+  width: 100%;
 }
 
-.btnTool {
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 800;
+.dockRow {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: #222;
-  color: #888;
+  gap: 4px;
+  padding: 6px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dockRow::-webkit-scrollbar { display: none; }
+
+.dockBtn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  color: #999;
+  transition: all 0.15s ease;
+}
+.dockBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
-.btnToolActive {
-  background: rgba(255, 107, 0, 0.15);
+.dockBtnActive {
+  background: rgba(255, 107, 0, 0.2);
   border-color: #FF6B00;
   color: #FF6B00;
+  box-shadow: 0 0 12px rgba(255, 107, 0, 0.3);
 }
+
+.dockIcon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.dockDivider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+  margin: 0 4px;
+}
+
+.dockSlider {
+  width: 80px;
+  flex-shrink: 0;
+  accent-color: #FF6B00;
+  cursor: pointer;
+}
+
+.dockLock {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  background: #FF6B00;
+  color: #000;
+  border: none;
+  border-radius: 12px;
+  font-weight: 900;
+  font-size: 10px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.dockLock:hover { opacity: 0.85; }
+
+.dockWipe {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #666;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.dockWipe:hover { background: rgba(255, 60, 60, 0.2); color: #f66; }
