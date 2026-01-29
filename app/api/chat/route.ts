@@ -4,21 +4,27 @@ import { NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-type ChatRequestBody = {
-  message: string
-  imageDataUrl?: string
-}
-
 export async function POST(req: NextRequest) {
   try {
+    const body = await req.json()
+    const messages: { role: string; content: unknown }[] = body.messages ?? []
+
+    // Also support legacy single-message format
+    if (!messages.length && body.message) {
+      const content = body.imageDataUrl
+        ? [{ type: 'text', text: body.message }, { type: 'image_url', image_url: { url: body.imageDataUrl } }]
+        : [{ type: 'text', text: body.message }]
+      messages.push({ role: 'user', content })
+    }
+
+    if (!messages.length) {
+      return NextResponse.json({ error: 'No messages provided' }, { status: 400 })
+    }
+
     const key = process.env.OPENROUTER_KEY
-    if (!key) return NextResponse.json({ error: 'Missing OPENROUTER_KEY' }, { status: 500 })
-
-    const body = (await req.json()) as ChatRequestBody
-    const message = body.message?.trim() || ''
-    const imageDataUrl = body.imageDataUrl
-
-    if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
+    if (!key) {
+      return NextResponse.json({ reply: 'Tony is offline — no API key configured.' })
+    }
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -30,13 +36,8 @@ export async function POST(req: NextRequest) {
         model: 'anthropic/claude-3.5-sonnet',
         messages: [
           { role: 'system', content: 'You are Tony, a blunt Whitetail Habitat Partner. Max 3 sentences.' },
-          {
-            role: 'user',
-            content: imageDataUrl 
-              ? [{ type: 'text', text: message }, { type: 'image_url', image_url: { url: imageDataUrl } }]
-              : [{ type: 'text', text: message }]
-          }
-        ]
+          ...messages,
+        ],
       }),
     })
 
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
     const reply = data?.choices?.[0]?.message?.content || 'No reply.'
     return NextResponse.json({ reply })
   } catch (err) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    console.error('[chat/route] error:', err)
+    return NextResponse.json({ reply: 'Tony hit a snag. Try again.' }, { status: 200 })
   }
 }
