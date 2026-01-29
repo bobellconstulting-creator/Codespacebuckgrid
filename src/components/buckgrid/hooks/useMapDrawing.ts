@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Tool } from '../constants/tools'
-import type * as LeafletNS from 'leaflet'
+import mapboxgl from 'mapbox-gl'
 
 type LatLngLike = { lat: number; lng: number }
 
@@ -24,14 +24,16 @@ function calculateAreaAcres(pts: LatLngLike[]) {
   return Number((Math.abs((area * radius * radius) / 2.0) * 0.000247105).toFixed(2))
 }
 
+let canvasIdCounter = 0
+function uniqueCanvasId() { return `draw-canvas-${canvasIdCounter++}` }
+
 export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivElement>, activeTool: Tool, brushSize: number }) {
   const { containerRef, activeTool, brushSize } = args
-  const LRef = useRef<typeof LeafletNS | null>(null)
-  const mapRef = useRef<LeafletNS.Map | null>(null)
-  const drawnItemsRef = useRef<LeafletNS.FeatureGroup | null>(null)
-  const boundaryLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
+  const mapRef = useRef<mapboxgl.Map | null>(null)
   const boundaryPointsRef = useRef<LatLngLike[]>([])
-  const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
+  const boundaryMarkersRef = useRef<mapboxgl.Marker[]>([])
+  const boundarySourceAdded = useRef(false)
+  const drawCanvasRef = useRef<HTMLCanvasElement | null>(null)
   const isDrawingRef = useRef(false)
 
   const activeToolRef = useRef(activeTool)
@@ -39,59 +41,182 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   useEffect(() => { activeToolRef.current = activeTool }, [activeTool])
   useEffect(() => { brushSizeRef.current = brushSize }, [brushSize])
 
-  useEffect(() => {
-    let mounted = true
-    const init = async () => {
-      const leaflet = await import('leaflet')
-      if (!mounted || !containerRef.current) return
-      LRef.current = leaflet
-      const map = leaflet.map(containerRef.current, { center: [38.6583, -96.4937], zoom: 16, zoomControl: false, attributionControl: false })
-      leaflet.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, crossOrigin: true }).addTo(map)
-      drawnItemsRef.current = new leaflet.FeatureGroup().addTo(map)
-      boundaryLayerRef.current = new leaflet.FeatureGroup().addTo(map)
-      mapRef.current = map
-    }
-    init()
-    return () => { mounted = false }
+  // Create a transparent canvas overlay for free-draw painting
+  const ensureDrawCanvas = useCallback(() => {
+    if (drawCanvasRef.current) return drawCanvasRef.current
+    const container = containerRef.current
+    if (!container) return null
+    const canvas = document.createElement('canvas')
+    canvas.width = container.clientWidth
+    canvas.height = container.clientHeight
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;'
+    container.appendChild(canvas)
+    drawCanvasRef.current = canvas
+    return canvas
   }, [containerRef])
+
+  useEffect(() => {
+    if (!containerRef.current) return
+
+    mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+
+    const map = new mapboxgl.Map({
+      container: containerRef.current,
+      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      center: [-96.4937, 38.6583],
+      zoom: 16,
+      pitch: 60,
+      bearing: -17,
+      antialias: true,
+      attributionControl: false,
+    })
+
+    map.on('style.load', () => {
+      map.addSource('mapbox-dem', {
+        type: 'raster-dem',
+        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+        tileSize: 512,
+        maxzoom: 14,
+      })
+      map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 })
+    })
+
+    mapRef.current = map
+
+    return () => { map.remove() }
+  }, [containerRef])
+
+  // Sync map drag enable/disable with active tool
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (activeTool.id === 'nav') {
+      map.dragPan.enable()
+      map.scrollZoom.enable()
+      map.dragRotate.enable()
+    } else {
+      map.dragPan.disable()
+      map.scrollZoom.disable()
+      map.dragRotate.disable()
+    }
+  }, [activeTool])
+
+  const updateBoundaryLine = useCallback(() => {
+    const map = mapRef.current
+    if (!map) return
+    const pts = boundaryPointsRef.current
+    if (pts.length < 2) return
+    const coords = pts.map(p => [p.lng, p.lat] as [number, number])
+    const geojson: GeoJSON.Feature = { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } }
+
+    if (!boundarySourceAdded.current) {
+      map.addSource('boundary-line', { type: 'geojson', data: geojson })
+      map.addLayer({ id: 'boundary-line-layer', type: 'line', source: 'boundary-line', paint: { 'line-color': '#FF6B00', 'line-width': 4 } })
+      boundarySourceAdded.current = true
+    } else {
+      (map.getSource('boundary-line') as mapboxgl.GeoJSONSource).setData(geojson)
+    }
+  }, [])
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
-    const L = LRef.current
-    if (!mapRef.current || !L || activeToolRef.current.id === 'nav') return
+    const map = mapRef.current
+    if (!map || activeToolRef.current.id === 'nav') return
+
     const rect = containerRef.current!.getBoundingClientRect()
-    const latlng = mapRef.current.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top])
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const lngLat = map.unproject([x, y])
+
     if (activeToolRef.current.id === 'boundary') {
-      boundaryPointsRef.current.push({ lat: latlng.lat, lng: latlng.lng })
-      L.circleMarker(latlng, { color: '#FF6B00', radius: 5, fillOpacity: 1 }).addTo(boundaryLayerRef.current!)
-      if (boundaryPointsRef.current.length > 1) L.polyline(boundaryPointsRef.current as any, { color: '#FF6B00', weight: 4 }).addTo(boundaryLayerRef.current!)
+      boundaryPointsRef.current.push({ lat: lngLat.lat, lng: lngLat.lng })
+      const marker = new mapboxgl.Marker({ color: '#FF6B00', scale: 0.6 }).setLngLat(lngLat).addTo(map)
+      boundaryMarkersRef.current.push(marker)
+      updateBoundaryLine()
       return
     }
+
+    // Free-draw mode
     isDrawingRef.current = true
-    tempPathRef.current = L.polyline([latlng], { color: activeToolRef.current.color, weight: brushSizeRef.current, opacity: 0.6 }).addTo(drawnItemsRef.current!)
-  }, [containerRef])
+    const canvas = ensureDrawCanvas()
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.strokeStyle = activeToolRef.current.color
+    ctx.lineWidth = brushSizeRef.current
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.globalAlpha = 0.6
+  }, [containerRef, ensureDrawCanvas, updateBoundaryLine])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDrawingRef.current || !tempPathRef.current) return
+    if (!isDrawingRef.current) return
+    const canvas = drawCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
     const rect = containerRef.current!.getBoundingClientRect()
-    tempPathRef.current.addLatLng(mapRef.current!.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top]))
+    ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top)
+    ctx.stroke()
   }, [containerRef])
 
-  return { 
-    api: { 
-      lockBoundary: () => {
-        const acres = calculateAreaAcres(boundaryPointsRef.current)
-        if (!acres) return null
-        boundaryLayerRef.current?.clearLayers()
-        LRef.current!.polygon(boundaryPointsRef.current as any, { color: '#FF6B00', weight: 5, fillOpacity: 0.15 }).addTo(boundaryLayerRef.current!)
-        return acres
-      },
-      wipeAll: () => {
-        drawnItemsRef.current?.clearLayers()
-        boundaryLayerRef.current?.clearLayers()
-        boundaryPointsRef.current = []
-      },
-      getCaptureElement: () => containerRef.current
-    }, 
-    handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } } 
-  }
+  const onPointerUp = useCallback(() => {
+    isDrawingRef.current = false
+  }, [])
+
+  const api: MapApi = useMemo(() => ({
+    lockBoundary: () => {
+      const map = mapRef.current
+      const pts = boundaryPointsRef.current
+      const acres = calculateAreaAcres(pts)
+      if (!acres || !map) return null
+
+      // Remove markers
+      boundaryMarkersRef.current.forEach(m => m.remove())
+      boundaryMarkersRef.current = []
+
+      // Draw polygon
+      const coords = pts.map(p => [p.lng, p.lat] as [number, number])
+      coords.push(coords[0]) // close ring
+      const geojson: GeoJSON.Feature = { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [coords] } }
+
+      if (boundarySourceAdded.current) {
+        // Replace line with polygon
+        if (map.getLayer('boundary-line-layer')) map.removeLayer('boundary-line-layer')
+        if (map.getSource('boundary-line')) map.removeSource('boundary-line')
+        boundarySourceAdded.current = false
+      }
+      map.addSource('boundary-poly', { type: 'geojson', data: geojson })
+      map.addLayer({ id: 'boundary-poly-fill', type: 'fill', source: 'boundary-poly', paint: { 'fill-color': '#FF6B00', 'fill-opacity': 0.15 } })
+      map.addLayer({ id: 'boundary-poly-line', type: 'line', source: 'boundary-poly', paint: { 'line-color': '#FF6B00', 'line-width': 5 } })
+
+      return acres
+    },
+    wipeAll: () => {
+      const map = mapRef.current
+      if (!map) return
+      boundaryMarkersRef.current.forEach(m => m.remove())
+      boundaryMarkersRef.current = []
+      boundaryPointsRef.current = []
+      if (boundarySourceAdded.current) {
+        if (map.getLayer('boundary-line-layer')) map.removeLayer('boundary-line-layer')
+        if (map.getSource('boundary-line')) map.removeSource('boundary-line')
+        boundarySourceAdded.current = false
+      }
+      if (map.getLayer('boundary-poly-fill')) map.removeLayer('boundary-poly-fill')
+      if (map.getLayer('boundary-poly-line')) map.removeLayer('boundary-poly-line')
+      if (map.getSource('boundary-poly')) map.removeSource('boundary-poly')
+
+      // Clear draw canvas
+      const canvas = drawCanvasRef.current
+      if (canvas) {
+        const ctx = canvas.getContext('2d')
+        ctx?.clearRect(0, 0, canvas.width, canvas.height)
+      }
+    },
+    getCaptureElement: () => containerRef.current,
+  }), [containerRef, updateBoundaryLine])
+
+  return { api, handlers: { onPointerDown, onPointerMove, onPointerUp } }
 }
