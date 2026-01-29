@@ -68,7 +68,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       const leaflet = await import('leaflet')
       if (!mounted || !containerRef.current) return
       LRef.current = leaflet
-      const map = leaflet.map(containerRef.current, { center: [38.6583, -96.4937], zoom: 16, zoomControl: false, attributionControl: false })
+      const map = leaflet.map(containerRef.current, { center: [38.6583, -96.4937], zoom: 16, zoomControl: false, attributionControl: false, zoomSnap: 0.1, zoomDelta: 0.5, wheelDebounceTime: 80, wheelPxPerZoomLevel: 120 })
       leaflet.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, crossOrigin: true }).addTo(map)
       drawnItemsRef.current = new leaflet.FeatureGroup().addTo(map)
       boundaryLayerRef.current = new leaflet.FeatureGroup().addTo(map)

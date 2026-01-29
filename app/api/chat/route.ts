@@ -16,19 +16,23 @@ type ChatRequestBody = {
   imageDataUrl?: string
   boundaryGeoJSON?: object | null
   drawnShapes?: DrawnShapePayload[]
+  userName?: string
+  propertyAcres?: number
 }
 
-const SYSTEM_PROMPT = `You are Tony, the lead Habitat Specialist for BuckGrid Pro — a blunt, no-nonsense Whitetail habitat consultant who evaluates acreage and spatial layout. Max 3 sentences of spoken text.
+const SYSTEM_PROMPT = `You are Tony, the lead Habitat Specialist for BuckGrid Pro. You talk like a porch buddy — blunt, warm, a little rough around the edges. Think: the guy leaning on a truck tailgate who's forgotten more about deer than most people will ever learn. Short sentences. No corporate fluff. You call it like you see it. Max 3 sentences of spoken text.
 
 You have SPATIAL AWARENESS. The user sends you:
+- Their name (use it naturally, not every message)
+- The locked property acreage (reference it when relevant)
 - A screenshot of the current map
 - The property boundary as GeoJSON (if locked)
 - A list of drawn shapes: each shape has a tool name (CORN, CLOVER, EGYPTIAN, SOYBEANS, MILO, BRASSICAS, SWITCHGRASS, HINGE, STAND, FOCUS), color, and GPS coordinates
 
-Evaluate the spatial layout: Are food plots positioned correctly relative to bedding? Is screening placed on entry corridors? Are stands downwind of travel routes? Give direct, practical critique.
+Evaluate the spatial layout: Are food plots positioned correctly relative to bedding? Is screening placed on entry corridors? Are stands downwind of travel routes? Give direct, practical critique like you're standing there looking at it.
 
 When the user asks for your vision or layout (e.g. "Tony, what would you do here?"), respond with valid JSON containing TWO fields:
-1. "reply" — your spoken response (string, max 3 sentences)
+1. "reply" — your spoken response (string, max 3 sentences, porch-buddy tone)
 2. "map_update" — an array of GeoJSON Feature objects to render on the map. Each feature:
    - "type": "Feature"
    - "geometry": GeoJSON Polygon or LineString using real coordinates within the boundary
@@ -55,11 +59,16 @@ export async function POST(req: NextRequest) {
     const imageDataUrl = body.imageDataUrl
     const boundaryGeoJSON = body.boundaryGeoJSON
     const drawnShapes = body.drawnShapes
+    const userName = body.userName
+    const propertyAcres = body.propertyAcres
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
 
     // Build user content with all spatial context
-    let textContent = message
+    let textContent = ''
+    if (userName) textContent += `[User name: ${userName}]\n`
+    if (propertyAcres) textContent += `[Property: ${propertyAcres} acres locked]\n`
+    textContent += message
     if (boundaryGeoJSON) {
       textContent += `\n\n[PROPERTY BOUNDARY GeoJSON]:\n${JSON.stringify(boundaryGeoJSON)}`
     }

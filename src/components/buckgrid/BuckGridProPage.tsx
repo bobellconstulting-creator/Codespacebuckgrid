@@ -18,7 +18,7 @@ export default function BuckGridProPage() {
     const acres = mapRef.current?.lockBoundary()
     if (!acres) return
     setPropertyAcres(acres)
-    chatRef.current?.addTonyMessage(`Locked: ${acres} acres. Send your notes.`)
+    chatRef.current?.updateAcres(acres)
     setActiveTool(TOOLS[0])
   }, [])
 
@@ -47,6 +47,7 @@ export default function BuckGridProPage() {
         getBoundaryGeoJSON={getBoundaryGeoJSON}
         getDrawnShapes={getDrawnShapes}
         onBlueprintReceived={handleBlueprintReceived}
+        propertyAcres={propertyAcres}
       />
       <div className="glass" style={{ position: 'absolute', left: 10, bottom: 10, padding: '10px 15px', borderRadius: 10, borderLeft: '4px solid #FF6B00' }}>
         <div style={{ fontSize: 22, fontWeight: 900, color: '#FF6B00' }}>{propertyAcres} <span style={{ fontSize: 10, color: '#888' }}>ACRES</span></div>
