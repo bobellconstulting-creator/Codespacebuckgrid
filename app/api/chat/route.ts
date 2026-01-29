@@ -4,9 +4,17 @@ import { NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+type SituationContext = {
+  propertyAcres: number
+  activeTool: string
+  brushSize: number
+  borderLocked: boolean
+}
+
 type ChatRequestBody = {
   message: string
   imageDataUrl?: string
+  situation?: SituationContext
 }
 
 export async function POST(req: NextRequest) {
@@ -17,8 +25,13 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as ChatRequestBody
     const message = body.message?.trim() || ''
     const imageDataUrl = body.imageDataUrl
+    const situation = body.situation
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
+
+    const situationBlock = situation
+      ? `\n\nCurrent situation: Property is ${situation.propertyAcres} acres. Border ${situation.borderLocked ? 'locked' : 'not locked'}. Active tool: ${situation.activeTool}. Brush size: ${situation.brushSize}px.`
+      : ''
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -29,7 +42,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: 'anthropic/claude-3.5-sonnet',
         messages: [
-          { role: 'system', content: 'You are Tony, a blunt Whitetail Habitat Partner. Max 3 sentences.' },
+          { role: 'system', content: `You are Tony, a blunt Whitetail Habitat Partner. Max 3 sentences.${situationBlock}` },
           {
             role: 'user',
             content: imageDataUrl 

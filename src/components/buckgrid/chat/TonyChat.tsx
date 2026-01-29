@@ -3,9 +3,16 @@
 import React, { forwardRef, useCallback, useImperativeHandle, useRef, useState, useEffect } from 'react'
 import html2canvas from 'html2canvas'
 
+export type SituationContext = {
+  propertyAcres: number
+  activeTool: string
+  brushSize: number
+  borderLocked: boolean
+}
+
 export type TonyChatHandle = { addTonyMessage: (text: string) => void }
 
-const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElement | null }>(({ getCaptureTarget }, ref) => {
+const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElement | null; situation: SituationContext }>(({ getCaptureTarget, situation }, ref) => {
   const [chat, setChat] = useState([{ role: 'tony', text: "Ready. Lock the border and let's start the audit." }])
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(true)
@@ -23,7 +30,7 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input, imageDataUrl: canvas.toDataURL('image/jpeg', 0.6) })
+        body: JSON.stringify({ message: input, imageDataUrl: canvas.toDataURL('image/jpeg', 0.6), situation })
       })
       const data = await res.json()
       setChat(p => [...p, { role: 'tony', text: data.reply }])
