@@ -1,15 +1,28 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { Tool } from '../constants/tools'
 import type * as LeafletNS from 'leaflet'
 
 type LatLngLike = { lat: number; lng: number }
 
+export type BlueprintFeature = {
+  type: 'Feature'
+  geometry: { type: string; coordinates: any }
+  properties: { label: string; zone: 'forage' | 'screening' }
+}
+
+const ZONE_COLORS: Record<string, string> = {
+  forage: '#2D5A1E',
+  screening: '#ef4444',
+}
+
 export type MapApi = {
   lockBoundary: () => number | null
   wipeAll: () => void
   getCaptureElement: () => HTMLElement | null
+  getBoundaryGeoJSON: () => object | null
+  drawBlueprint: (features: BlueprintFeature[]) => void
 }
 
 function calculateAreaAcres(pts: LatLngLike[]) {
@@ -30,6 +43,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   const mapRef = useRef<LeafletNS.Map | null>(null)
   const drawnItemsRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const boundaryLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
+  const blueprintLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const boundaryPointsRef = useRef<LatLngLike[]>([])
   const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
   const isDrawingRef = useRef(false)
@@ -49,6 +63,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       leaflet.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, crossOrigin: true }).addTo(map)
       drawnItemsRef.current = new leaflet.FeatureGroup().addTo(map)
       boundaryLayerRef.current = new leaflet.FeatureGroup().addTo(map)
+      blueprintLayerRef.current = new leaflet.FeatureGroup().addTo(map)
       mapRef.current = map
     }
     init()
@@ -76,8 +91,8 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
     tempPathRef.current.addLatLng(mapRef.current!.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top]))
   }, [containerRef])
 
-  return { 
-    api: { 
+  return {
+    api: {
       lockBoundary: () => {
         const acres = calculateAreaAcres(boundaryPointsRef.current)
         if (!acres) return null
@@ -88,10 +103,72 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       wipeAll: () => {
         drawnItemsRef.current?.clearLayers()
         boundaryLayerRef.current?.clearLayers()
+        blueprintLayerRef.current?.clearLayers()
         boundaryPointsRef.current = []
       },
-      getCaptureElement: () => containerRef.current
-    }, 
-    handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } } 
+      getCaptureElement: () => containerRef.current,
+      getBoundaryGeoJSON: () => {
+        const pts = boundaryPointsRef.current
+        if (pts.length < 3) return null
+        // GeoJSON uses [lng, lat] order, closed ring
+        const coords = pts.map(p => [p.lng, p.lat])
+        coords.push(coords[0]) // close the ring
+        return {
+          type: 'Feature',
+          geometry: { type: 'Polygon', coordinates: [coords] },
+          properties: { acres: calculateAreaAcres(pts) }
+        }
+      },
+      drawBlueprint: (features: BlueprintFeature[]) => {
+        const L = LRef.current
+        const map = mapRef.current
+        if (!L || !map || !blueprintLayerRef.current) return
+
+        // Disable drag pan while Tony draws
+        map.dragging.disable()
+        map.touchZoom.disable()
+        map.doubleClickZoom.disable()
+        map.scrollWheelZoom.disable()
+
+        // Clear previous blueprint
+        blueprintLayerRef.current.clearLayers()
+
+        for (const feature of features) {
+          const color = ZONE_COLORS[feature.properties.zone] || '#ffffff'
+          const geom = feature.geometry
+
+          if (geom.type === 'Polygon') {
+            // GeoJSON coords are [lng, lat], Leaflet needs [lat, lng]
+            const latLngs = geom.coordinates[0].map((c: number[]) => [c[1], c[0]])
+            const poly = L.polygon(latLngs, {
+              color,
+              weight: 3,
+              fillColor: color,
+              fillOpacity: 0.35,
+            })
+            poly.bindTooltip(feature.properties.label, { permanent: true, direction: 'center', className: 'blueprint-label' })
+            poly.addTo(blueprintLayerRef.current!)
+          } else if (geom.type === 'LineString') {
+            const latLngs = geom.coordinates.map((c: number[]) => [c[1], c[0]])
+            const line = L.polyline(latLngs, {
+              color,
+              weight: 6,
+              opacity: 0.8,
+            })
+            line.bindTooltip(feature.properties.label, { permanent: true, direction: 'center', className: 'blueprint-label' })
+            line.addTo(blueprintLayerRef.current!)
+          }
+        }
+
+        // Re-enable interaction after a short delay so user can see the result
+        setTimeout(() => {
+          map.dragging.enable()
+          map.touchZoom.enable()
+          map.doubleClickZoom.enable()
+          map.scrollWheelZoom.enable()
+        }, 1500)
+      }
+    },
+    handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } }
   }
 }
