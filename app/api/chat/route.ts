@@ -1,17 +1,83 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
+import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const summarizeMapContext = (ctx?: MapContextPayload) => {
+  if (!ctx) return 'No boundary or focus data provided. Ask user to lock a boundary if guidance requires property edges.'
+  const lines: string[] = []
+  if (ctx.bounds) {
+    lines.push(`Visible bounds lat ${ctx.bounds.south.toFixed(4)}→${ctx.bounds.north.toFixed(4)}, lng ${ctx.bounds.west.toFixed(4)}→${ctx.bounds.east.toFixed(4)}, zoom ${ctx.zoom ?? 'n/a'}`)
+  }
+  if (ctx.boundary) {
+    lines.push('PROPERTY BOUNDARY (HARD EDGE) GEOJSON:')
+    lines.push(JSON.stringify(ctx.boundary))
+  } else {
+    lines.push('NO PROPERTY BOUNDARY LOCKED: warn user and avoid suggesting outside unknown limits.')
+  }
+  if (ctx.focusFeatures?.length) {
+    lines.push(`FOCUS TOOL GEOJSON (${ctx.focusFeatures.length} features):`)
+    lines.push(JSON.stringify(ctx.focusFeatures.slice(0, 3)))
+  }
+  if (ctx.userDrawn?.features?.length) {
+    lines.push(`USER DRAWN LAYERS (${ctx.userDrawn.features.length} features) preview:`)
+    lines.push(JSON.stringify({ ...ctx.userDrawn, features: ctx.userDrawn.features.slice(0, 5) }))
+  }
+  return lines.join('\n')
+}
+
+const buildSystemPrompt = (mapContext?: MapContextPayload) => `You are Tony, a veteran Whitetail Habitat Consultant specializing in property layout, bedding areas, food plots, and travel corridors.
+
+You receive aerial imagery plus rich geospatial context (boundary + focus markings). Use that intelligence to give blunt, tactical advice.
+
+MAP CONTEXT INPUT:
+${summarizeMapContext(mapContext)}
+
+MANDATES:
+1. PROPERTY HARD WALL: All recommendations MUST remain inside the provided property boundary polygon. If any idea would cross onto a neighbor, adjust or warn the user explicitly.
+2. RED FOCUS PRIORITY: If the user provided red focus tool GeoJSON, concentrate your guidance on those highlighted coordinates.
+3. RIDGE RULE: Avoid placing food plots on ridge tops or steep slopes. Prefer bottom ground, benches, gentle plateaus. Infer slope from canopy shading and contour cues; call it out if uncertain.
+4. JSON CONTRACT: Respond ONLY with valid JSON using the schema below. No prose outside the JSON.
+
+RESPONSE SCHEMA (always include drawing, even if empty):
+{
+  "reply": "2-3 sentence, no fluff habitat advice.",
+  "drawing": {
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "type": "bedding" | "food_plot" | "travel_corridor" | "staging_area" | "observation",
+          "label": "North Bench Bedding",
+          "notes": "Optional detail"
+        },
+        "geometry": {
+          "type": "Point" | "LineString" | "Polygon",
+          "coordinates": [...] // GeoJSON [lng, lat]
+        }
+      }
+    ]
+  }
+}
+
+If you cannot confidently place a feature inside the boundary, return an empty features array and explain why in "reply".`
+
+type MapContextPayload = {
+  bounds?: { north: number; south: number; east: number; west: number }
+  center?: { lat: number; lng: number }
+  zoom?: number
+  boundary?: Feature<Polygon> | null
+  focusFeatures?: Feature<LineString>[]
+  userDrawn?: FeatureCollection
+}
+
 type ChatRequestBody = {
   message: string
   imageDataUrl?: string
-  mapContext?: {
-    bounds?: { north: number; south: number; east: number; west: number }
-    drawnFeatures?: any[]
-    focusArea?: any
-  }
+  mapContext?: MapContextPayload
 }
 
 export async function POST(req: NextRequest) {
@@ -26,44 +92,7 @@ export async function POST(req: NextRequest) {
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
 
-    // Build geospatial-aware system prompt
-    const systemPrompt = `You are Tony, a veteran Whitetail Habitat Consultant specializing in property layout, bedding areas, food plots, and travel corridors.
-
-${mapContext ? `CURRENT MAP CONTEXT:
-- Visible Bounds: ${mapContext.bounds ? `N:${mapContext.bounds.north.toFixed(4)} S:${mapContext.bounds.south.toFixed(4)} E:${mapContext.bounds.east.toFixed(4)} W:${mapContext.bounds.west.toFixed(4)}` : 'unknown'}
-- Drawn Features: ${mapContext.drawnFeatures?.length || 0} layers on map
-- Focus Area: ${mapContext.focusArea ? 'user has highlighted a specific zone' : 'full property view'}
-
-When you provide habitat advice, you MUST return STRUCTURED GEOSPATIAL DATA so the app can draw your recommendations on the map.` : ''}
-
-RESPONSE FORMAT - YOU MUST RETURN VALID JSON:
-{
-  "reply": "Your 2-3 sentence advice here",
-  "drawing": {
-    "type": "FeatureCollection",
-    "features": [
-      {
-        "type": "Feature",
-        "properties": {
-          "type": "bedding" | "food_plot" | "travel_corridor" | "staging_area" | "observation",
-          "label": "North Ridge Bedding",
-          "notes": "Optional detail"
-        },
-        "geometry": {
-          "type": "Point" | "LineString" | "Polygon",
-          "coordinates": [...] // [lng, lat] format for Point, [[lng,lat]...] for LineString/Polygon
-        }
-      }
-    ]
-  }
-}
-
-RULES:
-- Keep "reply" under 3 sentences, direct and blunt
-- If you recommend a location, ADD IT TO "features" array with proper GeoJSON coordinates
-- Use actual lat/lng coordinates based on the map bounds provided
-- If no geospatial recommendation, return empty features array but KEEP the JSON structure
-- NEVER return plain text - ALWAYS return the JSON object above`
+    const systemPrompt = buildSystemPrompt(mapContext)
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -87,7 +116,10 @@ RULES:
     })
 
     const data = await res.json()
-    const rawReply = data?.choices?.[0]?.message?.content || '{"reply":"No response.","drawing":{"type":"FeatureCollection","features":[]}}'
+    const choiceContent = data?.choices?.[0]?.message?.content
+    const rawReply = Array.isArray(choiceContent)
+      ? choiceContent.map((chunk: { text?: string }) => chunk?.text ?? '').join('\n')
+      : choiceContent || '{"reply":"No response.","drawing":{"type":"FeatureCollection","features":[]}}'
     
     // Parse the JSON response
     let parsedResponse
@@ -99,6 +131,9 @@ RULES:
         reply: rawReply,
         drawing: { type: 'FeatureCollection', features: [] }
       }
+    }
+    if (!parsedResponse.drawing || parsedResponse.drawing.type !== 'FeatureCollection' || !Array.isArray(parsedResponse.drawing.features)) {
+      parsedResponse.drawing = { type: 'FeatureCollection', features: [] }
     }
 
     return NextResponse.json(parsedResponse)

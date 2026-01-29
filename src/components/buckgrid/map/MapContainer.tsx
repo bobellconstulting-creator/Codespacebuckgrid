@@ -22,4 +22,6 @@ const MapContainer = forwardRef<MapContainerHandle, { activeTool: Tool, brushSiz
   )
 })
 
+MapContainer.displayName = 'MapContainer'
+
 export default React.memo(MapContainer)

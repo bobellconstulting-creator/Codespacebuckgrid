@@ -2,7 +2,9 @@
 
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react'
 import html2canvas from 'html2canvas'
+import type { Feature } from 'geojson'
 import type { Tool } from '../constants/tools'
+import type { MapContext } from '../hooks/useMapDrawing'
 
 export type TonyChatHandle = { addTonyMessage: (text: string) => void }
 
@@ -10,8 +12,8 @@ const TonyChat = forwardRef<TonyChatHandle, {
   getCaptureTarget: () => HTMLElement | null
   acres: number
   activeTool: Tool
-  getMapContext: () => any
-  onDrawFeatures?: (features: any[]) => void
+  getMapContext: () => MapContext | null
+  onDrawFeatures?: (features: Feature[]) => void
 }>(({ getCaptureTarget, acres, activeTool, getMapContext, onDrawFeatures }, ref) => {
   const [chat, setChat] = useState([{ role: 'tony', text: "Ready. Lock the border and let's start the audit." }])
   const [input, setInput] = useState('')
@@ -19,6 +21,39 @@ const TonyChat = forwardRef<TonyChatHandle, {
   const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  const describeFocusFeature = (feature: MapContext['focusFeatures'][number]) => {
+    const coords = feature.geometry?.type === 'LineString' ? feature.geometry.coordinates : []
+    if (!coords.length) return 'Focus path (no coords)'
+    const [startLng, startLat] = coords[0] as [number, number]
+    const [endLng, endLat] = coords[coords.length - 1] as [number, number]
+    return `${feature.properties?.label || 'Focus track'} (${startLat.toFixed(4)}, ${startLng.toFixed(4)}) → (${endLat.toFixed(4)}, ${endLng.toFixed(4)})`
+  }
+
+  TonyChat.displayName = 'TonyChat'
+
+  const buildContextText = (ctx: MapContext | null) => {
+    if (!ctx) return ''
+    const lines: string[] = []
+    if (ctx.bounds) {
+      lines.push(`Viewport lat ${ctx.bounds.south.toFixed(4)}→${ctx.bounds.north.toFixed(4)}, lng ${ctx.bounds.west.toFixed(4)}→${ctx.bounds.east.toFixed(4)} @ zoom ${ctx.zoom ?? 'n/a'}`)
+    }
+    if (ctx.boundary) {
+      lines.push('Property boundary locked — treat as HARD EDGE. All coordinates must live inside this polygon.')
+      lines.push(`Boundary vertices: ${ctx.boundary.geometry.coordinates?.[0]?.length || 0}`)
+    } else {
+      lines.push('Boundary not locked yet. Warn user before suggesting across property lines.')
+    }
+    if (ctx.focusFeatures?.length) {
+      lines.push(`User Focus Highlights (${ctx.focusFeatures.length}): ${ctx.focusFeatures.map(describeFocusFeature).join(' | ')}`)
+      const preview = JSON.stringify(ctx.focusFeatures.slice(0, 2))
+      lines.push(`Focus GeoJSON Preview: ${preview}`)
+    }
+    if (ctx.userDrawn?.features?.length) {
+      lines.push(`User drawn layers count: ${ctx.userDrawn.features.length}`)
+    }
+    return `MAP CONTEXT\n${lines.join('\n')}\n`
+  }
 
   useImperativeHandle(ref, () => ({ addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]) }), [])
 
@@ -29,8 +64,8 @@ const TonyChat = forwardRef<TonyChatHandle, {
 
   const send = async () => {
     if (!input.trim() || loading) return
-    const spatialContext = `[Property: ${acres ? acres + ' acres' : 'not set'} | Tool: ${activeTool.label}]\\n`
-    const fullMessage = spatialContext + input
+    const spatialContext = `[Property: ${acres ? acres + ' acres' : 'not set'} | Tool: ${activeTool.label}]\n`
+    const baseMessage = spatialContext + input
     setLoading(true)
     setChat(p => [...p, { role: 'user', text: input }])
     setInput('')
@@ -48,6 +83,8 @@ const TonyChat = forwardRef<TonyChatHandle, {
     
     // Get map context (bounds, drawn features)
     const mapContext = getMapContext()
+    const contextText = buildContextText(mapContext)
+    const fullMessage = `${contextText}${baseMessage}`
     
     try {
       const res = await fetch('/api/chat', {

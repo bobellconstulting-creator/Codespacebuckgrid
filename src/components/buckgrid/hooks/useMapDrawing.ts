@@ -1,17 +1,33 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { Tool } from '../constants/tools'
 import type * as LeafletNS from 'leaflet'
+import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
 
 type LatLngLike = { lat: number; lng: number }
+
+type DrawnPath = {
+  toolId: string
+  color: string
+  points: LatLngLike[]
+}
+
+export type MapContext = {
+  bounds?: { north: number; south: number; east: number; west: number }
+  center?: { lat: number; lng: number }
+  zoom?: number
+  boundary?: Feature<Polygon> | null
+  focusFeatures: Feature<LineString>[]
+  userDrawn: FeatureCollection
+}
 
 export type MapApi = {
   lockBoundary: () => number | null
   wipeAll: () => void
   getCaptureElement: () => HTMLElement | null
-  getMapContext: () => any
-  drawAISuggestions: (features: any[]) => void
+  getMapContext: () => MapContext | null
+  drawAISuggestions: (features: Feature[]) => void
 }
 
 function calculateAreaAcres(pts: LatLngLike[]) {
@@ -36,6 +52,8 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   const boundaryPointsRef = useRef<LatLngLike[]>([])
   const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
   const isDrawingRef = useRef(false)
+  const drawnPathsRef = useRef<DrawnPath[]>([])
+  const currentPathRef = useRef<DrawnPath | null>(null)
 
   const activeToolRef = useRef(activeTool)
   const brushSizeRef = useRef(brushSize)
@@ -92,8 +110,10 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       return
     }
     isDrawingRef.current = true
+    const tool = activeToolRef.current
+    currentPathRef.current = { toolId: tool.id, color: tool.color, points: [{ lat: latlng.lat, lng: latlng.lng }] }
     tempPathRef.current = L.polyline([latlng], { 
-      color: activeToolRef.current.color, 
+      color: tool.color, 
       weight: brushSizeRef.current * 0.5, 
       opacity: 0.6,
       lineCap: 'round',
@@ -104,8 +124,40 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     if (!isDrawingRef.current || !tempPathRef.current) return
     const rect = containerRef.current!.getBoundingClientRect()
-    tempPathRef.current.addLatLng(mapRef.current!.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top]))
+    const latlng = mapRef.current!.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top])
+    tempPathRef.current.addLatLng(latlng)
+    if (currentPathRef.current) currentPathRef.current.points.push({ lat: latlng.lat, lng: latlng.lng })
   }, [containerRef])
+
+  const onPointerUp = useCallback(() => {
+    isDrawingRef.current = false
+    tempPathRef.current = null
+    if (currentPathRef.current && currentPathRef.current.points.length > 1) {
+      drawnPathsRef.current.push(currentPathRef.current)
+    }
+    currentPathRef.current = null
+  }, [])
+
+  const toGeoJSONLine = (path: DrawnPath): Feature<LineString> => ({
+    type: 'Feature',
+    properties: { toolId: path.toolId, color: path.color },
+    geometry: {
+      type: 'LineString',
+      coordinates: path.points.map(pt => [pt.lng, pt.lat])
+    }
+  })
+
+  const buildBoundaryFeature = (): Feature<Polygon> | null => {
+    if (boundaryPointsRef.current.length < 3) return null
+    return {
+      type: 'Feature',
+      properties: { type: 'property_boundary' },
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[...boundaryPointsRef.current, boundaryPointsRef.current[0]].map(pt => [pt.lng, pt.lat])]
+      }
+    }
+  }
 
   return { 
     api: { 
@@ -121,12 +173,18 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         boundaryLayerRef.current?.clearLayers()
         aiSuggestionsLayerRef.current?.clearLayers()
         boundaryPointsRef.current = []
+        drawnPathsRef.current = []
+        currentPathRef.current = null
       },
       getCaptureElement: () => containerRef.current,
       getMapContext: () => {
         const map = mapRef.current
         if (!map) return null
         const bounds = map.getBounds()
+        const boundary = buildBoundaryFeature()
+        const features = drawnPathsRef.current.map(toGeoJSONLine)
+        const focusFeatures = features.filter(f => f.properties?.toolId === 'focus') as Feature<LineString>[]
+        const center = map.getCenter()
         return {
           bounds: {
             north: bounds.getNorth(),
@@ -134,50 +192,58 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
             east: bounds.getEast(),
             west: bounds.getWest()
           },
-          center: map.getCenter(),
+          center: { lat: center.lat, lng: center.lng },
           zoom: map.getZoom(),
-          drawnFeatures: drawnItemsRef.current?.getLayers().length || 0
+          boundary,
+          focusFeatures,
+          userDrawn: {
+            type: 'FeatureCollection',
+            features
+          }
         }
       },
-      drawAISuggestions: (features: any[]) => {
+      drawAISuggestions: (features: Feature[]) => {
         const L = LRef.current
         if (!L || !aiSuggestionsLayerRef.current) return
         
         aiSuggestionsLayerRef.current.clearLayers()
         
         features.forEach(feature => {
-          const { geometry, properties } = feature
-          const color = properties.type === 'bedding' ? '#00FF00' 
-            : properties.type === 'food_plot' ? '#FFD700'
-            : properties.type === 'travel_corridor' ? '#00BFFF'
-            : '#FF00FF'
+          const { geometry, properties = {} } = feature
+          if (!geometry) return
+          const color = properties.type === 'bedding' ? '#00FF6A' 
+            : properties.type === 'food_plot' ? '#F4C95D'
+            : properties.type === 'travel_corridor' ? '#38BDF8'
+            : '#C084FC'
           
           if (geometry.type === 'Point') {
-            L.circleMarker(geometry.coordinates.reverse(), {
+            const [lng, lat] = geometry.coordinates as [number, number]
+            L.circleMarker([lat, lng], {
               color,
               radius: 8,
               fillOpacity: 0.6,
               weight: 3
-            }).bindPopup(`<b>${properties.label || properties.type}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+            }).bindPopup(`<b>${properties.label || properties.type || 'Suggestion'}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
               .addTo(aiSuggestionsLayerRef.current!)
           } else if (geometry.type === 'Polygon') {
-            L.polygon(geometry.coordinates[0].map((c: number[]) => [c[1], c[0]]), {
+            const ring = geometry.coordinates?.[0] || []
+            L.polygon(ring.map((c: number[]) => [c[1], c[0]]), {
               color,
               weight: 3,
               fillOpacity: 0.2
-            }).bindPopup(`<b>${properties.label || properties.type}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+            }).bindPopup(`<b>${properties.label || properties.type || 'Suggestion'}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
               .addTo(aiSuggestionsLayerRef.current!)
           } else if (geometry.type === 'LineString') {
             L.polyline(geometry.coordinates.map((c: number[]) => [c[1], c[0]]), {
               color,
               weight: 4,
               opacity: 0.7
-            }).bindPopup(`<b>${properties.label || properties.type}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+            }).bindPopup(`<b>${properties.label || properties.type || 'Suggestion'}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
               .addTo(aiSuggestionsLayerRef.current!)
           }
         })
       }
     }, 
-    handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } } 
+    handlers: { onPointerDown, onPointerMove, onPointerUp } 
   }
 }
