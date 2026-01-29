@@ -23,11 +23,22 @@ You MUST respond with valid JSON in this exact format:
       {
         "type": "Feature",
         "geometry": { "type": "Point", "coordinates": [lng, lat] },
-        "properties": { "type": "stand_location|suggested_trail|food_plot|bedding_area|water_source", "reason": "Brief reason", "style": "optional: dashed" }
+        "properties": { "type": "stand_location", "title": "NW Stand", "reason": "Wind funnels deer through this saddle.", "style": "optional: dashed" }
       }
     ]
   }
 }
+
+CRITICAL RULES FOR GEOMETRY:
+- Do NOT draw perfect squares or rectangles. Habitat is organic. Use irregular polygon shapes with 6-10 vertices that follow natural terrain contours — kidney shapes, teardrops, crescents, amoeba forms.
+- Vary vertex spacing. No two sides should be the same length.
+- For food plots, use elongated irregular shapes (not boxes).
+- For bedding areas, use rounded organic blobs.
+- LineString features (trails) should curve naturally, not go in straight lines. Use 5+ waypoints with gentle arcs.
+
+CRITICAL RULES FOR PROPERTIES:
+- Every feature MUST include "title" (short label, e.g. "Doe Bedding", "NW Stand", "Access Trail") and "reason" (1 sentence explaining why this placement).
+- Every feature MUST include "type" from the allowed list below.
 
 Feature types you can suggest:
 - "stand_location" (Point) - Tree stand placements
