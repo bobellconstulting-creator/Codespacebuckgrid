@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useRef, useCallback } from 'react'
+import React, { useEffect, useRef, useCallback, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import * as turf from '@turf/turf'
 import { useMapStore, computeFieldRec } from '@/stores/mapStore'
@@ -14,6 +14,9 @@ export default function MapEngine() {
   const mapInstanceRef = useRef<any>(null)
   const drawPointsRef = useRef<[number, number][]>([])
   const isDrawingRef = useRef(false)
+
+  const [mapStatus, setMapStatus] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [errorMsg, setErrorMsg] = useState('')
 
   const {
     setMap,
@@ -34,182 +37,204 @@ export default function MapEngine() {
   useEffect(() => {
     if (!containerRef.current || mapInstanceRef.current) return
 
-    mapboxgl.accessToken = MAPBOX_TOKEN
+    if (!MAPBOX_TOKEN || MAPBOX_TOKEN.includes('placeholder')) {
+      console.error('[BuckGrid] Missing NEXT_PUBLIC_MAPBOX_TOKEN in .env.local')
+      setErrorMsg('Set NEXT_PUBLIC_MAPBOX_TOKEN in .env.local')
+      setMapStatus('error')
+      return
+    }
 
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      style: 'mapbox://styles/mapbox/satellite-streets-v12',
-      center: [-96.4937, 38.6583],
-      zoom: 15,
-      pitch: 45,
-      bearing: 0,
-      antialias: true,
-      attributionControl: false,
-    })
+    try {
+      mapboxgl.accessToken = MAPBOX_TOKEN
 
-    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right')
-
-    map.on('style.load', () => {
-      // 3D Terrain — 1.5x exaggeration (ridges, draws, bedding benches)
-      map.addSource('mapbox-dem', {
-        type: 'raster-dem',
-        url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
-        tileSize: 512,
-        maxzoom: 14,
-      })
-      map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 })
-
-      // Sky atmosphere
-      map.addLayer({
-        id: 'sky',
-        type: 'sky',
-        paint: {
-          'sky-type': 'atmosphere',
-          'sky-atmosphere-sun': [0.0, 0.0],
-          'sky-atmosphere-sun-intensity': 15,
-        },
+      const map = new mapboxgl.Map({
+        container: containerRef.current,
+        style: 'mapbox://styles/mapbox/satellite-streets-v12',
+        center: [-96.4937, 38.6583],
+        zoom: 15,
+        pitch: 45,
+        bearing: 0,
+        antialias: true,
+        attributionControl: false,
       })
 
-      // === BOUNDARY ===
-      map.addSource('boundary', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      })
-      map.addLayer({
-        id: 'boundary-fill',
-        type: 'fill',
-        source: 'boundary',
-        paint: { 'fill-color': '#FF6B00', 'fill-opacity': 0.1 },
-      })
-      map.addLayer({
-        id: 'boundary-line',
-        type: 'line',
-        source: 'boundary',
-        paint: { 'line-color': '#FF6B00', 'line-width': 3, 'line-opacity': 0.9 },
+      map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right')
+
+      map.on('error', (e: any) => {
+        console.error('[BuckGrid] Mapbox error:', e.error?.message || e)
       })
 
-      // === SHAPES ===
-      map.addSource('shapes', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      })
-      map.addLayer({
-        id: 'shapes-fill',
-        type: 'fill',
-        source: 'shapes',
-        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.35 },
-        filter: ['==', ['get', 'shapeType'], 'polygon'],
-      })
-      map.addLayer({
-        id: 'shapes-line',
-        type: 'line',
-        source: 'shapes',
-        paint: { 'line-color': ['get', 'color'], 'line-width': 3 },
-        filter: ['any',
-          ['==', ['get', 'shapeType'], 'polygon'],
-          ['==', ['get', 'shapeType'], 'polyline'],
-        ],
-      })
-      map.addLayer({
-        id: 'shapes-points',
-        type: 'circle',
-        source: 'shapes',
-        paint: {
-          'circle-radius': 8,
-          'circle-color': ['get', 'color'],
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 2,
-        },
-        filter: ['==', ['get', 'shapeType'], 'marker'],
+      map.on('load', () => {
+        console.log('[BuckGrid] Map loaded successfully')
+        setMapStatus('ready')
       })
 
-      // === ACREAGE LABELS (centroid of each polygon) ===
-      map.addSource('shape-labels', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      })
-      map.addLayer({
-        id: 'shape-labels-text',
-        type: 'symbol',
-        source: 'shape-labels',
-        layout: {
-          'text-field': ['get', 'label'],
-          'text-size': 12,
-          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-          'text-anchor': 'center',
-          'text-allow-overlap': true,
-        },
-        paint: {
-          'text-color': '#FFFFFF',
-          'text-halo-color': '#000000',
-          'text-halo-width': 1.5,
-        },
-      })
+      map.on('style.load', () => {
+        // 3D Terrain — 1.5x exaggeration (ridges, draws, bedding benches)
+        map.addSource('mapbox-dem', {
+          type: 'raster-dem',
+          url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+          tileSize: 512,
+          maxzoom: 14,
+        })
+        map.setTerrain({ source: 'mapbox-dem', exaggeration: 1.5 })
 
-      // === CONSULTANT CORRECTIONS (red #ef4444, heavy dashed) ===
-      map.addSource('corrections', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      })
-      map.addLayer({
-        id: 'corrections-line',
-        type: 'line',
-        source: 'corrections',
-        paint: {
-          'line-color': '#ef4444',
-          'line-width': 4,
-          'line-dasharray': [4, 3],
-          'line-opacity': 0.95,
-        },
-      })
-      map.addLayer({
-        id: 'corrections-label',
-        type: 'symbol',
-        source: 'corrections',
-        layout: {
-          'text-field': ['get', 'label'],
-          'text-size': 11,
-          'text-offset': [0, -1.2],
-          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-          'text-allow-overlap': true,
-        },
-        paint: {
-          'text-color': '#ef4444',
-          'text-halo-color': '#000000',
-          'text-halo-width': 1.5,
-        },
-      })
+        // Sky atmosphere
+        map.addLayer({
+          id: 'sky',
+          type: 'sky',
+          paint: {
+            'sky-type': 'atmosphere',
+            'sky-atmosphere-sun': [0.0, 0.0],
+            'sky-atmosphere-sun-intensity': 15,
+          },
+        })
 
-      // === CLICK: field recommendation on food plot polygons ===
-      map.on('click', 'shapes-fill', (e: any) => {
-        const props = e.features?.[0]?.properties
-        if (!props) return
-        const { id, toolId, acreage } = props
-        if (acreage && toolId) {
-          const rec = computeFieldRec(toolId, acreage)
-          if (rec) {
-            setSelectedShape(id)
-            setFieldRecommendation({ ...rec, shapeId: id })
+        // === BOUNDARY ===
+        map.addSource('boundary', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        })
+        map.addLayer({
+          id: 'boundary-fill',
+          type: 'fill',
+          source: 'boundary',
+          paint: { 'fill-color': '#FF6B00', 'fill-opacity': 0.1 },
+        })
+        map.addLayer({
+          id: 'boundary-line',
+          type: 'line',
+          source: 'boundary',
+          paint: { 'line-color': '#FF6B00', 'line-width': 3, 'line-opacity': 0.9 },
+        })
+
+        // === SHAPES ===
+        map.addSource('shapes', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        })
+        map.addLayer({
+          id: 'shapes-fill',
+          type: 'fill',
+          source: 'shapes',
+          paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.35 },
+          filter: ['==', ['get', 'shapeType'], 'polygon'],
+        })
+        map.addLayer({
+          id: 'shapes-line',
+          type: 'line',
+          source: 'shapes',
+          paint: { 'line-color': ['get', 'color'], 'line-width': 3 },
+          filter: ['any',
+            ['==', ['get', 'shapeType'], 'polygon'],
+            ['==', ['get', 'shapeType'], 'polyline'],
+          ],
+        })
+        map.addLayer({
+          id: 'shapes-points',
+          type: 'circle',
+          source: 'shapes',
+          paint: {
+            'circle-radius': 8,
+            'circle-color': ['get', 'color'],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 2,
+          },
+          filter: ['==', ['get', 'shapeType'], 'marker'],
+        })
+
+        // === ACREAGE LABELS (centroid of each polygon) ===
+        map.addSource('shape-labels', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        })
+        map.addLayer({
+          id: 'shape-labels-text',
+          type: 'symbol',
+          source: 'shape-labels',
+          layout: {
+            'text-field': ['get', 'label'],
+            'text-size': 12,
+            'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+            'text-anchor': 'center',
+            'text-allow-overlap': true,
+          },
+          paint: {
+            'text-color': '#FFFFFF',
+            'text-halo-color': '#000000',
+            'text-halo-width': 1.5,
+          },
+        })
+
+        // === CONSULTANT CORRECTIONS (red #ef4444, heavy dashed) ===
+        map.addSource('corrections', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        })
+        map.addLayer({
+          id: 'corrections-line',
+          type: 'line',
+          source: 'corrections',
+          paint: {
+            'line-color': '#ef4444',
+            'line-width': 4,
+            'line-dasharray': [4, 3],
+            'line-opacity': 0.95,
+          },
+        })
+        map.addLayer({
+          id: 'corrections-label',
+          type: 'symbol',
+          source: 'corrections',
+          layout: {
+            'text-field': ['get', 'label'],
+            'text-size': 11,
+            'text-offset': [0, -1.2],
+            'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+            'text-allow-overlap': true,
+          },
+          paint: {
+            'text-color': '#ef4444',
+            'text-halo-color': '#000000',
+            'text-halo-width': 1.5,
+          },
+        })
+
+        // === CLICK: field recommendation on food plot polygons ===
+        map.on('click', 'shapes-fill', (e: any) => {
+          const props = e.features?.[0]?.properties
+          if (!props) return
+          const { id, toolId, acreage } = props
+          if (acreage && toolId) {
+            const rec = computeFieldRec(toolId, acreage)
+            if (rec) {
+              setSelectedShape(id)
+              setFieldRecommendation({ ...rec, shapeId: id })
+            }
           }
-        }
+        })
+
+        map.on('mouseenter', 'shapes-fill', () => {
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'shapes-fill', () => {
+          const tool = TOOLS.find((t) => t.id === useMapStore.getState().activeTool)
+          map.getCanvas().style.cursor = tool && tool.drawType !== 'none' ? 'crosshair' : ''
+        })
       })
 
-      map.on('mouseenter', 'shapes-fill', () => {
-        map.getCanvas().style.cursor = 'pointer'
-      })
-      map.on('mouseleave', 'shapes-fill', () => {
-        const tool = TOOLS.find((t) => t.id === useMapStore.getState().activeTool)
-        map.getCanvas().style.cursor = tool && tool.drawType !== 'none' ? 'crosshair' : ''
-      })
-    })
+      mapInstanceRef.current = map
+      setMap(map)
 
-    mapInstanceRef.current = map
-    setMap(map)
-
-    return () => {
-      map.remove()
-      mapInstanceRef.current = null
-      setMap(null)
+      return () => {
+        map.remove()
+        mapInstanceRef.current = null
+        setMap(null)
+      }
+    } catch (err) {
+      console.error('[BuckGrid] Failed to initialize map:', err)
+      setErrorMsg('Map initialization failed. Check console.')
+      setMapStatus('error')
     }
   }, [setMap, setSelectedShape, setFieldRecommendation])
 
@@ -405,13 +430,71 @@ export default function MapEngine() {
   }, [activeTool, getActiveTool])
 
   return (
-    <div
-      ref={containerRef}
-      id="map-engine"
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
-    />
+    <>
+      {/* Map container — always rendered for Mapbox to attach */}
+      <div
+        ref={containerRef}
+        id="map-engine"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
+      />
+
+      {/* Loading overlay */}
+      {mapStatus === 'loading' && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 50,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: '#0A0F0A', gap: 12,
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#FF6B00', letterSpacing: 3 }}>
+            BUCKGRID PRO
+          </div>
+          <div style={{ fontSize: 11, color: '#6B8060', letterSpacing: 1 }}>
+            Loading 3D terrain engine...
+          </div>
+          <div style={{
+            width: 40, height: 40, border: '3px solid #1C2820',
+            borderTopColor: '#FF6B00', borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {/* Error overlay */}
+      {mapStatus === 'error' && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 50,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          background: '#0A0F0A', gap: 14,
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: '#FF6B00', letterSpacing: 3 }}>
+            BUCKGRID PRO
+          </div>
+          <div style={{
+            padding: '14px 20px', background: 'rgba(239,68,68,0.1)',
+            border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10,
+            maxWidth: 340, textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#ef4444', marginBottom: 6 }}>
+              MAP ENGINE ERROR
+            </div>
+            <div style={{ fontSize: 11, color: '#6B8060', lineHeight: 1.6 }}>
+              {errorMsg || 'Failed to initialize Mapbox.'}
+            </div>
+            <div style={{
+              fontSize: 10, color: '#3D4F35', marginTop: 10,
+              fontFamily: 'monospace', background: '#0D120D',
+              padding: '8px 10px', borderRadius: 6, textAlign: 'left',
+            }}>
+              # .env.local<br />
+              NEXT_PUBLIC_MAPBOX_TOKEN=pk.your_token
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
