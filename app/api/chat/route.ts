@@ -5,20 +5,31 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 type ChatRequestBody = {
-  message: string
+  messages?: Array<{ role: string; content: string | unknown[] }>
+  message?: string
   imageDataUrl?: string
 }
 
 export async function POST(req: NextRequest) {
   try {
     const key = process.env.OPENROUTER_KEY
-    if (!key) return NextResponse.json({ error: 'Missing OPENROUTER_KEY' }, { status: 500 })
+    if (!key) {
+      return NextResponse.json({ reply: 'Tony is offline — no API key configured.' })
+    }
 
     const body = (await req.json()) as ChatRequestBody
-    const message = body.message?.trim() || ''
-    const imageDataUrl = body.imageDataUrl
 
-    if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
+    // Support both 'messages' array and legacy 'message' string
+    let userMessages: Array<{ role: string; content: string | unknown[] }> = []
+    if (body.messages && Array.isArray(body.messages)) {
+      userMessages = body.messages
+    } else {
+      const text = body.message?.trim() || ''
+      if (!text) return NextResponse.json({ error: 'Message required' }, { status: 400 })
+      const content: unknown[] = [{ type: 'text', text }]
+      if (body.imageDataUrl) content.push({ type: 'image_url', image_url: { url: body.imageDataUrl } })
+      userMessages = [{ role: 'user', content }]
+    }
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -30,12 +41,7 @@ export async function POST(req: NextRequest) {
         model: 'anthropic/claude-3.5-sonnet',
         messages: [
           { role: 'system', content: 'You are Tony, a blunt Whitetail Habitat Partner. Max 3 sentences.' },
-          {
-            role: 'user',
-            content: imageDataUrl 
-              ? [{ type: 'text', text: message }, { type: 'image_url', image_url: { url: imageDataUrl } }]
-              : [{ type: 'text', text: message }]
-          }
+          ...userMessages
         ]
       }),
     })
@@ -44,6 +50,6 @@ export async function POST(req: NextRequest) {
     const reply = data?.choices?.[0]?.message?.content || 'No reply.'
     return NextResponse.json({ reply })
   } catch (err) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ reply: 'Tony hit a snag. Try again.' })
   }
 }

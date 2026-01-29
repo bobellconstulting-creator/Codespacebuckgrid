@@ -39,6 +39,25 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   useEffect(() => { activeToolRef.current = activeTool }, [activeTool])
   useEffect(() => { brushSizeRef.current = brushSize }, [brushSize])
 
+  // ANCHOR LOCK: disable drag when drawing tool is active
+  const DRAWING_TOOLS = useMemo(() => new Set(['boundary', 'brush', 'food', 'bedding', 'water', 'screen', 'access']), [])
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const canvas = containerRef.current
+    if (!canvas) return
+
+    const isDrawing = DRAWING_TOOLS.has(activeTool.id)
+
+    if (isDrawing) {
+      map.dragging.disable()
+      canvas.style.pointerEvents = 'auto'
+    } else {
+      map.dragging.enable()
+      canvas.style.pointerEvents = 'none'
+    }
+  }, [activeTool, DRAWING_TOOLS, containerRef])
+
   useEffect(() => {
     let mounted = true
     const init = async () => {
