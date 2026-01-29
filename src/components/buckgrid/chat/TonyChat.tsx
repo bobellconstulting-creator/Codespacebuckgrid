@@ -1,6 +1,6 @@
 'use client'
 
-import React, { forwardRef, useCallback, useImperativeHandle, useRef, useState, useEffect } from 'react'
+import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react'
 import html2canvas from 'html2canvas'
 
 export type TonyChatHandle = { addTonyMessage: (text: string) => void }
@@ -16,7 +16,9 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
 
   const send = async () => {
     if (!input.trim() || loading) return
-    setLoading(true); setChat(p => [...p, { role: 'user', text: input }]); setInput('')
+    setLoading(true)
+    setChat(p => [...p, { role: 'user', text: input }])
+    setInput('')
     try {
       const target = getCaptureTarget()
       const canvas = await html2canvas(target!, { useCORS: true, scale: 1 })
@@ -27,24 +29,138 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
       })
       const data = await res.json()
       setChat(p => [...p, { role: 'tony', text: data.reply }])
-    } catch { setChat(p => [...p, { role: 'tony', text: 'Capture failed.' }]) }
+    } catch {
+      setChat(p => [...p, { role: 'tony', text: 'Capture failed.' }])
+    }
     setLoading(false)
   }
 
   return (
-    <div className="glass" style={{ position: 'absolute', right: 10, top: 10, width: isOpen ? 300 : 50, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
-      <div onClick={() => setIsOpen(!isOpen)} style={{ padding: 12, background: '#1a1a1a', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 10 }}>
-        <span>{isOpen ? 'TONY PARTNER' : '🦌'}</span>
-        <span>{isOpen ? '—' : '+'}</span>
+    <div
+      className="glass textureOverlay"
+      style={{
+        position: 'absolute',
+        right: 14,
+        top: 70,
+        width: isOpen ? 320 : 52,
+        borderRadius: 8,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        maxHeight: '75vh',
+        borderTop: '2px solid rgba(200, 165, 92, 0.3)',
+        transition: 'width 0.25s ease',
+      }}
+    >
+      {/* Header */}
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          padding: '12px 14px',
+          background: 'rgba(15, 26, 15, 0.6)',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid rgba(200, 165, 92, 0.1)',
+        }}
+      >
+        <span style={{
+          fontFamily: 'var(--font-heading)',
+          fontSize: 13,
+          letterSpacing: 3,
+          color: 'var(--gold)',
+        }}>
+          {isOpen ? 'TONY PARTNER' : 'T'}
+        </span>
+        <span style={{
+          color: 'var(--gold-dark)',
+          fontSize: 14,
+          fontWeight: 300,
+        }}>
+          {isOpen ? '\u2014' : '+'}
+        </span>
       </div>
+
       {isOpen && (
         <>
+          {/* Messages */}
           <div ref={containerRef} className="chatArea">
             {chat.map((m, i) => (
-              <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? '#FF6B00' : '#222', padding: '8px 12px', borderRadius: '10px', fontSize: '11px', maxWidth: '85%' }}>{m.text}</div>
+              <div
+                key={i}
+                style={{
+                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                  background: m.role === 'user'
+                    ? 'linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%)'
+                    : 'rgba(200, 165, 92, 0.08)',
+                  color: m.role === 'user' ? '#0A0A08' : 'var(--bone)',
+                  padding: '9px 13px',
+                  borderRadius: m.role === 'user' ? '10px 10px 2px 10px' : '10px 10px 10px 2px',
+                  fontSize: 11,
+                  fontWeight: m.role === 'user' ? 600 : 400,
+                  maxWidth: '88%',
+                  lineHeight: 1.5,
+                  border: m.role === 'user' ? 'none' : '1px solid rgba(200, 165, 92, 0.08)',
+                }}
+              >
+                {m.text}
+              </div>
             ))}
+            {loading && (
+              <div style={{
+                fontSize: 11,
+                color: 'var(--gold-dark)',
+                fontStyle: 'italic',
+                padding: '4px 0',
+              }}>
+                Tony is analyzing...
+              </div>
+            )}
           </div>
-          <div style={{ padding: 10, display: 'flex', gap: 6 }}><input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} style={{ flex: 1, background: '#000', border: '1px solid #333', color: '#fff', padding: 8, borderRadius: 6 }} /><button onClick={send} style={{background: '#FF6B00', border: 'none', borderRadius: 4, cursor: 'pointer'}}>➤</button></div>
+
+          {/* Input */}
+          <div style={{
+            padding: '10px 12px',
+            display: 'flex',
+            gap: 8,
+            borderTop: '1px solid rgba(200, 165, 92, 0.08)',
+          }}>
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && send()}
+              placeholder="Message Tony..."
+              style={{
+                flex: 1,
+                background: 'rgba(10, 10, 8, 0.8)',
+                border: '1px solid rgba(200, 165, 92, 0.15)',
+                color: 'var(--bone)',
+                padding: '9px 12px',
+                borderRadius: 4,
+                fontSize: 11,
+                fontFamily: 'var(--font-body)',
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={send}
+              disabled={loading}
+              style={{
+                background: 'linear-gradient(180deg, var(--gold) 0%, var(--gold-dark) 100%)',
+                border: 'none',
+                borderRadius: 4,
+                cursor: loading ? 'wait' : 'pointer',
+                padding: '0 12px',
+                color: '#0A0A08',
+                fontWeight: 900,
+                fontSize: 13,
+                opacity: loading ? 0.5 : 1,
+              }}
+            >
+              &rsaquo;
+            </button>
+          </div>
         </>
       )}
     </div>
