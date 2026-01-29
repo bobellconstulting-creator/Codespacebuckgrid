@@ -11,13 +11,21 @@ const MapContainer = forwardRef<MapContainerHandle, { activeTool: Tool, brushSiz
   const { api, handlers } = useMapDrawing({ containerRef, activeTool, brushSize })
   useImperativeHandle(ref, () => api, [api])
 
+  const isDrawTool = activeTool.id !== 'nav' && activeTool.id !== 'eraser'
+
   return (
     <div
       ref={containerRef}
       onPointerDown={handlers.onPointerDown}
       onPointerMove={handlers.onPointerMove}
       onPointerUp={handlers.onPointerUp}
-      style={{ height: '100%', width: '100%', zIndex: 1, touchAction: 'none', background: '#000' }}
+      style={{
+        height: '100%',
+        width: '100%',
+        zIndex: 1,
+        touchAction: isDrawTool ? 'none' : 'auto',
+        background: '#000',
+      }}
     />
   )
 })
