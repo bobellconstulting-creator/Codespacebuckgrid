@@ -1,36 +1,72 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react'
+import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react'
 import html2canvas from 'html2canvas'
 
 export type TonyChatHandle = { addTonyMessage: (text: string) => void }
 
-const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElement | null }>(({ getCaptureTarget }, ref) => {
+type SpatialContext = {
+  acres: number
+  activeTool: string
+}
+
+const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElement | null; spatialContext?: SpatialContext }>(({ getCaptureTarget, spatialContext }, ref) => {
   const [chat, setChat] = useState([{ role: 'tony', text: "Ready. Lock the border and let's start the audit." }])
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(true)
   const [loading, setLoading] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   useImperativeHandle(ref, () => ({ addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]) }), [])
 
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chat])
+
   const send = async () => {
     if (!input.trim() || loading) return
+    const userMsg = input.trim()
     setLoading(true)
-    setChat(p => [...p, { role: 'user', text: input }])
+    setChat(p => [...p, { role: 'user', text: userMsg }])
     setInput('')
+
+    // Build spatial context string
+    const ctx = spatialContext
+      ? `[Context: ${spatialContext.acres} acres locked, active tool: ${spatialContext.activeTool}] `
+      : ''
+
     try {
-      const target = getCaptureTarget()
-      const canvas = await html2canvas(target!, { useCORS: true, scale: 1 })
+      // Attempt image capture — but don't let it block the message
+      let imageDataUrl: string | undefined
+      try {
+        const target = getCaptureTarget()
+        if (target) {
+          const canvas = await html2canvas(target, { useCORS: true, scale: 0.5, logging: false })
+          imageDataUrl = canvas.toDataURL('image/jpeg', 0.5)
+        }
+      } catch {
+        // Image capture failed — send text-only, no problem
+      }
+
+      const payload: Record<string, string> = { message: ctx + userMsg }
+      if (imageDataUrl) payload.imageDataUrl = imageDataUrl
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input, imageDataUrl: canvas.toDataURL('image/jpeg', 0.6) })
+        body: JSON.stringify(payload),
       })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.error || `HTTP ${res.status}`)
+      }
+
       const data = await res.json()
-      setChat(p => [...p, { role: 'tony', text: data.reply }])
-    } catch {
-      setChat(p => [...p, { role: 'tony', text: 'Capture failed.' }])
+      setChat(p => [...p, { role: 'tony', text: data.reply || 'No response.' }])
+    } catch (err: any) {
+      setChat(p => [...p, { role: 'tony', text: `Connection issue: ${err?.message || 'check API key and try again.'}` }])
     }
     setLoading(false)
   }
@@ -85,7 +121,7 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
       {isOpen && (
         <>
           {/* Messages */}
-          <div ref={containerRef} className="chatArea">
+          <div className="chatArea">
             {chat.map((m, i) => (
               <div
                 key={i}
@@ -117,6 +153,7 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
                 Tony is analyzing...
               </div>
             )}
+            <div ref={bottomRef} />
           </div>
 
           {/* Input */}

@@ -73,7 +73,7 @@ export default function BuckGridProPage() {
       </div>
 
       {/* ─── Tony Chat Panel ─── */}
-      <TonyChat ref={chatRef} getCaptureTarget={() => mapRef.current?.getCaptureElement() ?? null} />
+      <TonyChat ref={chatRef} getCaptureTarget={() => mapRef.current?.getCaptureElement() ?? null} spatialContext={{ acres: propertyAcres, activeTool: activeTool.name }} />
 
       {/* ─── Bottom Status Bar ─── */}
       <div
