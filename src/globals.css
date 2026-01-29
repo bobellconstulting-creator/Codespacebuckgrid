@@ -1,12 +1,13 @@
 /* ============================================
    BUCKGRID PRO — Premium Tactical Design System
    Deep Forest | Slate Gray | Tactical Orange
+   Glassmorphism: 85% opacity, 12px blur
    ============================================ */
 
 :root {
   --bg-primary: #0A0F0A;
-  --bg-panel: rgba(10, 15, 10, 0.95);
-  --bg-panel-hover: rgba(20, 30, 20, 0.95);
+  --bg-panel: rgba(10, 15, 10, 0.85);
+  --bg-panel-hover: rgba(20, 30, 20, 0.85);
   --bg-input: #0D120D;
   --border-subtle: rgba(45, 90, 30, 0.25);
   --border-active: rgba(255, 107, 0, 0.6);
@@ -15,11 +16,12 @@
   --text-muted: #3D4F35;
   --accent-orange: #FF6B00;
   --accent-orange-dim: rgba(255, 107, 0, 0.15);
-  --accent-red: #DC2626;
+  --accent-red: #ef4444;
   --accent-green: #2D5A1E;
   --slate: #1C2820;
   --slate-light: #2A3A2E;
   --font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
 }
 
 *, *::before, *::after {
@@ -38,7 +40,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* === COCKPIT LAYOUT === */
+/* === COCKPIT LAYOUT (100dvh, no scrollbars) === */
 .cockpit {
   position: fixed;
   inset: 0;
@@ -48,15 +50,16 @@ html, body {
   background: var(--bg-primary);
 }
 
-/* === DOCK PANEL (Left Sidebar) === */
+/* === DOCK PANEL (Left Sidebar — Glassmorphism) === */
 .dock-panel {
   position: absolute;
   left: 12px;
   top: 12px;
   bottom: 12px;
-  width: 200px;
+  width: 210px;
   background: var(--bg-panel);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   z-index: 100;
@@ -141,7 +144,7 @@ html, body {
   letter-spacing: 0.5px;
 }
 
-/* Dock buttons */
+/* === Dock Buttons === */
 .dock-btn {
   width: 100%;
   padding: 10px;
@@ -163,6 +166,26 @@ html, body {
   background: var(--accent-orange-dim);
   border-color: var(--accent-orange);
   color: var(--accent-orange);
+}
+
+/* Upload Boundary — "Big Green Button" */
+.dock-btn-upload {
+  width: 100%;
+  padding: 12px;
+  background: var(--accent-green);
+  border: 1px solid rgba(45, 90, 30, 0.6);
+  border-radius: 8px;
+  color: #E8EDE8;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+}
+.dock-btn-upload:hover {
+  filter: brightness(1.2);
+  border-color: rgba(45, 90, 30, 0.9);
 }
 
 .dock-btn-lock {
@@ -213,7 +236,23 @@ html, body {
 }
 .dock-btn-wipe:hover { color: var(--accent-red); }
 
-/* Acres display */
+/* === Correction Toggle === */
+.dock-btn-correction-on {
+  border-color: var(--accent-red) !important;
+  color: var(--accent-red) !important;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.corr-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-red);
+  flex-shrink: 0;
+}
+
+/* === Acres Display (Mono font) === */
 .acres-display {
   padding: 14px;
   border-bottom: 1px solid var(--border-subtle);
@@ -223,6 +262,7 @@ html, body {
   font-size: 28px;
   font-weight: 900;
   color: var(--accent-orange);
+  font-family: var(--font-mono);
 }
 .acres-label {
   font-size: 9px;
@@ -232,13 +272,86 @@ html, body {
   margin-left: 6px;
 }
 
-/* === CHAT PANEL (Right) === */
+/* === Field Recommendation Card === */
+.field-rec-card {
+  background: rgba(45, 90, 30, 0.08);
+  border-left: 3px solid var(--accent-green) !important;
+}
+
+.field-rec-name {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--accent-orange);
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.field-rec-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(45, 90, 30, 0.15);
+}
+
+.field-rec-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+}
+
+.field-rec-value {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+/* === Tactical Legend === */
+.legend-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 0;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.legend-swatch-dashed {
+  background: transparent;
+  border: 2px dashed var(--accent-red);
+  width: 10px;
+  height: 10px;
+}
+
+.legend-name {
+  font-size: 7px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+/* === CHAT PANEL (Right — Glassmorphism) === */
 .chat-panel {
   position: absolute;
   right: 12px;
   top: 12px;
   background: var(--bg-panel);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   z-index: 100;
@@ -374,6 +487,7 @@ html, body {
   border: 1px solid var(--border-subtle) !important;
   border-radius: 8px !important;
   overflow: hidden;
+  backdrop-filter: blur(12px);
 }
 
 .mapboxgl-ctrl-group button {

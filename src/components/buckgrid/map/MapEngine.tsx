@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useCallback } from 'react'
 import mapboxgl from 'mapbox-gl'
 import * as turf from '@turf/turf'
-import { useMapStore } from '@/stores/mapStore'
+import { useMapStore, computeFieldRec } from '@/stores/mapStore'
 import { TOOLS } from '../constants/tools'
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
@@ -18,19 +18,19 @@ export default function MapEngine() {
   const {
     setMap,
     activeTool,
-    brushSize,
     addShape,
     addCorrection,
     shapes,
     corrections,
+    showCorrections,
     boundaryCoords,
+    boundaryGeoJSON,
     setBoundaryCoords,
-    setPropertyAcres,
-    setLocked,
-    isLocked,
+    setSelectedShape,
+    setFieldRecommendation,
   } = useMapStore()
 
-  // Initialize Mapbox 3D terrain map
+  // Initialize Mapbox GL v3 — 3D Terrain Engine
   useEffect(() => {
     if (!containerRef.current || mapInstanceRef.current) return
 
@@ -50,7 +50,7 @@ export default function MapEngine() {
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right')
 
     map.on('style.load', () => {
-      // 3D Terrain with 1.5x exaggeration
+      // 3D Terrain — 1.5x exaggeration (ridges, draws, bedding benches)
       map.addSource('mapbox-dem', {
         type: 'raster-dem',
         url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
@@ -70,7 +70,7 @@ export default function MapEngine() {
         },
       })
 
-      // Sources for drawn layers
+      // === BOUNDARY ===
       map.addSource('boundary', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -79,7 +79,7 @@ export default function MapEngine() {
         id: 'boundary-fill',
         type: 'fill',
         source: 'boundary',
-        paint: { 'fill-color': '#FF6B00', 'fill-opacity': 0.12 },
+        paint: { 'fill-color': '#FF6B00', 'fill-opacity': 0.1 },
       })
       map.addLayer({
         id: 'boundary-line',
@@ -88,7 +88,7 @@ export default function MapEngine() {
         paint: { 'line-color': '#FF6B00', 'line-width': 3, 'line-opacity': 0.9 },
       })
 
-      // Shapes layer
+      // === SHAPES ===
       map.addSource('shapes', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -97,20 +97,14 @@ export default function MapEngine() {
         id: 'shapes-fill',
         type: 'fill',
         source: 'shapes',
-        paint: {
-          'fill-color': ['get', 'color'],
-          'fill-opacity': 0.35,
-        },
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.35 },
         filter: ['==', ['get', 'shapeType'], 'polygon'],
       })
       map.addLayer({
         id: 'shapes-line',
         type: 'line',
         source: 'shapes',
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 3,
-        },
+        paint: { 'line-color': ['get', 'color'], 'line-width': 3 },
         filter: ['any',
           ['==', ['get', 'shapeType'], 'polygon'],
           ['==', ['get', 'shapeType'], 'polyline'],
@@ -129,7 +123,30 @@ export default function MapEngine() {
         filter: ['==', ['get', 'shapeType'], 'marker'],
       })
 
-      // Consultant correction layer (red dashed)
+      // === ACREAGE LABELS (centroid of each polygon) ===
+      map.addSource('shape-labels', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      })
+      map.addLayer({
+        id: 'shape-labels-text',
+        type: 'symbol',
+        source: 'shape-labels',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 12,
+          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+          'text-anchor': 'center',
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': '#FFFFFF',
+          'text-halo-color': '#000000',
+          'text-halo-width': 1.5,
+        },
+      })
+
+      // === CONSULTANT CORRECTIONS (red #ef4444, heavy dashed) ===
       map.addSource('corrections', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -139,10 +156,10 @@ export default function MapEngine() {
         type: 'line',
         source: 'corrections',
         paint: {
-          'line-color': '#FF0000',
+          'line-color': '#ef4444',
           'line-width': 4,
           'line-dasharray': [4, 3],
-          'line-opacity': 0.9,
+          'line-opacity': 0.95,
         },
       })
       map.addLayer({
@@ -154,12 +171,35 @@ export default function MapEngine() {
           'text-size': 11,
           'text-offset': [0, -1.2],
           'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+          'text-allow-overlap': true,
         },
         paint: {
-          'text-color': '#FF0000',
+          'text-color': '#ef4444',
           'text-halo-color': '#000000',
           'text-halo-width': 1.5,
         },
+      })
+
+      // === CLICK: field recommendation on food plot polygons ===
+      map.on('click', 'shapes-fill', (e: any) => {
+        const props = e.features?.[0]?.properties
+        if (!props) return
+        const { id, toolId, acreage } = props
+        if (acreage && toolId) {
+          const rec = computeFieldRec(toolId, acreage)
+          if (rec) {
+            setSelectedShape(id)
+            setFieldRecommendation({ ...rec, shapeId: id })
+          }
+        }
+      })
+
+      map.on('mouseenter', 'shapes-fill', () => {
+        map.getCanvas().style.cursor = 'pointer'
+      })
+      map.on('mouseleave', 'shapes-fill', () => {
+        const tool = TOOLS.find((t) => t.id === useMapStore.getState().activeTool)
+        map.getCanvas().style.cursor = tool && tool.drawType !== 'none' ? 'crosshair' : ''
       })
     })
 
@@ -171,43 +211,68 @@ export default function MapEngine() {
       mapInstanceRef.current = null
       setMap(null)
     }
-  }, [setMap])
+  }, [setMap, setSelectedShape, setFieldRecommendation])
 
-  // Sync shapes to map
+  // Sync shapes + acreage labels
   useEffect(() => {
     const map = mapInstanceRef.current
     if (!map || !map.isStyleLoaded()) return
 
-    const features: GeoJSON.Feature[] = shapes.map((s) => {
+    const shapeFeatures: GeoJSON.Feature[] = []
+    const labelFeatures: GeoJSON.Feature[] = []
+
+    shapes.forEach((s) => {
       if (s.type === 'marker') {
-        return {
+        shapeFeatures.push({
           type: 'Feature',
-          properties: { color: s.color, shapeType: 'marker', id: s.id },
+          properties: { color: s.color, shapeType: 'marker', id: s.id, toolId: s.toolId },
           geometry: { type: 'Point', coordinates: s.coordinates[0] },
-        }
-      }
-      if (s.type === 'polyline') {
-        return {
+        })
+      } else if (s.type === 'polyline') {
+        shapeFeatures.push({
           type: 'Feature',
-          properties: { color: s.color, shapeType: 'polyline', id: s.id },
+          properties: { color: s.color, shapeType: 'polyline', id: s.id, toolId: s.toolId },
           geometry: { type: 'LineString', coordinates: s.coordinates },
+        })
+      } else {
+        const ring = s.coordinates.length > 2 ? [...s.coordinates, s.coordinates[0]] : s.coordinates
+        shapeFeatures.push({
+          type: 'Feature',
+          properties: { color: s.color, shapeType: 'polygon', id: s.id, toolId: s.toolId, acreage: s.acreage },
+          geometry: { type: 'Polygon', coordinates: [ring] },
+        })
+
+        // Dynamic acreage label at centroid
+        if (s.acreage && s.coordinates.length >= 3) {
+          const poly = turf.polygon([ring])
+          const center = turf.centroid(poly)
+          const toolName = TOOLS.find((t) => t.id === s.toolId)?.name || ''
+          labelFeatures.push({
+            type: 'Feature',
+            properties: { label: `${toolName}\n${s.acreage} ac` },
+            geometry: center.geometry,
+          })
         }
-      }
-      return {
-        type: 'Feature',
-        properties: { color: s.color, shapeType: 'polygon', id: s.id },
-        geometry: { type: 'Polygon', coordinates: [s.coordinates.length > 2 ? [...s.coordinates, s.coordinates[0]] : s.coordinates] },
       }
     })
 
-    const src = map.getSource('shapes') as any
-    if (src) src.setData({ type: 'FeatureCollection', features })
+    const shapeSrc = map.getSource('shapes') as any
+    if (shapeSrc) shapeSrc.setData({ type: 'FeatureCollection', features: shapeFeatures })
+
+    const labelSrc = map.getSource('shape-labels') as any
+    if (labelSrc) labelSrc.setData({ type: 'FeatureCollection', features: labelFeatures })
   }, [shapes])
 
-  // Sync corrections to map
+  // Sync corrections + visibility toggle
   useEffect(() => {
     const map = mapInstanceRef.current
     if (!map || !map.isStyleLoaded()) return
+
+    const vis = showCorrections ? 'visible' : 'none'
+    if (map.getLayer('corrections-line')) map.setLayoutProperty('corrections-line', 'visibility', vis)
+    if (map.getLayer('corrections-label')) map.setLayoutProperty('corrections-label', 'visibility', vis)
+
+    if (!showCorrections) return
 
     const features: GeoJSON.Feature[] = corrections.map((c) => ({
       type: 'Feature',
@@ -217,15 +282,23 @@ export default function MapEngine() {
 
     const src = map.getSource('corrections') as any
     if (src) src.setData({ type: 'FeatureCollection', features })
-  }, [corrections])
+  }, [corrections, showCorrections])
 
-  // Sync boundary to map
+  // Sync boundary (hand-drawn OR uploaded GeoJSON/KML)
   useEffect(() => {
     const map = mapInstanceRef.current
     if (!map || !map.isStyleLoaded()) return
 
     const src = map.getSource('boundary') as any
     if (!src) return
+
+    // Uploaded GeoJSON takes precedence
+    if (boundaryGeoJSON) {
+      src.setData(boundaryGeoJSON)
+      const bbox = turf.bbox(boundaryGeoJSON) as [number, number, number, number]
+      map.fitBounds(bbox, { padding: 80, pitch: 45, duration: 1500 })
+      return
+    }
 
     if (boundaryCoords.length < 3) {
       src.setData({ type: 'FeatureCollection', features: [] })
@@ -241,9 +314,9 @@ export default function MapEngine() {
         geometry: { type: 'Polygon', coordinates: [ring] },
       }],
     })
-  }, [boundaryCoords])
+  }, [boundaryCoords, boundaryGeoJSON])
 
-  // Drawing interaction
+  // Drawing handlers
   const getActiveTool = useCallback(() => TOOLS.find((t) => t.id === activeTool), [activeTool])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -273,7 +346,6 @@ export default function MapEngine() {
       return
     }
 
-    // Start polyline/polygon drawing
     isDrawingRef.current = true
     drawPointsRef.current = [coord]
     map.dragPan.disable()
@@ -283,7 +355,6 @@ export default function MapEngine() {
     if (!isDrawingRef.current) return
     const map = mapInstanceRef.current
     if (!map) return
-
     const lngLat = map.unproject([e.nativeEvent.offsetX, e.nativeEvent.offsetY])
     drawPointsRef.current.push([lngLat.lng, lngLat.lat])
   }, [])
@@ -302,7 +373,7 @@ export default function MapEngine() {
       addCorrection({
         id: `corr-${Date.now()}`,
         coordinates: coords,
-        label: 'CORRECTION',
+        label: 'TONY CORRECTION',
       })
     } else {
       let acreage: number | undefined
@@ -325,16 +396,12 @@ export default function MapEngine() {
     drawPointsRef.current = []
   }, [activeTool, addShape, addCorrection, getActiveTool])
 
-  // Disable map interaction when drawing
+  // Cursor
   useEffect(() => {
     const map = mapInstanceRef.current
     if (!map) return
     const tool = getActiveTool()
-    if (tool && tool.drawType !== 'none') {
-      map.getCanvas().style.cursor = 'crosshair'
-    } else {
-      map.getCanvas().style.cursor = ''
-    }
+    map.getCanvas().style.cursor = tool && tool.drawType !== 'none' ? 'crosshair' : ''
   }, [activeTool, getActiveTool])
 
   return (
