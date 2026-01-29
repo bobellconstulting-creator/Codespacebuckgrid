@@ -17,11 +17,19 @@ const ZONE_COLORS: Record<string, string> = {
   screening: '#ef4444',
 }
 
+export type DrawnShape = {
+  toolId: string
+  toolName: string
+  color: string
+  coords: [number, number][] // [lat, lng] pairs
+}
+
 export type MapApi = {
   lockBoundary: () => number | null
   wipeAll: () => void
   getCaptureElement: () => HTMLElement | null
   getBoundaryGeoJSON: () => object | null
+  getDrawnShapes: () => DrawnShape[]
   drawBlueprint: (features: BlueprintFeature[]) => void
 }
 
@@ -47,6 +55,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   const boundaryPointsRef = useRef<LatLngLike[]>([])
   const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
   const isDrawingRef = useRef(false)
+  const drawnShapesRef = useRef<DrawnShape[]>([])
 
   const activeToolRef = useRef(activeTool)
   const brushSizeRef = useRef(brushSize)
@@ -105,6 +114,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         boundaryLayerRef.current?.clearLayers()
         blueprintLayerRef.current?.clearLayers()
         boundaryPointsRef.current = []
+        drawnShapesRef.current = []
       },
       getCaptureElement: () => containerRef.current,
       getBoundaryGeoJSON: () => {
@@ -119,6 +129,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
           properties: { acres: calculateAreaAcres(pts) }
         }
       },
+      getDrawnShapes: () => drawnShapesRef.current,
       drawBlueprint: (features: BlueprintFeature[]) => {
         const L = LRef.current
         const map = mapRef.current
@@ -169,6 +180,24 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         }, 1500)
       }
     },
-    handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } }
+    handlers: {
+      onPointerDown,
+      onPointerMove,
+      onPointerUp: () => {
+        if (isDrawingRef.current && tempPathRef.current) {
+          const latlngs = tempPathRef.current.getLatLngs() as LeafletNS.LatLng[]
+          if (latlngs.length > 1) {
+            drawnShapesRef.current.push({
+              toolId: activeToolRef.current.id,
+              toolName: activeToolRef.current.name,
+              color: activeToolRef.current.color,
+              coords: latlngs.map(ll => [ll.lat, ll.lng] as [number, number])
+            })
+          }
+        }
+        isDrawingRef.current = false
+        tempPathRef.current = null
+      }
+    }
   }
 }

@@ -2,17 +2,18 @@
 
 import React, { forwardRef, useCallback, useImperativeHandle, useRef, useState, useEffect } from 'react'
 import html2canvas from 'html2canvas'
-import type { BlueprintFeature } from '../hooks/useMapDrawing'
+import type { BlueprintFeature, DrawnShape } from '../hooks/useMapDrawing'
 
 export type TonyChatHandle = { addTonyMessage: (text: string) => void }
 
 type TonyChatProps = {
   getCaptureTarget: () => HTMLElement | null
   getBoundaryGeoJSON: () => object | null
+  getDrawnShapes: () => DrawnShape[]
   onBlueprintReceived: (features: BlueprintFeature[]) => void
 }
 
-const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, getBoundaryGeoJSON, onBlueprintReceived }, ref) => {
+const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, getBoundaryGeoJSON, getDrawnShapes, onBlueprintReceived }, ref) => {
   const [chat, setChat] = useState([{ role: 'tony', text: "Ready. Lock the border and let's start the audit." }])
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(true)
@@ -33,13 +34,15 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, 
       const target = getCaptureTarget()
       const canvas = await html2canvas(target!, { useCORS: true, scale: 1 })
       const boundaryGeoJSON = getBoundaryGeoJSON()
+      const drawnShapes = getDrawnShapes()
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMsg,
           imageDataUrl: canvas.toDataURL('image/jpeg', 0.6),
-          boundaryGeoJSON
+          boundaryGeoJSON,
+          drawnShapes
         })
       })
       const data = await res.json()

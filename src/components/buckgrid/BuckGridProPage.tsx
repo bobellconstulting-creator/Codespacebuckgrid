@@ -30,6 +30,10 @@ export default function BuckGridProPage() {
     return mapRef.current?.getBoundaryGeoJSON() ?? null
   }, [])
 
+  const getDrawnShapes = useCallback(() => {
+    return mapRef.current?.getDrawnShapes() ?? []
+  }, [])
+
   return (
     <div style={{ height: '100dvh', width: '100vw', background: '#000', overflow: 'hidden', position: 'fixed' }}>
       <MapContainer ref={mapRef} activeTool={activeTool} brushSize={brushSize} />
@@ -41,6 +45,7 @@ export default function BuckGridProPage() {
         ref={chatRef}
         getCaptureTarget={() => mapRef.current?.getCaptureElement() ?? null}
         getBoundaryGeoJSON={getBoundaryGeoJSON}
+        getDrawnShapes={getDrawnShapes}
         onBlueprintReceived={handleBlueprintReceived}
       />
       <div className="glass" style={{ position: 'absolute', left: 10, bottom: 10, padding: '10px 15px', borderRadius: 10, borderLeft: '4px solid #FF6B00' }}>
