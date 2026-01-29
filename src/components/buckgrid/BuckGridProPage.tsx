@@ -5,7 +5,7 @@ import MapContainer, { type MapContainerHandle } from './map/MapContainer'
 import ToolGrid from './ui/ToolGrid'
 import TonyChat, { type TonyChatHandle } from './chat/TonyChat'
 import { TOOLS, type Tool } from './constants/tools'
-import type { BlueprintFeature } from './hooks/useMapDrawing'
+import type { BlueprintFeature, TonySuggestedShape } from './hooks/useMapDrawing'
 
 export default function BuckGridProPage() {
   const mapRef = useRef<MapContainerHandle>(null)
@@ -24,6 +24,18 @@ export default function BuckGridProPage() {
 
   const handleBlueprintReceived = useCallback((features: BlueprintFeature[]) => {
     mapRef.current?.drawBlueprint(features)
+  }, [])
+
+  const handleSuggestionsReceived = useCallback((shapes: TonySuggestedShape[]) => {
+    mapRef.current?.drawSuggestions(shapes)
+  }, [])
+
+  const handleApplySuggestions = useCallback(() => {
+    return mapRef.current?.applySuggestions() ?? 0
+  }, [])
+
+  const handleClearSuggestions = useCallback(() => {
+    mapRef.current?.clearSuggestions()
   }, [])
 
   const getBoundaryGeoJSON = useCallback(() => {
@@ -47,6 +59,9 @@ export default function BuckGridProPage() {
         getBoundaryGeoJSON={getBoundaryGeoJSON}
         getDrawnShapes={getDrawnShapes}
         onBlueprintReceived={handleBlueprintReceived}
+        onSuggestionsReceived={handleSuggestionsReceived}
+        onApplySuggestions={handleApplySuggestions}
+        onClearSuggestions={handleClearSuggestions}
         propertyAcres={propertyAcres}
       />
       <div className="glass" style={{ position: 'absolute', left: 10, bottom: 10, padding: '10px 15px', borderRadius: 10, borderLeft: '4px solid #FF6B00' }}>

@@ -40,18 +40,29 @@ ANALYSIS RULES:
 4. STAND PLACEMENT: Stands should be downwind of expected travel routes between bedding and food. If a STAND is drawn upwind of a HINGE or food plot with no terrain break, flag it.
 5. SCREENING: Egyptian Wheat and Switchgrass should be on entry corridors, perimeters, and between human access routes and deer movement. If screening is missing where it matters, say so.
 
-When the user asks for your vision or layout (e.g. "Tony, what would you do here?"), respond with valid JSON containing TWO fields:
+YOU CAN NOW SUGGEST LAYOUTS. Your JSON response can include up to THREE optional fields:
+
 1. "reply" — your spoken response (string, max 3 sentences, porch-buddy tone)
-2. "map_update" — an array of GeoJSON Feature objects to render on the map. Each feature:
+
+2. "map_update" — an array of GeoJSON Feature objects for blueprint zones:
    - "type": "Feature"
    - "geometry": GeoJSON Polygon or LineString using real coordinates within the boundary
    - "properties": { "label": string, "zone": "forage" | "screening" }
 
+3. "tonySuggestedShapes" — an array of suggested shapes the user can apply. Each item:
+   - "type": "sneak_trail" | "forage_zone" | "screen_zone"
+   - "label": string (e.g. "South Sneak Trail", "Clover Bottom #1")
+   - "coords": array of [lat, lng] coordinate pairs. For sneak_trail, snake the trail through cover using the spatial data — these are waypoints. For zones, provide polygon vertices.
+   - "convertTo": the tool it becomes when applied — "clover" | "egyptian" | "switchgrass" | "corn" | "soybeans" | "bedding"
+
+SNEAK TRAIL RULES: When suggesting a sneak trail, use the boundary and existing features to route it through timber edges and screening. Avoid crossing open food plots. Snake it from the property edge to a stand location using 5-15 waypoints. Keep trails tight to cover.
+
 Zone colors (applied by frontend):
 - "forage" (Clover/Alfalfa): Green #2D5A1E — bottoms/fertile low ground
 - "screening" (Egyptian Wheat): Red #ef4444 — ridges/perimeters/entry corridors
+- Suggestions render as RED DASHED LINES until the user applies them.
 
-If NOT asked for a layout, respond with: { "reply": "your text here" }
+If NOT asked for a layout or suggestion, respond with: { "reply": "your text here" }
 
 Always respond with valid JSON only. No markdown, no code fences.`
 
@@ -150,17 +161,27 @@ export async function POST(req: NextRequest) {
     console.log(`[Tony API] Raw response: ${raw.slice(0, 200)}`)
 
     // Parse Tony's JSON response
-    let parsed: { reply: string; map_update?: any[] }
+    let parsed: { reply: string; map_update?: any[]; tonySuggestedShapes?: any[] }
     try {
       parsed = JSON.parse(raw)
     } catch {
       parsed = { reply: raw }
     }
 
-    return NextResponse.json({
+    const response: any = {
       reply: parsed.reply || raw,
-      map_update: parsed.map_update || null
-    })
+      map_update: parsed.map_update || null,
+      tonySuggestedShapes: parsed.tonySuggestedShapes || null
+    }
+
+    if (response.tonySuggestedShapes) {
+      console.log(`[Tony API] Suggested shapes: ${response.tonySuggestedShapes.length} items`)
+      for (const s of response.tonySuggestedShapes) {
+        console.log(`[Tony API]   -> ${s.type}: "${s.label}" (${s.coords?.length} pts) -> ${s.convertTo}`)
+      }
+    }
+
+    return NextResponse.json(response)
   } catch (err: any) {
     console.error('[Tony API] Server error:', err?.message || err)
     return NextResponse.json({ error: 'Server error', detail: err?.message }, { status: 500 })

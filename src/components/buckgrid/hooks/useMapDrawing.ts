@@ -12,9 +12,25 @@ export type BlueprintFeature = {
   properties: { label: string; zone: 'forage' | 'screening' }
 }
 
+export type TonySuggestedShape = {
+  type: 'sneak_trail' | 'forage_zone' | 'screen_zone'
+  label: string
+  coords: [number, number][] // [lat, lng] pairs
+  convertTo: 'clover' | 'egyptian' | 'switchgrass' | 'corn' | 'soybeans' | 'bedding'
+}
+
 const ZONE_COLORS: Record<string, string> = {
   forage: '#2D5A1E',
   screening: '#ef4444',
+}
+
+const CONVERT_COLORS: Record<string, string> = {
+  clover: '#4ade80',
+  egyptian: '#fb923c',
+  switchgrass: '#fdba74',
+  corn: '#fbbf24',
+  soybeans: '#166534',
+  bedding: '#713f12',
 }
 
 export type DrawnShape = {
@@ -31,6 +47,9 @@ export type MapApi = {
   getBoundaryGeoJSON: () => object | null
   getDrawnShapes: () => DrawnShape[]
   drawBlueprint: (features: BlueprintFeature[]) => void
+  drawSuggestions: (shapes: TonySuggestedShape[]) => void
+  applySuggestions: () => number
+  clearSuggestions: () => void
 }
 
 function calculateAreaAcres(pts: LatLngLike[]) {
@@ -52,10 +71,12 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   const drawnItemsRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const boundaryLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const blueprintLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
+  const suggestionLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const boundaryPointsRef = useRef<LatLngLike[]>([])
   const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
   const isDrawingRef = useRef(false)
   const drawnShapesRef = useRef<DrawnShape[]>([])
+  const pendingSuggestionsRef = useRef<TonySuggestedShape[]>([])
 
   const activeToolRef = useRef(activeTool)
   const brushSizeRef = useRef(brushSize)
@@ -73,6 +94,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       drawnItemsRef.current = new leaflet.FeatureGroup().addTo(map)
       boundaryLayerRef.current = new leaflet.FeatureGroup().addTo(map)
       blueprintLayerRef.current = new leaflet.FeatureGroup().addTo(map)
+      suggestionLayerRef.current = new leaflet.FeatureGroup().addTo(map)
       mapRef.current = map
     }
     init()
@@ -113,16 +135,17 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         drawnItemsRef.current?.clearLayers()
         boundaryLayerRef.current?.clearLayers()
         blueprintLayerRef.current?.clearLayers()
+        suggestionLayerRef.current?.clearLayers()
         boundaryPointsRef.current = []
         drawnShapesRef.current = []
+        pendingSuggestionsRef.current = []
       },
       getCaptureElement: () => containerRef.current,
       getBoundaryGeoJSON: () => {
         const pts = boundaryPointsRef.current
         if (pts.length < 3) return null
-        // GeoJSON uses [lng, lat] order, closed ring
         const coords = pts.map(p => [p.lng, p.lat])
-        coords.push(coords[0]) // close the ring
+        coords.push(coords[0])
         return {
           type: 'Feature',
           geometry: { type: 'Polygon', coordinates: [coords] },
@@ -135,13 +158,11 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         const map = mapRef.current
         if (!L || !map || !blueprintLayerRef.current) return
 
-        // Disable drag pan while Tony draws
         map.dragging.disable()
         map.touchZoom.disable()
         map.doubleClickZoom.disable()
         map.scrollWheelZoom.disable()
 
-        // Clear previous blueprint
         blueprintLayerRef.current.clearLayers()
 
         for (const feature of features) {
@@ -149,35 +170,113 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
           const geom = feature.geometry
 
           if (geom.type === 'Polygon') {
-            // GeoJSON coords are [lng, lat], Leaflet needs [lat, lng]
             const latLngs = geom.coordinates[0].map((c: number[]) => [c[1], c[0]])
-            const poly = L.polygon(latLngs, {
-              color,
-              weight: 3,
-              fillColor: color,
-              fillOpacity: 0.35,
-            })
+            const poly = L.polygon(latLngs, { color, weight: 3, fillColor: color, fillOpacity: 0.35 })
             poly.bindTooltip(feature.properties.label, { permanent: true, direction: 'center', className: 'blueprint-label' })
             poly.addTo(blueprintLayerRef.current!)
           } else if (geom.type === 'LineString') {
             const latLngs = geom.coordinates.map((c: number[]) => [c[1], c[0]])
-            const line = L.polyline(latLngs, {
-              color,
-              weight: 6,
-              opacity: 0.8,
-            })
+            const line = L.polyline(latLngs, { color, weight: 6, opacity: 0.8 })
             line.bindTooltip(feature.properties.label, { permanent: true, direction: 'center', className: 'blueprint-label' })
             line.addTo(blueprintLayerRef.current!)
           }
         }
 
-        // Re-enable interaction after a short delay so user can see the result
         setTimeout(() => {
           map.dragging.enable()
           map.touchZoom.enable()
           map.doubleClickZoom.enable()
           map.scrollWheelZoom.enable()
         }, 1500)
+      },
+
+      // Tony suggestion layer — red dashed lines
+      drawSuggestions: (shapes: TonySuggestedShape[]) => {
+        const L = LRef.current
+        const map = mapRef.current
+        if (!L || !map || !suggestionLayerRef.current) return
+
+        map.dragging.disable()
+        map.touchZoom.disable()
+        map.doubleClickZoom.disable()
+        map.scrollWheelZoom.disable()
+
+        suggestionLayerRef.current.clearLayers()
+        pendingSuggestionsRef.current = shapes
+
+        for (const shape of shapes) {
+          const latLngs = shape.coords.map(c => [c[0], c[1]] as [number, number])
+
+          if (shape.type === 'sneak_trail') {
+            // Red dashed line — ~6ft width at farm zoom = 4px
+            const line = L.polyline(latLngs, {
+              color: '#ef4444',
+              weight: 4,
+              opacity: 0.9,
+              dashArray: '10, 8',
+              dashOffset: '0',
+            })
+            line.bindTooltip(shape.label, { permanent: true, direction: 'center', className: 'blueprint-label' })
+            line.addTo(suggestionLayerRef.current!)
+          } else {
+            // Forage/screen zones — red dashed polygon
+            const poly = L.polygon(latLngs, {
+              color: '#ef4444',
+              weight: 3,
+              fillColor: '#ef4444',
+              fillOpacity: 0.15,
+              dashArray: '10, 8',
+            })
+            poly.bindTooltip(shape.label, { permanent: true, direction: 'center', className: 'blueprint-label' })
+            poly.addTo(suggestionLayerRef.current!)
+          }
+        }
+
+        setTimeout(() => {
+          map.dragging.enable()
+          map.touchZoom.enable()
+          map.doubleClickZoom.enable()
+          map.scrollWheelZoom.enable()
+        }, 1500)
+      },
+
+      // Convert pending suggestions into permanent drawn shapes
+      applySuggestions: () => {
+        const L = LRef.current
+        if (!L || !drawnItemsRef.current) return 0
+
+        const pending = pendingSuggestionsRef.current
+        if (pending.length === 0) return 0
+
+        for (const shape of pending) {
+          const color = CONVERT_COLORS[shape.convertTo] || '#ef4444'
+          const latLngs = shape.coords.map(c => [c[0], c[1]] as [number, number])
+
+          if (shape.type === 'sneak_trail') {
+            L.polyline(latLngs, { color, weight: 4, opacity: 0.7 }).addTo(drawnItemsRef.current!)
+          } else {
+            L.polygon(latLngs, { color, weight: 3, fillColor: color, fillOpacity: 0.35 }).addTo(drawnItemsRef.current!)
+          }
+
+          // Register as drawn shape for spatial context
+          drawnShapesRef.current.push({
+            toolId: shape.convertTo,
+            toolName: shape.convertTo.toUpperCase(),
+            color,
+            coords: shape.coords
+          })
+        }
+
+        // Clear suggestion layer — they're now permanent
+        suggestionLayerRef.current?.clearLayers()
+        const count = pending.length
+        pendingSuggestionsRef.current = []
+        return count
+      },
+
+      clearSuggestions: () => {
+        suggestionLayerRef.current?.clearLayers()
+        pendingSuggestionsRef.current = []
       }
     },
     handlers: {

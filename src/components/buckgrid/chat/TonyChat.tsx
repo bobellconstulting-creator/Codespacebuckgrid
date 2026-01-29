@@ -2,7 +2,7 @@
 
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react'
 import html2canvas from 'html2canvas'
-import type { BlueprintFeature, DrawnShape } from '../hooks/useMapDrawing'
+import type { BlueprintFeature, DrawnShape, TonySuggestedShape } from '../hooks/useMapDrawing'
 
 export type TonyChatHandle = {
   addTonyMessage: (text: string) => void
@@ -14,24 +14,27 @@ type TonyChatProps = {
   getBoundaryGeoJSON: () => object | null
   getDrawnShapes: () => DrawnShape[]
   onBlueprintReceived: (features: BlueprintFeature[]) => void
+  onSuggestionsReceived: (shapes: TonySuggestedShape[]) => void
+  onApplySuggestions: () => number
+  onClearSuggestions: () => void
   propertyAcres: number
 }
 
 const STORAGE_KEY = 'buckgrid_user_name'
 
-const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, getBoundaryGeoJSON, getDrawnShapes, onBlueprintReceived, propertyAcres }, ref) => {
+const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, getBoundaryGeoJSON, getDrawnShapes, onBlueprintReceived, onSuggestionsReceived, onApplySuggestions, onClearSuggestions, propertyAcres }, ref) => {
   const [chat, setChat] = useState<{ role: string; text: string }[]>([])
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(true)
   const [loading, setLoading] = useState(false)
   const [userName, setUserName] = useState<string | null>(null)
   const [askingName, setAskingName] = useState(false)
+  const [hasPendingSuggestions, setHasPendingSuggestions] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const acresRef = useRef(propertyAcres)
 
   useEffect(() => { acresRef.current = propertyAcres }, [propertyAcres])
 
-  // Boot sequence: check localStorage for name, greet accordingly
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
@@ -61,7 +64,6 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, 
     const userMsg = input
     setInput('')
 
-    // If we're in the name-asking phase, save the name
     if (askingName) {
       const name = userMsg.trim()
       localStorage.setItem(STORAGE_KEY, name)
@@ -84,7 +86,6 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, 
       const boundaryGeoJSON = getBoundaryGeoJSON()
       const drawnShapes = getDrawnShapes()
 
-      // Build structured SpatialContext for Tony
       const spatialContext = {
         boundaryPolygon: boundaryGeoJSON,
         propertyAcres: acresRef.current,
@@ -126,8 +127,27 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, 
       if (data.map_update && Array.isArray(data.map_update)) {
         onBlueprintReceived(data.map_update)
       }
+
+      if (data.tonySuggestedShapes && Array.isArray(data.tonySuggestedShapes) && data.tonySuggestedShapes.length > 0) {
+        onSuggestionsReceived(data.tonySuggestedShapes)
+        setHasPendingSuggestions(true)
+      }
     } catch { setChat(p => [...p, { role: 'tony', text: 'Signal dropped. Try again.' }]) }
     setLoading(false)
+  }
+
+  const handleApply = () => {
+    const count = onApplySuggestions()
+    setHasPendingSuggestions(false)
+    if (count > 0) {
+      setChat(p => [...p, { role: 'tony', text: `Done. ${count} suggestion${count > 1 ? 's' : ''} locked into the plan.` }])
+    }
+  }
+
+  const handleDismiss = () => {
+    onClearSuggestions()
+    setHasPendingSuggestions(false)
+    setChat(p => [...p, { role: 'tony', text: "Scrapped. Your call — tell me what you want instead." }])
   }
 
   return (
@@ -143,6 +163,16 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, 
               <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? '#FF6B00' : '#222', padding: '8px 12px', borderRadius: '10px', fontSize: '11px', maxWidth: '85%' }}>{m.text}</div>
             ))}
           </div>
+          {hasPendingSuggestions && (
+            <div style={{ padding: '8px 10px', display: 'flex', gap: 6, borderTop: '1px solid #333' }}>
+              <button onClick={handleApply} style={{ flex: 1, background: '#2D5A1E', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 0', fontSize: 10, fontWeight: 900, cursor: 'pointer', letterSpacing: 0.5 }}>
+                APPLY TONY'S SUGGESTION
+              </button>
+              <button onClick={handleDismiss} style={{ background: '#333', color: '#888', border: 'none', borderRadius: 6, padding: '8px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                X
+              </button>
+            </div>
+          )}
           <div style={{ padding: 10, display: 'flex', gap: 6 }}>
             <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder={askingName ? "Your name..." : "Ask Tony..."} style={{ flex: 1, background: '#000', border: '1px solid #333', color: '#fff', padding: 8, borderRadius: 6 }} />
             <button onClick={send} disabled={loading} style={{ background: '#FF6B00', border: 'none', borderRadius: 4, cursor: 'pointer', opacity: loading ? 0.5 : 1 }}>➤</button>
