@@ -10,6 +10,8 @@ export type MapApi = {
   lockBoundary: () => number | null
   wipeAll: () => void
   getCaptureElement: () => HTMLElement | null
+  getMapContext: () => any
+  drawAISuggestions: (features: any[]) => void
 }
 
 function calculateAreaAcres(pts: LatLngLike[]) {
@@ -30,6 +32,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   const mapRef = useRef<LeafletNS.Map | null>(null)
   const drawnItemsRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const boundaryLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
+  const aiSuggestionsLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const boundaryPointsRef = useRef<LatLngLike[]>([])
   const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
   const isDrawingRef = useRef(false)
@@ -49,15 +52,37 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       leaflet.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, crossOrigin: true }).addTo(map)
       drawnItemsRef.current = new leaflet.FeatureGroup().addTo(map)
       boundaryLayerRef.current = new leaflet.FeatureGroup().addTo(map)
+      aiSuggestionsLayerRef.current = new leaflet.FeatureGroup().addTo(map)
       mapRef.current = map
+      // Respect initial tool state
+      if (activeToolRef.current.id !== 'nav') {
+        map.dragging.disable()
+        map.doubleClickZoom.disable()
+      }
     }
     init()
     return () => { mounted = false }
   }, [containerRef])
 
+  // Toggle map dragging based on active tool
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (activeTool.id === 'nav') {
+      map.dragging.enable()
+      map.doubleClickZoom.enable()
+      if (containerRef.current) containerRef.current.style.cursor = 'grab'
+    } else {
+      map.dragging.disable()
+      map.doubleClickZoom.disable()
+      if (containerRef.current) containerRef.current.style.cursor = 'crosshair'
+    }
+  }, [activeTool, containerRef])
+
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const L = LRef.current
     if (!mapRef.current || !L || activeToolRef.current.id === 'nav') return
+    e.currentTarget.setPointerCapture(e.pointerId) // Prevent stroke interruption
     const rect = containerRef.current!.getBoundingClientRect()
     const latlng = mapRef.current.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top])
     if (activeToolRef.current.id === 'boundary') {
@@ -67,7 +92,13 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       return
     }
     isDrawingRef.current = true
-    tempPathRef.current = L.polyline([latlng], { color: activeToolRef.current.color, weight: brushSizeRef.current, opacity: 0.6 }).addTo(drawnItemsRef.current!)
+    tempPathRef.current = L.polyline([latlng], { 
+      color: activeToolRef.current.color, 
+      weight: brushSizeRef.current * 0.5, 
+      opacity: 0.6,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(drawnItemsRef.current!)
   }, [containerRef])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
@@ -88,9 +119,64 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       wipeAll: () => {
         drawnItemsRef.current?.clearLayers()
         boundaryLayerRef.current?.clearLayers()
+        aiSuggestionsLayerRef.current?.clearLayers()
         boundaryPointsRef.current = []
       },
-      getCaptureElement: () => containerRef.current
+      getCaptureElement: () => containerRef.current,
+      getMapContext: () => {
+        const map = mapRef.current
+        if (!map) return null
+        const bounds = map.getBounds()
+        return {
+          bounds: {
+            north: bounds.getNorth(),
+            south: bounds.getSouth(),
+            east: bounds.getEast(),
+            west: bounds.getWest()
+          },
+          center: map.getCenter(),
+          zoom: map.getZoom(),
+          drawnFeatures: drawnItemsRef.current?.getLayers().length || 0
+        }
+      },
+      drawAISuggestions: (features: any[]) => {
+        const L = LRef.current
+        if (!L || !aiSuggestionsLayerRef.current) return
+        
+        aiSuggestionsLayerRef.current.clearLayers()
+        
+        features.forEach(feature => {
+          const { geometry, properties } = feature
+          const color = properties.type === 'bedding' ? '#00FF00' 
+            : properties.type === 'food_plot' ? '#FFD700'
+            : properties.type === 'travel_corridor' ? '#00BFFF'
+            : '#FF00FF'
+          
+          if (geometry.type === 'Point') {
+            L.circleMarker(geometry.coordinates.reverse(), {
+              color,
+              radius: 8,
+              fillOpacity: 0.6,
+              weight: 3
+            }).bindPopup(`<b>${properties.label || properties.type}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+              .addTo(aiSuggestionsLayerRef.current!)
+          } else if (geometry.type === 'Polygon') {
+            L.polygon(geometry.coordinates[0].map((c: number[]) => [c[1], c[0]]), {
+              color,
+              weight: 3,
+              fillOpacity: 0.2
+            }).bindPopup(`<b>${properties.label || properties.type}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+              .addTo(aiSuggestionsLayerRef.current!)
+          } else if (geometry.type === 'LineString') {
+            L.polyline(geometry.coordinates.map((c: number[]) => [c[1], c[0]]), {
+              color,
+              weight: 4,
+              opacity: 0.7
+            }).bindPopup(`<b>${properties.label || properties.type}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+              .addTo(aiSuggestionsLayerRef.current!)
+          }
+        })
+      }
     }, 
     handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } } 
   }

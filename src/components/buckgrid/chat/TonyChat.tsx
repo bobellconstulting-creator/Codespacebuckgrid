@@ -1,37 +1,75 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react'
+import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect } from 'react'
 import html2canvas from 'html2canvas'
+import type { Tool } from '../constants/tools'
 
 export type TonyChatHandle = { addTonyMessage: (text: string) => void }
 
-const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElement | null }>(({ getCaptureTarget }, ref) => {
+const TonyChat = forwardRef<TonyChatHandle, { 
+  getCaptureTarget: () => HTMLElement | null
+  acres: number
+  activeTool: Tool
+  getMapContext: () => any
+  onDrawFeatures?: (features: any[]) => void
+}>(({ getCaptureTarget, acres, activeTool, getMapContext, onDrawFeatures }, ref) => {
   const [chat, setChat] = useState([{ role: 'tony', text: "Ready. Lock the border and let's start the audit." }])
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(true)
   const [loading, setLoading] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
   useImperativeHandle(ref, () => ({ addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]) }), [])
 
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chat])
+
   const send = async () => {
     if (!input.trim() || loading) return
+    const spatialContext = `[Property: ${acres ? acres + ' acres' : 'not set'} | Tool: ${activeTool.label}]\\n`
+    const fullMessage = spatialContext + input
     setLoading(true)
     setChat(p => [...p, { role: 'user', text: input }])
     setInput('')
+    
+    let imageDataUrl: string | undefined
     try {
       const target = getCaptureTarget()
-      const canvas = await html2canvas(target!, { useCORS: true, scale: 1 })
+      if (target) {
+        const canvas = await html2canvas(target, { useCORS: true, scale: 1 })
+        imageDataUrl = canvas.toDataURL('image/jpeg', 0.6)
+      }
+    } catch (err) {
+      console.warn('Map capture failed, sending text-only:', err)
+    }
+    
+    // Get map context (bounds, drawn features)
+    const mapContext = getMapContext()
+    
+    try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input, imageDataUrl: canvas.toDataURL('image/jpeg', 0.6) })
+        body: JSON.stringify({ message: fullMessage, imageDataUrl, mapContext })
       })
+      if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
-      setChat(p => [...p, { role: 'tony', text: data.reply }])
-    } catch {
-      setChat(p => [...p, { role: 'tony', text: 'Capture failed.' }])
+      
+      // Handle structured response
+      const reply = data.reply || data.error || 'No response'
+      setChat(p => [...p, { role: 'tony', text: reply }])
+      
+      // Draw AI-suggested features on map
+      if (data.drawing && data.drawing.features && data.drawing.features.length > 0 && onDrawFeatures) {
+        onDrawFeatures(data.drawing.features)
+      }
+    } catch (err) {
+      setChat(p => [...p, { role: 'tony', text: `Error: ${err instanceof Error ? err.message : 'Request failed'}` }])
     }
+    
     setLoading(false)
   }
 
@@ -117,6 +155,7 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
                 Tony is analyzing...
               </div>
             )}
+            <div ref={chatEndRef} />
           </div>
 
           {/* Input */}
