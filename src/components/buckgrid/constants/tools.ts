@@ -4,6 +4,7 @@ export type Tool = {
   name: string
   color: string
   icon: string
+  layer?: 'user' | 'consultant'
 }
 
 export const TOOLS: Tool[] = [
@@ -19,4 +20,13 @@ export const TOOLS: Tool[] = [
   { id: 'bedding', name: 'HINGE', color: '#713f12', icon: '🪚' },
   { id: 'stand', name: 'STAND', color: '#ef4444', icon: '🏹' },
   { id: 'focus', name: 'FOCUS', color: '#FF0000', icon: '⭕' },
+]
+
+/** Consultant-only correction tools — drawn on a separate red overlay layer */
+export const CONSULTANT_TOOLS: Tool[] = [
+  { id: 'cx-move', name: 'MOVE', color: '#FF2D2D', icon: '↗️', layer: 'consultant' },
+  { id: 'cx-trail', name: 'TRAIL', color: '#FF2D2D', icon: '🦌', layer: 'consultant' },
+  { id: 'cx-remove', name: 'CUT', color: '#FF2D2D', icon: '✂️', layer: 'consultant' },
+  { id: 'cx-add', name: 'ADD', color: '#00FF88', icon: '➕', layer: 'consultant' },
+  { id: 'cx-pin', name: 'PIN', color: '#FFD600', icon: '📌', layer: 'consultant' },
 ]

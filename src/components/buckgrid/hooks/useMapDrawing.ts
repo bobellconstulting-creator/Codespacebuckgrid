@@ -10,6 +10,7 @@ export type MapApi = {
   lockBoundary: () => number | null
   wipeAll: () => void
   getCaptureElement: () => HTMLElement | null
+  getMapInstance: () => LeafletNS.Map | null
 }
 
 function calculateAreaAcres(pts: LatLngLike[]) {
@@ -90,8 +91,9 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         boundaryLayerRef.current?.clearLayers()
         boundaryPointsRef.current = []
       },
-      getCaptureElement: () => containerRef.current
-    }, 
+      getCaptureElement: () => containerRef.current,
+      getMapInstance: () => mapRef.current
+    },
     handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } } 
   }
 }

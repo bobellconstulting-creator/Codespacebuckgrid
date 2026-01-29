@@ -11,7 +11,12 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
     <>
       <div className={styles.gridTools}>
         {tools.map(t => (
-          <button key={t.id} className={`${styles.btnTool} ${activeToolId === t.id ? styles.btnToolActive : ''}`} onClick={() => onSelectTool(t)}>
+          <button
+            key={t.id}
+            className={`${styles.btnTool} ${activeToolId === t.id ? styles.btnToolActive : ''}`}
+            onClick={() => onSelectTool(t)}
+            style={t.layer === 'consultant' ? { borderLeft: '3px solid #FF2D2D' } : undefined}
+          >
             <span>{t.icon}</span> <span>{t.name}</span>
           </button>
         ))}
