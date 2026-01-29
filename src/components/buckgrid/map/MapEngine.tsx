@@ -6,9 +6,12 @@ import * as turf from '@turf/turf'
 import { useMapStore, computeFieldRec } from '@/stores/mapStore'
 import { TOOLS } from '../constants/tools'
 
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || ''
+// Hardcoded for render debug — will revert to env var after confirmed working
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'pk.eyJ1IjoiYm9iZWxsODciLCJhIjoiY21rdDBkb2V5MHo5NzNlb2RyeWJ0dnZkMSJ9.cBBzJ0BR4wm5TLeItbOI_g'
 
 export default function MapEngine() {
+  console.log('[BuckGrid] MapEngine render — token:', MAPBOX_TOKEN.substring(0, 20) + '...')
+
   const containerRef = useRef<HTMLDivElement>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapInstanceRef = useRef<any>(null)
