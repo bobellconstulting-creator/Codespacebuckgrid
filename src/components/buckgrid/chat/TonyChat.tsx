@@ -83,16 +83,41 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, 
       const canvas = await html2canvas(target!, { useCORS: true, scale: 1 })
       const boundaryGeoJSON = getBoundaryGeoJSON()
       const drawnShapes = getDrawnShapes()
+
+      // Build structured SpatialContext for Tony
+      const spatialContext = {
+        boundaryPolygon: boundaryGeoJSON,
+        propertyAcres: acresRef.current,
+        activeFeatures: drawnShapes.map(s => ({
+          type: s.toolName,
+          toolId: s.toolId,
+          color: s.color,
+          pointCount: s.coords.length,
+          centroid: s.coords.length > 0
+            ? [
+                s.coords.reduce((sum, c) => sum + c[0], 0) / s.coords.length,
+                s.coords.reduce((sum, c) => sum + c[1], 0) / s.coords.length
+              ]
+            : null,
+          bounds: s.coords.length > 0
+            ? {
+                minLat: Math.min(...s.coords.map(c => c[0])),
+                maxLat: Math.max(...s.coords.map(c => c[0])),
+                minLng: Math.min(...s.coords.map(c => c[1])),
+                maxLng: Math.max(...s.coords.map(c => c[1]))
+              }
+            : null
+        }))
+      }
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMsg,
           imageDataUrl: canvas.toDataURL('image/jpeg', 0.6),
-          boundaryGeoJSON,
-          drawnShapes,
-          userName: userName || undefined,
-          propertyAcres: acresRef.current
+          spatialContext,
+          userName: userName || undefined
         })
       })
       const data = await res.json()
