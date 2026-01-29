@@ -16,7 +16,7 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
           </button>
         ))}
       </div>
-      <input type="range" min={10} max={150} value={brushSize} onChange={e => onBrushSize(Number(e.target.value))} style={{ width: '100%', accentColor: '#FF6B00' }} />
+      <input type="range" min={1} max={45} step={1} value={brushSize} onChange={e => onBrushSize(Number(e.target.value))} style={{ width: '100%', accentColor: '#FF6B00' }} />
       <button onClick={onLockBorder} style={{ width: '100%', background: '#FF6B00', color: '#000', padding: 12, borderRadius: 8, fontWeight: 900, cursor: 'pointer' }}>LOCK BORDER</button>
       <button onClick={onWipeAll} style={{ width: '100%', color: '#555', background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>WIPE ALL</button>
     </>

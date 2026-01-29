@@ -67,7 +67,8 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
       return
     }
     isDrawingRef.current = true
-    tempPathRef.current = L.polyline([latlng], { color: activeToolRef.current.color, weight: brushSizeRef.current, opacity: 0.6 }).addTo(drawnItemsRef.current!)
+    const cappedWeight = Math.min(brushSizeRef.current, 45)
+    tempPathRef.current = L.polyline([latlng], { color: activeToolRef.current.color, weight: cappedWeight, opacity: 0.6 }).addTo(drawnItemsRef.current!)
   }, [containerRef])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {

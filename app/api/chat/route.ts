@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic'
 type ChatRequestBody = {
   message: string
   imageDataUrl?: string
+  spatialContext?: string
 }
 
 export async function POST(req: NextRequest) {
@@ -17,8 +18,11 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as ChatRequestBody
     const message = body.message?.trim() || ''
     const imageDataUrl = body.imageDataUrl
+    const spatialContext = body.spatialContext || ''
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
+
+    const systemPrompt = `You are Tony, a blunt Whitetail Habitat Partner. Max 3 sentences.${spatialContext ? `\n\nSpatial Context: ${spatialContext}` : ''}`
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -29,7 +33,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: 'anthropic/claude-3.5-sonnet',
         messages: [
-          { role: 'system', content: 'You are Tony, a blunt Whitetail Habitat Partner. Max 3 sentences.' },
+          { role: 'system', content: systemPrompt },
           {
             role: 'user',
             content: imageDataUrl 
