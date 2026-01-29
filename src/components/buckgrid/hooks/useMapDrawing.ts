@@ -36,7 +36,20 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
 
   const activeToolRef = useRef(activeTool)
   const brushSizeRef = useRef(brushSize)
-  useEffect(() => { activeToolRef.current = activeTool }, [activeTool])
+  useEffect(() => {
+    activeToolRef.current = activeTool
+    const map = mapRef.current
+    if (!map) return
+    if (activeTool.id === 'nav') {
+      map.dragging.enable()
+      map.scrollWheelZoom.enable()
+      map.doubleClickZoom.enable()
+    } else {
+      map.dragging.disable()
+      map.scrollWheelZoom.disable()
+      map.doubleClickZoom.disable()
+    }
+  }, [activeTool])
   useEffect(() => { brushSizeRef.current = brushSize }, [brushSize])
 
   useEffect(() => {
