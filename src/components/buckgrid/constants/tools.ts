@@ -4,19 +4,19 @@ export type Tool = {
   name: string
   color: string
   icon: string
+  type?: string
+  allowGlobal?: boolean
 }
 
 export const TOOLS: Tool[] = [
-  { id: 'nav', name: 'PAN', color: '#fff', icon: '✋' },
-  { id: 'boundary', name: 'BORDER', color: '#FF6B00', icon: '🟧' },
-  { id: 'clover', name: 'CLOVER', color: '#4ade80', icon: '🍀' },
-  { id: 'brassicas', name: 'BRASSICAS', color: '#c084fc', icon: '🥬' },
-  { id: 'corn', name: 'CORN', color: '#facc15', icon: '🌽' },
-  { id: 'soybeans', name: 'SOYBEANS', color: '#86efac', icon: '🫘' },
-  { id: 'milo', name: 'MILO', color: '#d97706', icon: '🌰' },
-  { id: 'egyptian', name: 'EGYPTIAN', color: '#fb923c', icon: '🌾' },
-  { id: 'switchgrass', name: 'SWITCH', color: '#fdba74', icon: '🌾' },
-  { id: 'bedding', name: 'HINGE', color: '#713f12', icon: '🪚' },
-  { id: 'stand', name: 'STAND', color: '#ef4444', icon: '🏹' },
-  { id: 'focus', name: 'FOCUS', color: '#FF0000', icon: '⭕' },
+  { id: 'boundary', name: 'BOUNDARY', color: '#FFEB3B', icon: '🟨', type: 'boundary' },
+  { id: 'bedding', name: 'BEDDING', color: '#92400e', icon: '🟫', type: 'bedding' },
+  { id: 'sanctuary', name: 'SANCTUARY', color: '#3b82f6', icon: '🔵', type: 'sanctuary' },
+  { id: 'food', name: 'FOOD PLOT', color: '#22c55e', icon: '🟢', type: 'food' },
+  { id: 'alfalfa', name: 'ALFALFA', color: '#14b8a6', icon: '🟦', type: 'crop_alfalfa' },
+  { id: 'milo', name: 'MILO', color: '#ff6b35', icon: '🟠', type: 'crop_milo' },
+  { id: 'corn', name: 'CORN', color: '#fbbf24', icon: '🟡', type: 'crop_corn' },
+  { id: 'clover', name: 'CLOVER', color: '#86efac', icon: '🟩', type: 'crop_clover' },
+  { id: 'focus', name: 'FOCUS', color: '#ef4444', icon: '🔴', type: 'focus', allowGlobal: true },
+  { id: 'eraser', name: 'ERASER', color: '#ffffff', icon: '🧹', type: 'eraser' },
 ]

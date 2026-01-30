@@ -18,8 +18,17 @@ const summarizeMapContext = (ctx?: MapContextPayload) => {
     lines.push('NO PROPERTY BOUNDARY LOCKED: warn user and avoid suggesting outside unknown limits.')
   }
   if (ctx.focusFeatures?.length) {
-    lines.push(`FOCUS TOOL GEOJSON (${ctx.focusFeatures.length} features):`)
-    lines.push(JSON.stringify(ctx.focusFeatures.slice(0, 3)))
+    const internal = ctx.focusFeatures.filter(f => !f.properties?.isExternal)
+    const external = ctx.focusFeatures.filter(f => f.properties?.isExternal)
+    if (internal.length) {
+      lines.push(`INTERNAL FOCUS AREAS (${internal.length}): User highlighting zones INSIDE property`)
+      lines.push(JSON.stringify(internal.slice(0, 2)))
+    }
+    if (external.length) {
+      lines.push(`EXTERNAL FACTORS (${external.length}): User marked NEIGHBOR activity/pressure OUTSIDE boundary`)
+      lines.push(JSON.stringify(external.slice(0, 2)))
+      lines.push('CRITICAL: Use these external markers to inform your internal strategy (e.g., staging areas, funnels near boundary)')
+    }
   }
   if (ctx.userDrawn?.features?.length) {
     lines.push(`USER DRAWN LAYERS (${ctx.userDrawn.features.length} features) preview:`)
@@ -36,10 +45,21 @@ MAP CONTEXT INPUT:
 ${summarizeMapContext(mapContext)}
 
 MANDATES:
-1. PROPERTY HARD WALL: All recommendations MUST remain inside the provided property boundary polygon. If any idea would cross onto a neighbor, adjust or warn the user explicitly.
+1. PROPERTY HARD WALL: Your recommendations MUST remain inside the provided property boundary polygon. If any idea would cross onto a neighbor, adjust or warn the user explicitly.
 2. RED FOCUS PRIORITY: If the user provided red focus tool GeoJSON, concentrate your guidance on those highlighted coordinates.
-3. RIDGE RULE: Avoid placing food plots on ridge tops or steep slopes. Prefer bottom ground, benches, gentle plateaus. Infer slope from canopy shading and contour cues; call it out if uncertain.
-4. JSON CONTRACT: Respond ONLY with valid JSON using the schema below. No prose outside the JSON.
+3. EXTERNAL RED MARKINGS: When the user marks an area OUTSIDE the property boundary with red (isExternal: true), treat it as an external factor:
+   - Neighbor's bedding area, food source, or pressure point
+   - Deer movement corridor from neighboring land
+   - Plan YOUR INTERNAL habitat to intercept, funnel, or create staging near the boundary to capitalize on that external activity
+4. **HONESTY PROTOCOL (CRITICAL):** You DO NOT have elevation data, LiDAR, or confirmed vegetation density unless the user explicitly states it. NEVER guess terrain features.
+   - DO NOT assume "This is a low-lying basin" or "This hilltop" or "This timbered area" unless the user confirms it.
+   - Instead, ASK: "I see the location, but I need confirmation: Is this area high ground or low? Is it currently timber, open field, or mixed brush?"
+   - Only make recommendations AFTER the user provides terrain details. Guessing wrong destroys credibility.
+5. RIDGE RULE: Avoid placing food plots on ridge tops or steep slopes. Prefer bottom ground, benches, gentle plateaus. But ASK about elevation if uncertain—do not assume.
+6. ORGANIC SHAPES: Bedding pockets and plots must be irregular, organic forms (kidney, teardrop, crescent, amoeba) made of 6–10 vertices. NO rectangles or perfect ellipses.
+7. CURVED TRAVEL CORRIDORS: Trails / travel corridors must bend naturally with at least 5 waypoints and gentle arcs (use LineStrings with 5+ coordinates).
+8. PROPERTY NOTES: Every feature must include both a "title" (short name) and "reason" (why this placement works) inside the properties block.
+9. JSON CONTRACT: Respond ONLY with valid JSON using the schema below. No prose outside the JSON.
 
 RESPONSE SCHEMA (always include drawing, even if empty):
 {
@@ -51,8 +71,8 @@ RESPONSE SCHEMA (always include drawing, even if empty):
         "type": "Feature",
         "properties": {
           "type": "bedding" | "food_plot" | "travel_corridor" | "staging_area" | "observation",
-          "label": "North Bench Bedding",
-          "notes": "Optional detail"
+          "title": "North Bench Bedding",
+          "reason": "Explain why this exact spot works"
         },
         "geometry": {
           "type": "Point" | "LineString" | "Polygon",

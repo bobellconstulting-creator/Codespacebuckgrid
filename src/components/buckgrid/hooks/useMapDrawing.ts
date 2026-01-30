@@ -11,6 +11,9 @@ type DrawnPath = {
   toolId: string
   color: string
   points: LatLngLike[]
+  type?: string
+  acres?: number
+  isExternal?: boolean
 }
 
 export type MapContext = {
@@ -40,6 +43,19 @@ function calculateAreaAcres(pts: LatLngLike[]) {
     area += (p2.lng - p1.lng) * (Math.PI / 180) * (2 + Math.sin(p1.lat * (Math.PI / 180)) + Math.sin(p2.lat * (Math.PI / 180)))
   }
   return Number((Math.abs((area * radius * radius) / 2.0) * 0.000247105).toFixed(2))
+}
+
+function pointInPolygon(point: LatLngLike, polygon: LatLngLike[]): boolean {
+  if (polygon.length < 3) return false
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng, yi = polygon[i].lat
+    const xj = polygon[j].lng, yj = polygon[j].lat
+    const intersect = ((yi > point.lat) !== (yj > point.lat)) &&
+      (point.lng < (xj - xi) * (point.lat - yi) / (yj - yi) + xi)
+    if (intersect) inside = !inside
+  }
+  return inside
 }
 
 export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivElement>, activeTool: Tool, brushSize: number }) {
@@ -111,14 +127,34 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
     }
     isDrawingRef.current = true
     const tool = activeToolRef.current
-    currentPathRef.current = { toolId: tool.id, color: tool.color, points: [{ lat: latlng.lat, lng: latlng.lng }] }
-    tempPathRef.current = L.polyline([latlng], { 
+    currentPathRef.current = { 
+      toolId: tool.id, 
+      color: tool.color, 
+      type: tool.type,
+      points: [{ lat: latlng.lat, lng: latlng.lng }] 
+    }
+    const polyline = L.polyline([latlng], { 
       color: tool.color, 
       weight: brushSizeRef.current * 0.5, 
       opacity: 0.6,
       lineCap: 'round',
       lineJoin: 'round'
     }).addTo(drawnItemsRef.current!)
+    
+    // Add click handler for user shapes
+    polyline.on('click', () => {
+      const acres = currentPathRef.current?.acres || 0
+      const type = tool.type || tool.name
+      const popupContent = buildPopupHtml({
+        color: tool.color,
+        type,
+        title: tool.name,
+        reason: acres > 0 ? `${acres.toFixed(2)} acres` : 'Drawing in progress'
+      })
+      polyline.bindPopup(popupContent).openPopup()
+    })
+    attachInteractivity(polyline)
+    tempPathRef.current = polyline
   }, [containerRef])
 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
@@ -133,14 +169,33 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
     isDrawingRef.current = false
     tempPathRef.current = null
     if (currentPathRef.current && currentPathRef.current.points.length > 1) {
-      drawnPathsRef.current.push(currentPathRef.current)
+      const path = currentPathRef.current
+      // Calculate acreage if closed path (polygon-like)
+      if (path.points.length >= 3) {
+        path.acres = calculateAreaAcres(path.points)
+      }
+      // Check if outside boundary (for focus tool)
+      if (path.toolId === 'focus' && boundaryPointsRef.current.length >= 3) {
+        const centroid = path.points.reduce(
+          (acc, pt) => ({ lat: acc.lat + pt.lat / path.points.length, lng: acc.lng + pt.lng / path.points.length }),
+          { lat: 0, lng: 0 }
+        )
+        path.isExternal = !pointInPolygon(centroid, boundaryPointsRef.current)
+      }
+      drawnPathsRef.current.push(path)
     }
     currentPathRef.current = null
   }, [])
 
   const toGeoJSONLine = (path: DrawnPath): Feature<LineString> => ({
     type: 'Feature',
-    properties: { toolId: path.toolId, color: path.color },
+    properties: { 
+      toolId: path.toolId, 
+      color: path.color,
+      type: path.type,
+      acres: path.acres,
+      isExternal: path.isExternal
+    },
     geometry: {
       type: 'LineString',
       coordinates: path.points.map(pt => [pt.lng, pt.lat])
@@ -157,6 +212,72 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         coordinates: [[...boundaryPointsRef.current, boundaryPointsRef.current[0]].map(pt => [pt.lng, pt.lat])]
       }
     }
+  }
+
+  const smoothLatLngPoints = (points: LatLngLike[], iterations: number, closed: boolean) => {
+    if (points.length < 3) return points
+    let pts = points.map(p => ({ ...p }))
+    for (let i = 0; i < iterations; i++) {
+      if (pts.length < 2) break
+      const next: LatLngLike[] = []
+      const limit = closed ? pts.length : pts.length - 1
+      for (let j = 0; j < limit; j++) {
+        const curr = pts[j]
+        const nextPt = pts[(j + 1) % pts.length]
+        const q: LatLngLike = {
+          lat: 0.75 * curr.lat + 0.25 * nextPt.lat,
+          lng: 0.75 * curr.lng + 0.25 * nextPt.lng,
+        }
+        const r: LatLngLike = {
+          lat: 0.25 * curr.lat + 0.75 * nextPt.lat,
+          lng: 0.25 * curr.lng + 0.75 * nextPt.lng,
+        }
+        next.push(q, r)
+      }
+      if (closed) {
+        next.push({ ...next[0] })
+      } else {
+        next.unshift({ ...pts[0] })
+        next.push({ ...pts[pts.length - 1] })
+      }
+      pts = next
+    }
+    return pts
+  }
+
+  const colorByType: Record<string, string> = {
+    bedding: '#00FF6A',
+    food_plot: '#F4C95D',
+    travel_corridor: '#38BDF8',
+    staging_area: '#FDA4AF',
+    observation: '#C084FC',
+  }
+
+  const buildPopupHtml = (opts: { color: string; type?: string; title?: string; reason?: string }) => {
+    const { color, type, title, reason } = opts
+    const badge = type ? type.replace(/_/g, ' ').toUpperCase() : 'SUGGESTION'
+    return `
+      <div style="background:#1a1a1a;border-radius:8px;border:1px solid rgba(255,255,255,0.08);padding:10px 12px;min-width:220px;color:#f5f5f0;font-family:'Inter', sans-serif;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <span style="font-size:10px;letter-spacing:1.2px;font-weight:600;padding:2px 8px;border-radius:999px;background:${color}1f;color:${color};border:1px solid ${color}40;">${badge}</span>
+          <span style="font-size:13px;font-weight:600;color:#fff;">${title || 'Tony Suggestion'}</span>
+        </div>
+        <div style="font-size:12px;color:#d4c8b4;line-height:1.5;">${reason || 'Placement rationale unavailable.'}</div>
+      </div>`
+  }
+
+  const resetCursorForTool = () => {
+    if (!containerRef.current) return
+    containerRef.current.style.cursor = activeToolRef.current.id === 'nav' ? 'grab' : 'crosshair'
+  }
+
+  const attachInteractivity = (layer: LeafletNS.Layer) => {
+    layer.on('mouseover', () => {
+      if (containerRef.current) containerRef.current.style.cursor = 'pointer'
+    })
+    layer.on('mouseout', () => {
+      resetCursorForTool()
+    })
   }
 
   return { 
@@ -207,39 +328,64 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         if (!L || !aiSuggestionsLayerRef.current) return
         
         aiSuggestionsLayerRef.current.clearLayers()
-        
+
         features.forEach(feature => {
-          const { geometry, properties = {} } = feature
-          if (!geometry) return
-          const color = properties.type === 'bedding' ? '#00FF6A' 
-            : properties.type === 'food_plot' ? '#F4C95D'
-            : properties.type === 'travel_corridor' ? '#38BDF8'
-            : '#C084FC'
-          
+          const { geometry, properties } = feature
+          if (!geometry || !properties) return
+          const type = (properties.type || 'suggestion') as string
+          const color = colorByType[type] || '#C084FC'
+          const title = properties.title || properties.label || type
+          const reason = properties.reason || properties.notes
+          const popupHtml = buildPopupHtml({ color, type, title, reason })
+
           if (geometry.type === 'Point') {
             const [lng, lat] = geometry.coordinates as [number, number]
-            L.circleMarker([lat, lng], {
-              color,
-              radius: 8,
-              fillOpacity: 0.6,
-              weight: 3
-            }).bindPopup(`<b>${properties.label || properties.type || 'Suggestion'}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+            const marker = L.marker([lat, lng], {
+              icon: L.divIcon({
+                className: '',
+                html: `<div style="width:16px;height:16px;border-radius:50%;background:${color};box-shadow:0 0 12px ${color};border:2px solid #0f0f0f"></div>`
+              })
+            }).bindPopup(popupHtml)
               .addTo(aiSuggestionsLayerRef.current!)
-          } else if (geometry.type === 'Polygon') {
+            attachInteractivity(marker)
+            return
+          }
+
+          if (geometry.type === 'Polygon') {
             const ring = geometry.coordinates?.[0] || []
-            L.polygon(ring.map((c: number[]) => [c[1], c[0]]), {
+            if (ring.length < 3) return
+            const trimmed = [...ring]
+            if (trimmed.length > 2) {
+              const first = trimmed[0]
+              const last = trimmed[trimmed.length - 1]
+              if (first && last && first[0] === last[0] && first[1] === last[1]) {
+                trimmed.pop()
+              }
+            }
+            const latLngs = trimmed.map(([lng, lat]) => ({ lat, lng }))
+            const smooth = smoothLatLngPoints(latLngs, 3, true)
+            const polygon = L.polygon(smooth.map(pt => [pt.lat, pt.lng]), {
               color,
-              weight: 3,
-              fillOpacity: 0.2
-            }).bindPopup(`<b>${properties.label || properties.type || 'Suggestion'}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+              weight: 2.5,
+              fillOpacity: 0.25,
+            }).bindPopup(popupHtml)
               .addTo(aiSuggestionsLayerRef.current!)
-          } else if (geometry.type === 'LineString') {
-            L.polyline(geometry.coordinates.map((c: number[]) => [c[1], c[0]]), {
+            attachInteractivity(polygon)
+            return
+          }
+
+          if (geometry.type === 'LineString') {
+            const coords = geometry.coordinates || []
+            if (coords.length < 2) return
+            const latLngs = coords.map(([lng, lat]) => ({ lat, lng }))
+            const smooth = smoothLatLngPoints(latLngs, 2, false)
+            const line = L.polyline(smooth.map(pt => [pt.lat, pt.lng]), {
               color,
               weight: 4,
-              opacity: 0.7
-            }).bindPopup(`<b>${properties.label || properties.type || 'Suggestion'}</b>${properties.notes ? '<br>' + properties.notes : ''}`)
+              opacity: 0.8,
+            }).bindPopup(popupHtml)
               .addTo(aiSuggestionsLayerRef.current!)
+            attachInteractivity(line)
           }
         })
       }
