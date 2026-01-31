@@ -1,3 +1,4 @@
+
 'use client'
 
 import React, { forwardRef, useImperativeHandle, useRef, useState } from 'react'
@@ -7,56 +8,91 @@ import { useMapDrawing, type MapApi } from '../hooks/useMapDrawing'
 export type MapContainerHandle = MapApi
 
 const MapContainer = forwardRef<MapContainerHandle, { activeTool: Tool, brushSize: number }>(({ activeTool, brushSize }, ref) => {
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null)
+  
+  // Initialize the drawing engine
   const { api, handlers } = useMapDrawing({ containerRef, activeTool, brushSize })
+  
+  // Expose the API to the parent
   useImperativeHandle(ref, () => api, [api])
 
   const runManualSearch = async () => {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN
-    if (!token) { alert("Missing Token"); return }
+    // 1. HARDCODED TOKEN (Fixes Audit Point #1)
+    const token = "pk.eyJ1IjoiYm9iZWxsODciLCJhIjoiY21rdDBkb2V5MHo5NzNlb2RyeWJ0dnZkMSJ9.cBBzJ0BR4wm5TLeItbOI_g";
+    
+    if (!searchQuery) return;
+
     try {
-      // 1. Get Location
-      const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${token}`)
-      const data = await res.json()
-      // 2. Fly Map (Check if 'api' exists, otherwise just log for now)
+      // 2. FETCH LOCATION
+      const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${token}`);
+      const data = await res.json();
+      
       if (data.features?.[0]?.center) {
-        const [lng, lat] = data.features[0].center
-        console.log("Flying to:", lat, lng)
-        if (api && typeof api.flyTo === 'function') {
-          api.flyTo([lat, lng], 16)
-        }
+         const [lng, lat] = data.features[0].center;
+         console.log(`Flying to: ${lat}, ${lng}`);
+
+         // 3. FIX NAVIGATION (Now uses api.flyTo)
+         if (api && typeof api.flyTo === 'function') {
+           api.flyTo(lat, lng, 16);
+         } else {
+           alert("Map Error: Could not move map.");
+         }
+      } else {
+        alert("Location not found.");
       }
-    } catch (e) { console.error(e) }
-  }
+    } catch (e) { console.error("Search Error:", e); }
+  };
 
   return (
     <>
-      {/* --- SEARCH BAR (New) --- */}
+      {/* --- BUCKGRID PRO SEARCH BAR (Fixes Audit Point #3) --- */}
       <div style={{
           position: 'fixed',
           top: '20px',
           right: '80px',
-          zIndex: 99999, /* Force on top */
-          backgroundColor: 'white',
-          padding: '10px',
+          zIndex: 99999,
+          backgroundColor: '#1a1a1a', /* Dark Background */
+          padding: '8px 12px',
           borderRadius: '8px',
-          border: '4px solid red', /* RED BORDER FOR VISIBILITY */
+          border: '1px solid #333',
           display: 'flex',
-          gap: '5px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+          gap: '8px',
+          alignItems: 'center',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.6)'
       }}>
         <input 
            value={searchQuery} 
            onChange={(e) => setSearchQuery(e.target.value)}
            onKeyDown={(e) => e.key === 'Enter' && runManualSearch()}
-           placeholder="Search Address..."
-           style={{border: '1px solid #ccc', color: 'black', padding: '5px'}}
+           placeholder="Search location..."
+           style={{
+             background: 'transparent',
+             border: 'none',
+             color: 'white',
+             outline: 'none',
+             width: '200px',
+             fontSize: '14px'
+           }}
         />
-        <button onClick={runManualSearch} style={{background: 'blue', color: 'white', padding: '5px 10px'}}>GO</button>
+        <button 
+          onClick={runManualSearch} 
+          style={{
+            background: '#ea580c', /* Orange Accent */
+            color: 'white', 
+            padding: '6px 12px',
+            borderRadius: '6px',
+            fontWeight: 'bold',
+            fontSize: '12px',
+            border: 'none',
+            cursor: 'pointer'
+          }}
+        >
+          GO
+        </button>
       </div>
 
-      {/* --- EXISTING MAP CONTAINER (Preserved) --- */}
+      {/* MAP CONTAINER */}
       <div
         ref={containerRef}
         onPointerDown={handlers.onPointerDown}
@@ -65,9 +101,9 @@ const MapContainer = forwardRef<MapContainerHandle, { activeTool: Tool, brushSiz
         style={{ height: '100%', width: '100%', zIndex: 1, touchAction: 'none', background: '#000' }}
       />
     </>
-  )
+  );
 })
 
 MapContainer.displayName = 'MapContainer'
 
-export default React.memo(MapContainer)
+export default MapContainer

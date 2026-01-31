@@ -294,6 +294,11 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
 
   return { 
     api: { 
+      flyTo: (lat: number, lng: number, zoom: number = 16) => {
+        if (mapRef.current) {
+          mapRef.current.setView([lat, lng], zoom)
+        }
+      },
       lockBoundary: () => {
         // Only lock if valid polygon
         if (boundaryPointsRef.current.length < 3) return null
