@@ -108,9 +108,23 @@ export default function BuckGridProPage() {
           const alwaysVisible = TOOLS.filter(t => t.id === 'nav' || t.id === 'boundary');
           let tabTools: Tool[] = [];
           if (toolTab === 'habitat') {
-            tabTools = TOOLS.filter(t => ['bedding','sanctuary','focus','food'].includes(t.id));
+            tabTools = TOOLS.filter(t => [
+              'bedding',
+              'sanctuary',
+              'focus',
+              'food',
+              'egyptian_wheat',
+              'switchgrass'
+            ].includes(t.id));
           } else {
-            tabTools = TOOLS.filter(t => ['clover','corn','milo','alfalfa'].includes(t.id));
+            tabTools = TOOLS.filter(t => [
+              'clover',
+              'corn',
+              'milo',
+              'alfalfa',
+              'brassicas',
+              'winter_wheat'
+            ].includes(t.id));
           }
           // Hide eraser for now
           const filtered = [...alwaysVisible, ...tabTools];
