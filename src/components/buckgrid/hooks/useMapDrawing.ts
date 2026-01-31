@@ -1,97 +1,199 @@
-'use client'
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
+import L from 'leaflet'
+// FIX: Using H3 v4 'polygonToCells' for spatial recognition
+import { polygonToCells } from 'h3-js'
+import 'leaflet/dist/leaflet.css'
 
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { Tool } from '../constants/tools'
-import type * as LeafletNS from 'leaflet'
+export type LayerType = 'boundary' | 'bedding' | 'food' | 'water' | 'path' | 'structure'
 
-type LatLngLike = { lat: number; lng: number }
-
-export type MapApi = {
-  lockBoundary: () => number | null
-  wipeAll: () => void
-  getCaptureElement: () => HTMLElement | null
+export interface MapApi {
+  flyTo: (center: [number, number], zoom: number) => void
+  clearAll: () => void
+  undoLast: () => void
+  setDrawMode: (mode: LayerType) => void
+  addSmartFeature: (geojson: any, type: LayerType, label: string) => void
+  lockAndBake: () => { count: number; acres: number; pathYards: number; layers: any[] }
 }
 
-function calculateAreaAcres(pts: LatLngLike[]) {
-  if (pts.length < 3) return 0
-  const radius = 6378137
-  let area = 0
-  for (let i = 0; i < pts.length; i++) {
-    const p1 = pts[i]
-    const p2 = pts[(i + 1) % pts.length]
-    area += (p2.lng - p1.lng) * (Math.PI / 180) * (2 + Math.sin(p1.lat * (Math.PI / 180)) + Math.sin(p2.lat * (Math.PI / 180)))
-  }
-  return Number((Math.abs((area * radius * radius) / 2.0) * 0.000247105).toFixed(2))
+interface UseMapDrawingProps {
+  containerRef: React.RefObject<HTMLDivElement>
+  activeTool: string 
+  brushSize: number
 }
 
-export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivElement>, activeTool: Tool, brushSize: number }) {
-  const { containerRef, activeTool, brushSize } = args
-  const LRef = useRef<typeof LeafletNS | null>(null)
-  const mapRef = useRef<LeafletNS.Map | null>(null)
-  const drawnItemsRef = useRef<LeafletNS.FeatureGroup | null>(null)
-  const boundaryLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
-  const boundaryPointsRef = useRef<LatLngLike[]>([])
-  const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
-  const isDrawingRef = useRef(false)
-
-  const activeToolRef = useRef(activeTool)
-  const brushSizeRef = useRef(brushSize)
-  useEffect(() => { activeToolRef.current = activeTool }, [activeTool])
-  useEffect(() => { brushSizeRef.current = brushSize }, [brushSize])
-
+export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDrawingProps) {
+  const mapRef = useRef<L.Map | null>(null)
+  const drawnItemsRef = useRef<L.FeatureGroup | null>(null)
+  const currentDrawRef = useRef<L.Polyline | null>(null) 
+  
+  // 1. INITIALIZE MAP
   useEffect(() => {
-    let mounted = true
-    const init = async () => {
-      const leaflet = await import('leaflet')
-      if (!mounted || !containerRef.current) return
-      LRef.current = leaflet
-      const map = leaflet.map(containerRef.current, { center: [38.6583, -96.4937], zoom: 16, zoomControl: false, attributionControl: false })
-      leaflet.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, crossOrigin: true }).addTo(map)
-      drawnItemsRef.current = new leaflet.FeatureGroup().addTo(map)
-      boundaryLayerRef.current = new leaflet.FeatureGroup().addTo(map)
-      mapRef.current = map
+    if (!containerRef.current || mapRef.current) return
+    const map = L.map(containerRef.current, { zoomControl: false, attributionControl: false }).setView([38.5, -98.0], 7)
+    
+    // Satellite Layer
+    L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+      attribution: 'Google Satellite'
+    }).addTo(map)
+
+    const drawnItems = new L.FeatureGroup()
+    map.addLayer(drawnItems)
+    drawnItemsRef.current = drawnItems
+    mapRef.current = map
+
+    return () => { map.remove(); mapRef.current = null }
+  }, [containerRef])
+
+  // 2. HANDLERS (Paint & Touch Fixed)
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const onMouseDown = (e: L.LeafletMouseEvent) => {
+        if (activeTool === 'cursor') return
+        const { lat, lng } = e.latlng
+        
+        let color = '#FFD700' 
+        if (activeTool === 'bedding') color = '#8B4513'
+        if (activeTool === 'food') color = '#32CD32'
+        if (activeTool === 'water') color = '#00BFFF'
+        
+        const polyline = L.polyline([[lat, lng]], { color, weight: brushSize || 4, opacity: 0.8 })
+        polyline.addTo(drawnItemsRef.current!)
+        currentDrawRef.current = polyline
     }
-    init()
-    return () => { mounted = false }
-  }, [containerRef])
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    const L = LRef.current
-    if (!mapRef.current || !L || activeToolRef.current.id === 'nav') return
-    const rect = containerRef.current!.getBoundingClientRect()
-    const latlng = mapRef.current.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top])
-    if (activeToolRef.current.id === 'boundary') {
-      boundaryPointsRef.current.push({ lat: latlng.lat, lng: latlng.lng })
-      L.circleMarker(latlng, { color: '#FF6B00', radius: 5, fillOpacity: 1 }).addTo(boundaryLayerRef.current!)
-      if (boundaryPointsRef.current.length > 1) L.polyline(boundaryPointsRef.current as any, { color: '#FF6B00', weight: 4 }).addTo(boundaryLayerRef.current!)
-      return
+    const onMouseMove = (e: L.LeafletMouseEvent) => {
+        if (!currentDrawRef.current) return 
+        currentDrawRef.current.addLatLng(e.latlng)
     }
-    isDrawingRef.current = true
-    tempPathRef.current = L.polyline([latlng], { color: activeToolRef.current.color, weight: brushSizeRef.current, opacity: 0.6 }).addTo(drawnItemsRef.current!)
-  }, [containerRef])
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDrawingRef.current || !tempPathRef.current) return
-    const rect = containerRef.current!.getBoundingClientRect()
-    tempPathRef.current.addLatLng(mapRef.current!.containerPointToLatLng([e.clientX - rect.left, e.clientY - rect.top]))
-  }, [containerRef])
+    const onMouseUp = () => {
+        if (!currentDrawRef.current) return
+        const shape = currentDrawRef.current
+        const coords = shape.getLatLngs() as L.LatLng[]
+        
+        // Auto-Close Logic (The "Lazy Lock")
+        if (activeTool !== 'path' && coords.length > 2) {
+             const start = coords[0]
+             const end = coords[coords.length - 1]
+             if (start.distanceTo(end) > 5) shape.addLatLng(start) 
+             
+             const polygon = L.polygon(shape.getLatLngs() as L.LatLng[], { 
+                 color: shape.options.color, 
+                 fillColor: shape.options.color, 
+                 fillOpacity: 0.3, 
+                 weight: 2 
+             })
+             drawnItemsRef.current?.removeLayer(shape)
+             drawnItemsRef.current?.addLayer(polygon)
+        }
+        currentDrawRef.current = null 
+    }
 
-  return { 
-    api: { 
-      lockBoundary: () => {
-        const acres = calculateAreaAcres(boundaryPointsRef.current)
-        if (!acres) return null
-        boundaryLayerRef.current?.clearLayers()
-        LRef.current!.polygon(boundaryPointsRef.current as any, { color: '#FF6B00', weight: 5, fillOpacity: 0.15 }).addTo(boundaryLayerRef.current!)
-        return acres
-      },
-      wipeAll: () => {
-        drawnItemsRef.current?.clearLayers()
-        boundaryLayerRef.current?.clearLayers()
-        boundaryPointsRef.current = []
-      },
-      getCaptureElement: () => containerRef.current
-    }, 
-    handlers: { onPointerDown, onPointerMove, onPointerUp: () => { isDrawingRef.current = false; tempPathRef.current = null } } 
-  }
+    // Explicit Touch Wrappers to prevent errors
+    const onTouchDown = (e: any) => onMouseDown(e)
+    const onTouchMove = (e: any) => onMouseMove(e)
+    const onTouchUp = () => onMouseUp()
+
+    map.on('mousedown', onMouseDown)
+    map.on('mousemove', onMouseMove)
+    map.on('mouseup', onMouseUp)
+    map.on('touchstart', onTouchDown)
+    map.on('touchmove', onTouchMove)
+    map.on('touchend', onTouchUp)
+
+    return () => {
+        map.off('mousedown', onMouseDown)
+        map.off('mousemove', onMouseMove)
+        map.off('mouseup', onMouseUp)
+        map.off('touchstart', onTouchDown)
+        map.off('touchmove', onTouchMove)
+        map.off('touchend', onTouchUp)
+    }
+  }, [activeTool, brushSize])
+
+  // 3. SPATIAL RECOGNITION (Tony's Eyes)
+  const lockAndBake = useCallback(() => {
+    if (!drawnItemsRef.current) return { count: 0, acres: 0, pathYards: 0, layers: [] }
+    
+    const layers = drawnItemsRef.current.getLayers()
+    let boundaryGeo: any = null
+    const allFeatures: any[] = []
+    let totalPathDistanceMeters = 0
+
+    for (const layer of layers) {
+      // @ts-ignore
+      if (layer.toGeoJSON) {
+        // @ts-ignore
+        const geo = layer.toGeoJSON()
+        
+        // Path Math
+        if (geo.geometry.type === 'LineString') {
+            // @ts-ignore
+            if (layer.getLatLngs) {
+               // @ts-ignore
+               const latlngs = layer.getLatLngs()
+               for(let i=0; i < latlngs.length -1; i++) {
+                   totalPathDistanceMeters += latlngs[i].distanceTo(latlngs[i+1])
+               }
+            }
+            // If it's the boundary tool, force it to be a polygon
+            if (activeTool === 'boundary' || activeTool === 'draw_poly') {
+                 const coords = geo.geometry.coordinates
+                 coords.push(coords[0]) 
+                 geo.geometry.type = 'Polygon'
+                 geo.geometry.coordinates = [coords]
+            }
+        }
+
+        allFeatures.push(geo)
+        // The largest polygon becomes the "Property" for Tony to analyze
+        if (geo.geometry.type === 'Polygon') boundaryGeo = geo
+      }
+    }
+
+    if (!boundaryGeo) return { count: 0, acres: 0, pathYards: 0, layers: [] }
+
+    // H3 SPATIAL CALCULATION
+    const hexIds = polygonToCells(boundaryGeo.geometry.coordinates, 10, true)
+    
+    // SAVE DATA FOR TONY
+    if (mapRef.current) {
+        // @ts-ignore
+        mapRef.current.options.hexGrid = hexIds
+        // @ts-ignore
+        mapRef.current.options.drawnFeatures = allFeatures
+    }
+
+    return { 
+        count: hexIds.length, 
+        acres: parseFloat((hexIds.length * 1.0).toFixed(1)), 
+        pathYards: Math.round(totalPathDistanceMeters * 1.09361), 
+        layers: allFeatures 
+    }
+  }, [activeTool])
+
+  const api = useMemo<MapApi>(() => ({
+    flyTo: (center, zoom) => mapRef.current?.setView(center, zoom),
+    clearAll: () => drawnItemsRef.current?.clearLayers(),
+    undoLast: () => { 
+        if (drawnItemsRef.current) { 
+            const l = drawnItemsRef.current.getLayers(); 
+            if (l.length > 0) drawnItemsRef.current.removeLayer(l[l.length - 1]) 
+        } 
+    },
+    setDrawMode: () => {}, 
+    addSmartFeature: (geojson, type, label) => { 
+        if (mapRef.current) { 
+            const color = type === 'bedding' ? 'brown' : 'green'; 
+            L.geoJSON(geojson, { style: { color } }).bindPopup(label).addTo(mapRef.current) 
+        } 
+    },
+    lockAndBake
+  }), [lockAndBake])
+
+  return { api }
 }
