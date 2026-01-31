@@ -13,6 +13,7 @@ export default function BuckGridProPage() {
   const [activeTool, setActiveTool] = useState<Tool>(TOOLS[0])
   const [brushSize, setBrushSize] = useState(30)
   const [propertyAcres, setPropertyAcres] = useState(0)
+  const [toolTab, setToolTab] = useState<'habitat' | 'food'>('habitat')
 
   // Prevent duplicate lock actions (React Strict Mode guard)
   const lockOnceRef = useRef(false)
@@ -67,15 +68,64 @@ export default function BuckGridProPage() {
           MAPPING TOOLS
         </div>
         <div className="dividerGold" />
-        <ToolGrid
-          tools={TOOLS}
-          activeToolId={activeTool.id}
-          brushSize={brushSize}
-          onSelectTool={setActiveTool}
-          onBrushSize={setBrushSize}
-          onLockBorder={onLockBorder}
-          onWipeAll={() => { mapRef.current?.wipeAll(); setPropertyAcres(0) }}
-        />
+        {/* Tabs for Habitat / Food */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <button
+            style={{
+              flex: 1,
+              padding: '6px 0',
+              background: toolTab === 'habitat' ? 'var(--gold)' : 'none',
+              color: toolTab === 'habitat' ? '#222' : 'var(--gold)',
+              border: 'none',
+              borderRadius: 6,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontSize: 13,
+              letterSpacing: 2,
+              transition: 'background 0.15s',
+            }}
+            onClick={() => setToolTab('habitat')}
+          >HABITAT</button>
+          <button
+            style={{
+              flex: 1,
+              padding: '6px 0',
+              background: toolTab === 'food' ? 'var(--gold)' : 'none',
+              color: toolTab === 'food' ? '#222' : 'var(--gold)',
+              border: 'none',
+              borderRadius: 6,
+              fontWeight: 700,
+              cursor: 'pointer',
+              fontSize: 13,
+              letterSpacing: 2,
+              transition: 'background 0.15s',
+            }}
+            onClick={() => setToolTab('food')}
+          >FOOD</button>
+        </div>
+        {/* Filter tools for tab, always show PAN/BOUNDARY */}
+        {(() => {
+          const alwaysVisible = TOOLS.filter(t => t.id === 'nav' || t.id === 'boundary');
+          let tabTools: Tool[] = [];
+          if (toolTab === 'habitat') {
+            tabTools = TOOLS.filter(t => ['bedding','sanctuary','focus','food'].includes(t.id));
+          } else {
+            tabTools = TOOLS.filter(t => ['clover','corn','milo','alfalfa'].includes(t.id));
+          }
+          // Hide eraser for now
+          const filtered = [...alwaysVisible, ...tabTools];
+          return (
+            <ToolGrid
+              tools={filtered}
+              activeToolId={activeTool.id}
+              brushSize={brushSize}
+              onSelectTool={setActiveTool}
+              onBrushSize={setBrushSize}
+              onLockBorder={onLockBorder}
+              onWipeAll={() => { mapRef.current?.wipeAll(); setPropertyAcres(0) }}
+            />
+          );
+        })()}
         {/* Dedicated Audit button for Tony */}
         <button
           style={{
