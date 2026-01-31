@@ -161,12 +161,26 @@ export default function BuckGridProPage() {
             if (mapContext?.sceneGraphLite) {
               boundaryLocked = !!mapContext.sceneGraphLite.boundary.locked;
               boundaryAcres = mapContext.sceneGraphLite.boundary.acres || 0;
-              features = mapContext.sceneGraphLite.features?.map(f => ({
-                id: f.id,
-                type: f.type,
-                acres: f.acres,
-                label: f.label
-              })) ?? [];
+              // Build human-readable feature labels
+              const typeCounts = {};
+              features = (mapContext.sceneGraphLite.features ?? []).map(f => {
+                const type = f.type || 'feature';
+                typeCounts[type] = (typeCounts[type] || 0) + 1;
+                const idx = typeCounts[type];
+                // Find display name for type
+                let display = type.replace(/_/g, ' ');
+                const tool = TOOLS.find(t => t.type === type || t.id === type);
+                if (tool && tool.name) display = tool.name;
+                const labelBase = `${display} ${idx}`;
+                const acres = f.acres ? Number(f.acres) : undefined;
+                const label = acres ? `${labelBase} (${acres.toFixed(2)} ac)` : labelBase;
+                return {
+                  id: labelBase,
+                  type: f.type,
+                  acres,
+                  label
+                };
+              });
               totalsByType = mapContext.sceneGraphLite.totalsByType ?? {};
             }
             const auditContext = {
