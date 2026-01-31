@@ -155,7 +155,30 @@ export default function BuckGridProPage() {
             fontSize: 15
           }}
           onClick={() => {
-            chatRef.current?.addTonyMessage('Audit request: Please analyze the current map context.')
+            // Build AuditContext
+            const mapContext = mapRef.current?.getMapContext() ?? null;
+            let boundaryLocked = false, boundaryAcres = 0, features = [], totalsByType = {};
+            if (mapContext?.sceneGraphLite) {
+              boundaryLocked = !!mapContext.sceneGraphLite.boundary.locked;
+              boundaryAcres = mapContext.sceneGraphLite.boundary.acres || 0;
+              features = mapContext.sceneGraphLite.features?.map(f => ({
+                id: f.id,
+                type: f.type,
+                acres: f.acres,
+                label: f.label
+              })) ?? [];
+              totalsByType = mapContext.sceneGraphLite.totalsByType ?? {};
+            }
+            const auditContext = {
+              boundaryLocked,
+              boundaryAcres,
+              features,
+              totalsByType
+            };
+            // Compose structured prompt
+            const prompt = `AUDIT_PROPERTY: Run a full habitat audit using the provided AuditContext.`;
+            // Send to Tony
+            chatRef.current?.addTonyMessage(`${prompt}\n\nAuditContext: ${JSON.stringify(auditContext)}`);
           }}
         >Audit Property</button>
       </div>
