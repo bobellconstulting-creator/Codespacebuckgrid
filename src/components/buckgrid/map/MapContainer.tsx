@@ -1,25 +1,41 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useRef } from 'react'
-import type { Tool } from '../constants/tools'
-import { useMapDrawing, type MapApi } from '../hooks/useMapDrawing'
+import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react'
+import { useMapDrawing, type LayerType } from '../hooks/useMapDrawing'
 
-export type MapContainerHandle = MapApi
+export interface MapContainerHandle {
+  lockBoundary: () => any // CHANGED: Returns full object, not just number
+  wipeAll: () => void
+  getCaptureElement: () => HTMLDivElement | null
+}
 
-const MapContainer = forwardRef<MapContainerHandle, { activeTool: Tool, brushSize: number }>(({ activeTool, brushSize }, ref) => {
+interface Props {
+  activeTool: any
+  brushSize: number
+}
+
+const MapContainer = forwardRef<MapContainerHandle, Props>(({ activeTool, brushSize }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null)
-  const { api, handlers } = useMapDrawing({ containerRef, activeTool, brushSize })
-  useImperativeHandle(ref, () => api, [api])
+  
+  // Initialize the Ferrari Engine
+  const { api } = useMapDrawing({ 
+    containerRef, 
+    activeTool: activeTool.id, 
+    brushSize 
+  })
 
-  return (
-    <div
-      ref={containerRef}
-      onPointerDown={handlers.onPointerDown}
-      onPointerMove={handlers.onPointerMove}
-      onPointerUp={handlers.onPointerUp}
-      style={{ height: '100%', width: '100%', zIndex: 1, touchAction: 'none', background: '#000' }}
-    />
-  )
+  useImperativeHandle(ref, () => ({
+    // PASS THE FULL DATA PACKET
+    lockBoundary: () => {
+      const stats = api.lockAndBake()
+      return stats // Returns { count, acres, pathYards, layers }
+    },
+    wipeAll: () => api.clearAll(),
+    getCaptureElement: () => containerRef.current
+  }))
+
+  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 })
 
-export default React.memo(MapContainer)
+MapContainer.displayName = 'MapContainer'
+export default MapContainer
