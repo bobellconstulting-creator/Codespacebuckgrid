@@ -100,7 +100,6 @@ function useTonyTTS() {
 
   return { enabled, toggle, speaking, stop, supported, needsUserAction, manualPlay, lastTonyIndex, ttsPlay };
 }
-"use client"
 // --- Tony voice output hook ---
 function useTonyVoice({ chat }: { chat: { role: string, text: string }[] }) {
   const [enabled, setEnabled] = React.useState(() => {
@@ -282,6 +281,10 @@ const TonyChat = forwardRef<TonyChatHandle, {
   const [loading, setLoading] = useState(false)
   const { listening, supported: voiceInputSupported, toggle: toggleMic } = useVoiceInput({ setInput })
   const tts = useTonyTTS();
+  const voiceEnabled = tts.enabled;
+  const toggleVoice = tts.toggle;
+  const speaking = tts.speaking;
+  const stop = tts.stop;
   const containerRef = useRef<HTMLDivElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -344,28 +347,37 @@ const TonyChat = forwardRef<TonyChatHandle, {
       console.warn('Map capture failed, sending text-only:', err)
     }
     
+
     // Get map context (bounds, drawn features)
     const mapContext = getMapContext()
-    const contextText = buildContextText(mapContext)
-    const fullMessage = `${contextText}${baseMessage}`
+    // --- SYSTEM PROMPT UPGRADE ---
+    const tonySystemPrompt = `You are \"Tony\" — a professional whitetail habitat specialist AND a friendly mentor.\n\nYou will be talking to two types of users:\n1) Kids (age <= 12): be warm, simple, encouraging, and conversational.\n2) Adults: be professional, direct, and detailed.\n\nIdentity + rapport:\n- If the user states their name, acknowledge it immediately (“Nice to meet you, Bryson.”).\n- Greet by name when known.\n- Ask 1–2 short questions before giving big recommendations.\n\nBoundary logic:\n- If boundaryLocked=true, NEVER ask them to mark the boundary.\n- Start by confirming what you see: “I see your boundary is locked at {boundaryAcres} acres.”\n\nOutput style:\n- Keep replies to 4–8 short sentences max for kids.\n- Use plain words. No long disclaimers.\n- Always offer a next step they can do on the map (e.g., “Draw your bedding area here…”).\n- If info is missing (vegetation), ask for it in a kid-friendly way, not as a blocker.`
 
-    // SceneGraphLite injection
-    const sceneGraphLite = mapContext?.sceneGraphLite || null
-    if (sceneGraphLite) {
-      // TEMP LOG: boundary acres, feature count, totalsByType keys
-      // eslint-disable-next-line no-console
-      console.log('[SceneGraphLite]', {
-        boundaryAcres: sceneGraphLite.boundary.acres,
-        featureCount: sceneGraphLite.features.length,
-        totalsByTypeKeys: Object.keys(sceneGraphLite.totalsByType)
-      })
+    // --- CONTEXT OBJECT ---
+    let boundaryLocked = false, boundaryAcres = 0, featureCounts = {};
+    if (mapContext?.sceneGraphLite) {
+      boundaryLocked = !!mapContext.sceneGraphLite.boundary.locked;
+      boundaryAcres = mapContext.sceneGraphLite.boundary.acres || 0;
+      featureCounts = {};
+      for (const k in mapContext.sceneGraphLite.totalsByType) {
+        featureCounts[k] = mapContext.sceneGraphLite.totalsByType[k].count;
+      }
     }
+    const context = { boundaryLocked, boundaryAcres, featureCounts };
+
+    // Compose message for Tony
+    const contextText = buildContextText(mapContext)
+    const fullMessage = `${tonySystemPrompt}\n\n${contextText}${baseMessage}`
+
+    // Show the exact context object being sent (for deliverable)
+    // eslint-disable-next-line no-console
+    console.log('TONY CONTEXT PAYLOAD:', context)
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: fullMessage, imageDataUrl, mapContext, sceneGraphLite })
+        body: JSON.stringify({ message: fullMessage, imageDataUrl, mapContext, context })
       })
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()

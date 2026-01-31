@@ -9,6 +9,7 @@ export type Tool = {
 }
 
 export const TOOLS: Tool[] = [
+  { id: 'nav', name: 'PAN', color: '#e0e0e0', icon: '🤚', type: 'nav' },
   { id: 'boundary', name: 'BOUNDARY', color: '#FFEB3B', icon: '🟨', type: 'boundary' },
   { id: 'bedding', name: 'BEDDING', color: '#92400e', icon: '🟫', type: 'bedding' },
   { id: 'sanctuary', name: 'SANCTUARY', color: '#3b82f6', icon: '🔵', type: 'sanctuary' },

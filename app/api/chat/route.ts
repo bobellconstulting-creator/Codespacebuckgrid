@@ -105,13 +105,26 @@ export async function POST(req: NextRequest) {
     const key = process.env.OPENROUTER_KEY
     if (!key) return NextResponse.json({ error: 'Missing OPENROUTER_KEY' }, { status: 500 })
 
-    const body = (await req.json()) as ChatRequestBody
+    const body = (await req.json()) as ChatRequestBody & { sceneGraphLite?: any }
     const message = body.message?.trim() || ''
     const imageDataUrl = body.imageDataUrl
     const mapContext = body.mapContext
+    const sceneGraphLite = body.sceneGraphLite
+
+    // TEMP LOG: boundary acres, feature count, totalsByType keys
+    if (sceneGraphLite) {
+      // eslint-disable-next-line no-console
+      console.log('[SceneGraphLite]', {
+        boundaryAcres: sceneGraphLite.boundary?.acres,
+        featureCount: Array.isArray(sceneGraphLite.features) ? sceneGraphLite.features.length : 0,
+        totalsByTypeKeys: sceneGraphLite.totalsByType ? Object.keys(sceneGraphLite.totalsByType) : []
+      })
+    }
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
 
+    // Optionally, use sceneGraphLite in prompt or for future logic
+    // For now, just confirm Tony references feature types/counts/acres
     const systemPrompt = buildSystemPrompt(mapContext)
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {

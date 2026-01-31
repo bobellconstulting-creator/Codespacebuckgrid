@@ -23,6 +23,11 @@ export type MapContext = {
   boundary?: Feature<Polygon> | null
   focusFeatures: Feature<LineString>[]
   userDrawn: FeatureCollection
+  sceneGraphLite?: {
+    boundary: { acres: number, locked: boolean },
+    features: Array<{ id: string, type: string, acres?: number, label?: string }>,
+    totalsByType: Record<string, { count: number, acres?: number }>
+  }
 }
 
 export type MapApi = {
@@ -64,6 +69,9 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   const mapRef = useRef<LeafletNS.Map | null>(null)
   const drawnItemsRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const boundaryLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
+  // Store locked boundary and acres
+  const lockedBoundaryRef = useRef<Feature<Polygon> | null>(null)
+  const lockedAcresRef = useRef<number>(0)
   const aiSuggestionsLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
   const boundaryPointsRef = useRef<LatLngLike[]>([])
   const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
@@ -105,10 +113,14 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
     if (activeTool.id === 'nav') {
       map.dragging.enable()
       map.doubleClickZoom.enable()
+      map.scrollWheelZoom.enable()
+      map.touchZoom.enable()
       if (containerRef.current) containerRef.current.style.cursor = 'grab'
     } else {
       map.dragging.disable()
       map.doubleClickZoom.disable()
+      map.scrollWheelZoom.disable()
+      map.touchZoom.disable()
       if (containerRef.current) containerRef.current.style.cursor = 'crosshair'
     }
   }, [activeTool, containerRef])
@@ -283,10 +295,22 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   return { 
     api: { 
       lockBoundary: () => {
+        // Only lock if valid polygon
+        if (boundaryPointsRef.current.length < 3) return null
         const acres = calculateAreaAcres(boundaryPointsRef.current)
         if (!acres) return null
         boundaryLayerRef.current?.clearLayers()
         LRef.current!.polygon(boundaryPointsRef.current as any, { color: '#FF6B00', weight: 5, fillOpacity: 0.15 }).addTo(boundaryLayerRef.current!)
+        // Store locked boundary and acres
+        lockedBoundaryRef.current = {
+          type: 'Feature',
+          properties: { type: 'property_boundary' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[...boundaryPointsRef.current, boundaryPointsRef.current[0]].map(pt => [pt.lng, pt.lat])]
+          }
+        }
+        lockedAcresRef.current = acres
         return acres
       },
       wipeAll: () => {
@@ -302,10 +326,32 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
         const map = mapRef.current
         if (!map) return null
         const bounds = map.getBounds()
-        const boundary = buildBoundaryFeature()
+        // Use locked boundary if set, else current drawn
+        const boundary = lockedBoundaryRef.current || buildBoundaryFeature()
         const features = drawnPathsRef.current.map(toGeoJSONLine)
         const focusFeatures = features.filter(f => f.properties?.toolId === 'focus') as Feature<LineString>[]
         const center = map.getCenter()
+        // SceneGraphLite builder
+        const boundaryAcres = lockedBoundaryRef.current ? lockedAcresRef.current : (boundary ? calculateAreaAcres(boundary.geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }))) : 0)
+        const locked = !!lockedBoundaryRef.current
+        const featureList = features.map(f => ({
+          id: f.properties?.toolId || '',
+          type: f.properties?.type || '',
+          acres: f.properties?.acres,
+          label: f.properties?.label
+        }))
+        const totalsByType: Record<string, { count: number, acres?: number }> = {}
+        featureList.forEach(f => {
+          if (!f.type) return
+          if (!totalsByType[f.type]) totalsByType[f.type] = { count: 0, acres: 0 }
+          totalsByType[f.type].count++
+          if (f.acres) totalsByType[f.type].acres = (totalsByType[f.type].acres || 0) + f.acres
+        })
+        const sceneGraphLite = {
+          boundary: { acres: boundaryAcres, locked },
+          features: featureList,
+          totalsByType
+        }
         return {
           bounds: {
             north: bounds.getNorth(),
@@ -318,9 +364,10 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
           boundary,
           focusFeatures,
           userDrawn: {
-            type: 'FeatureCollection',
+            type: 'FeatureCollection' as const,
             features
-          }
+          },
+          sceneGraphLite
         }
       },
       drawAISuggestions: (features: Feature[]) => {

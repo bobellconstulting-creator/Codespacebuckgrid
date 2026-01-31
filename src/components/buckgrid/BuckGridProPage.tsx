@@ -14,12 +14,18 @@ export default function BuckGridProPage() {
   const [brushSize, setBrushSize] = useState(30)
   const [propertyAcres, setPropertyAcres] = useState(0)
 
+  // Prevent duplicate lock actions (React Strict Mode guard)
+  const lockOnceRef = useRef(false)
   const onLockBorder = useCallback(() => {
+    if (lockOnceRef.current) return
+    lockOnceRef.current = true
     const acres = mapRef.current?.lockBoundary()
     if (!acres) return
     setPropertyAcres(acres)
     chatRef.current?.addTonyMessage(`Locked: ${acres} acres. Send your notes.`)
     setActiveTool(TOOLS[0])
+    // Reset ref after short delay to allow future locks if needed
+    setTimeout(() => { lockOnceRef.current = false }, 500)
   }, [])
 
   return (
@@ -70,6 +76,24 @@ export default function BuckGridProPage() {
           onLockBorder={onLockBorder}
           onWipeAll={() => { mapRef.current?.wipeAll(); setPropertyAcres(0) }}
         />
+        {/* Dedicated Audit button for Tony */}
+        <button
+          style={{
+            marginTop: 12,
+            width: '100%',
+            padding: '8px 0',
+            background: 'var(--gold)',
+            color: '#222',
+            fontWeight: 700,
+            borderRadius: 6,
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 15
+          }}
+          onClick={() => {
+            chatRef.current?.addTonyMessage('Audit request: Please analyze the current map context.')
+          }}
+        >Audit Property</button>
       </div>
 
       {/* ─── Tony Chat Panel ─── */}
