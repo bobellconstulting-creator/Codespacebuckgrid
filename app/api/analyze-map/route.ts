@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
     }
     mimeType = mimeType || 'image/jpeg'
 
-    // Initialize Gemini AI (2.0 Flash)
+    // Initialize Gemini AI (1.5 Flash - stable)
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     // Generate content
     const result = await model.generateContent({
