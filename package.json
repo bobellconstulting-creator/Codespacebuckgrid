@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@google/genai": "^1.39.0",
+    "@google/generative-ai": "^0.24.1",
     "@mapbox/mapbox-gl-geocoder": "^5.1.2",
     "framer-motion": "^11.0.3",
     "h3-js": "^4.4.0",

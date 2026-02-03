@@ -1,9 +1,18 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/genai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// Increase payload size limit for large map screenshots
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb'
+    }
+  }
+}
 
 const VISION_PROMPT = `Classify the aerial map image into habitat features. Identify regions as heavy_timber, scrub_brush, or open_pasture. Return bounding boxes in normalized coordinates (0..1000 scale). Output ONLY valid JSON with this exact schema: {"features":[{"label":"heavy_timber"|"scrub_brush"|"open_pasture","box_2d":[ymin,xmin,ymax,xmax],"confidence":0.0-1.0}],"notes":["max 3 short observations"]}. No markdown, no extra keys.`
 
@@ -25,6 +34,9 @@ export async function POST(req: NextRequest) {
     let { imageBase64, mimeType } = body
     const prompt = body.prompt || VISION_PROMPT
 
+    // Debug: Log incoming request details
+    console.log('[analyze-map] Vision API received request. Image size:', imageBase64?.length || 'No image')
+
     if (!imageBase64) {
       return NextResponse.json({ error: 'imageBase64 required' }, { status: 400 })
     }
@@ -37,9 +49,9 @@ export async function POST(req: NextRequest) {
     }
     mimeType = mimeType || 'image/jpeg'
 
-    // Initialize Gemini AI (1.5 Flash)
+    // Initialize Gemini AI (2.0 Flash)
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' })
 
     // Generate content
     const result = await model.generateContent({
@@ -72,7 +84,20 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ visionPacket })
   } catch (err) {
-    console.error('[analyze-map] Error:', err)
-    return NextResponse.json({ error: 'Vision analysis failed', details: String(err) }, { status: 500 })
+    // Enhanced error logging with full error details
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const errorStack = err instanceof Error ? err.stack : undefined
+    
+    console.error('[analyze-map] Vision analysis failed:', {
+      message: errorMessage,
+      stack: errorStack,
+      fullError: err
+    })
+    
+    return NextResponse.json({ 
+      error: 'Vision analysis failed', 
+      message: errorMessage,
+      details: errorStack 
+    }, { status: 500 })
   }
 }
