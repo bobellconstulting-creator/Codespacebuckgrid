@@ -51,7 +51,12 @@ export async function POST(req: NextRequest) {
 
     // Initialize Gemini AI with Vision-capable model
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        responseMimeType: 'application/json'
+      }
+    })
 
     // Generate content
     const result = await model.generateContent({

@@ -11,6 +11,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@mapbox/mapbox-gl-geocoder": "^5.1.2",
+    "dotenv": "^17.2.3",
     "framer-motion": "^11.0.3",
     "h3-js": "^4.4.0",
     "html2canvas": "^1.4.1",
