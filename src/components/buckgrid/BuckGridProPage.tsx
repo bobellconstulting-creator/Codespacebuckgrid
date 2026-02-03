@@ -11,7 +11,7 @@ export default function BuckGridProPage() {
   const mapRef = useRef<MapContainerHandle>(null)
   const chatRef = useRef<TonyChatHandle>(null)
   const [activeTool, setActiveTool] = useState<Tool>(TOOLS[0])
-  const [brushSize, setBrushSize] = useState(30)
+  const [brushSize, setBrushSize] = useState(15)
   const [propertyAcres, setPropertyAcres] = useState(0)
   const [toolTab, setToolTab] = useState<'habitat' | 'food'>('habitat')
 

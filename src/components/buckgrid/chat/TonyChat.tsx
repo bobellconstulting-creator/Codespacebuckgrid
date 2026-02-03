@@ -266,7 +266,10 @@ import type { Feature } from 'geojson'
 import type { Tool } from '../constants/tools'
 import type { MapContext } from '../hooks/useMapDrawing'
 
-export type TonyChatHandle = { addTonyMessage: (text: string) => void }
+export type TonyChatHandle = { 
+  addTonyMessage: (text: string) => void
+  setIsMinimized: (minimized: boolean) => void
+}
 
 const TonyChat = forwardRef<TonyChatHandle, { 
   getCaptureTarget: () => HTMLElement | null
@@ -278,6 +281,8 @@ const TonyChat = forwardRef<TonyChatHandle, {
   const [chat, setChat] = useState([{ role: 'tony', text: "Ready. Lock the border and let's start the audit." }])
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(true)
+  const [isMinimized, setIsMinimized] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const { listening, supported: voiceInputSupported, toggle: toggleMic } = useVoiceInput({ setInput })
   const tts = useTonyTTS();
@@ -321,7 +326,10 @@ const TonyChat = forwardRef<TonyChatHandle, {
     return `MAP CONTEXT\n${lines.join('\n')}\n`
   }
 
-  useImperativeHandle(ref, () => ({ addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]) }), [])
+  useImperativeHandle(ref, () => ({ 
+    addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]),
+    setIsMinimized: (minimized: boolean) => setIsMinimized(minimized)
+  }), [])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -398,6 +406,77 @@ const TonyChat = forwardRef<TonyChatHandle, {
   }
 
   return (
+    <>
+      {/* Search Bar - Always Visible */}
+      <div
+        className="glass textureOverlay"
+        style={{
+          position: 'absolute',
+          right: 14,
+          top: 14,
+          borderRadius: 8,
+          borderTop: '2px solid rgba(200, 165, 92, 0.3)',
+          padding: '10px 12px',
+          display: 'flex',
+          gap: '8px',
+          alignItems: 'center',
+          zIndex: 3000,
+        }}
+      >
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={async (e) => {
+            if (e.key === 'Enter' && searchQuery) {
+              const token = "pk.eyJ1IjoiYm9iZWxsODciLCJhIjoiY21rdDBkb2V5MHo5NzNlb2RyeWJ0dnZkMSJ9.cBBzJ0BR4wm5TLeItbOI_g";
+              try {
+                const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(searchQuery)}.json?access_token=${token}`);
+                const data = await res.json();
+                if (data.features?.[0]?.center) {
+                  const [lng, lat] = data.features[0].center;
+                  window.dispatchEvent(new CustomEvent('mapFlyTo', { detail: { lat, lng, zoom: 16 } }));
+                }
+              } catch (e) { console.error(e); }
+            }
+          }}
+          placeholder="SEARCH LOCATION..."
+          style={{
+            background: '#000',
+            border: '1px solid #333',
+            color: '#eab308',
+            outline: 'none',
+            width: '200px',
+            fontSize: '11px',
+            fontFamily: 'var(--font-body)',
+            fontWeight: 700,
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            padding: '8px 10px',
+            borderRadius: '4px',
+          }}
+        />
+        <button
+          onClick={() => setIsMinimized(!isMinimized)}
+          style={{
+            background: '#eab308',
+            color: '#000',
+            padding: '8px 14px',
+            borderRadius: '4px',
+            fontWeight: 900,
+            fontSize: '11px',
+            border: 'none',
+            cursor: 'pointer',
+            letterSpacing: '1px',
+            fontFamily: 'var(--font-body)',
+          }}
+          title={isMinimized ? "Show Tony" : "Hide Tony"}
+        >
+          {isMinimized ? '↑' : '↓'}
+        </button>
+      </div>
+
+      {/* Full Tony Chat */}
+      {!isMinimized && (
     <div
       className="glass textureOverlay"
       style={{
@@ -615,6 +694,8 @@ const TonyChat = forwardRef<TonyChatHandle, {
         </>
       )}
     </div>
+      )}
+    </>
   )
 })
 
