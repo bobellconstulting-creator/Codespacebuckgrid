@@ -128,8 +128,12 @@ export default function BuckGridProPage() {
       const imageData = canvas.toDataURL('image/jpeg', 0.8)
       console.log('[BuckGridPro] Screenshot captured, sending to Vision API...')
 
-      // Send to Tony's Eyes (Gemini Vision)
-      await analyzeMap(imageData)
+      // Send to Tony's Eyes (Gemini Vision) and draw immediately
+      const result = await analyzeMap(imageData)
+      if (result && result.features) {
+        mapRef.current?.drawAISuggestions(result.features)
+        console.log('[BuckGridPro] Features drawn on map:', result.features)
+      }
 
       console.log('[BuckGridPro] Vision analysis complete')
     } catch (error) {
