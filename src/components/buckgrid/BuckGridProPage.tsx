@@ -34,12 +34,49 @@ export default function BuckGridProPage() {
   //   }
   // }, [h3Grid])
 
-  // Log vision analysis results (Future: feed into Tony's Brain)
+  // Process vision analysis results and draw features on map
   useEffect(() => {
-    if (analysisResult) {
+    if (analysisResult && analysisResult.features && analysisResult.features.length > 0) {
       console.log('[BuckGridPro] Jim sees:', analysisResult)
+      
+      // Get map bounds to translate box_2d coordinates to lat/lng
+      const mapContext = mapRef.current?.getMapContext()
+      if (!mapContext?.bounds) {
+        console.warn('[BuckGridPro] No map bounds available for vision translation')
+        chatRef.current?.addTonyMessage(
+          `Vision analysis complete, but map bounds unavailable. Please lock boundary first.`
+        )
+        return
+      }
+
+      // Translate vision features to map features
+      const translatedFeatures = analysisResult.features.map((visionFeature, idx) => {
+        const [ymin, xmin, ymax, xmax] = visionFeature.box_2d
+        
+        // Convert 0-1000 scale to lat/lng using map bounds
+        const latRange = mapContext.bounds.north - mapContext.bounds.south
+        const lngRange = mapContext.bounds.east - mapContext.bounds.west
+        
+        const south = mapContext.bounds.south + (ymin / 1000) * latRange
+        const north = mapContext.bounds.south + (ymax / 1000) * latRange
+        const west = mapContext.bounds.west + (xmin / 1000) * lngRange
+        const east = mapContext.bounds.west + (xmax / 1000) * lngRange
+
+        return {
+          id: `vision_${visionFeature.label}_${idx}`,
+          type: visionFeature.label,
+          bounds: { north, south, east, west },
+          confidence: visionFeature.confidence,
+        }
+      })
+
+      console.log('[BuckGridPro] Translated features:', translatedFeatures)
+      
+      // Draw features on map
+      mapRef.current?.drawAISuggestions(translatedFeatures)
+      
       chatRef.current?.addTonyMessage(
-        `Vision Analysis Complete: Found ${analysisResult.features.length} habitat zones. Check console for details.`
+        `Vision Analysis Complete: Found ${analysisResult.features.length} habitat zones (${translatedFeatures.map(f => f.type).join(', ')}). Features drawn on map.`
       )
     }
   }, [analysisResult])

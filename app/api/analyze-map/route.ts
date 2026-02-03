@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,7 +13,7 @@ export const config = {
   }
 }
 
-const VISION_PROMPT = `Classify the aerial map image into habitat features. Identify regions as heavy_timber, scrub_brush, or open_pasture. Return bounding boxes in normalized coordinates (0..1000 scale). Output ONLY valid JSON with this exact schema: {"features":[{"label":"heavy_timber"|"scrub_brush"|"open_pasture","box_2d":[ymin,xmin,ymax,xmax],"confidence":0.0-1.0}],"notes":["max 3 short observations"]}. No markdown, no extra keys.`
+const VISION_PROMPT = `You are a spatial scanner. Analyze this aerial map image. Locate all visible regions: timber/forest areas, open fields/pasture, water features, and agricultural land. Return ONLY raw JSON coordinates. NO TEXT. NO EXPLANATIONS. NO MARKDOWN. Use this exact schema: {"features":[{"label":"heavy_timber"|"scrub_brush"|"open_pasture","box_2d":[ymin,xmin,ymax,xmax],"confidence":0.0-1.0}]} where coordinates are 0-1000 scale normalized to image bounds. START WITH { and END WITH }.`
 
 type AnalyzeMapRequest = {
   imageBase64: string
@@ -49,33 +48,45 @@ export async function POST(req: NextRequest) {
     }
     mimeType = mimeType || 'image/jpeg'
 
-    // Initialize Gemini AI with Vision-capable model
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json'
-      }
-    })
+    // Use direct v1 API call with the latest stable model
+    const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`
+    
+    // Debug: Log image data being sent
+    console.log('[analyze-map] SENDING TO GEMINI via v1 API (gemini-1.5-flash-latest):', imageBase64.substring(0, 50) + '...')
 
-    // Generate content
-    const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [
-          { text: prompt },
-          { 
-            inlineData: {
-              mimeType,
-              data: imageBase64
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { 
+              inline_data: {
+                mime_type: mimeType,
+                data: imageBase64
+              }
             }
-          }
-        ]
-      }]
+          ]
+        }]
+      })
     })
 
-    const response = await result.response
-    const text = response.text()
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error('[analyze-map] Gemini API error:', errorData)
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+    if (!text) {
+      console.error('[analyze-map] No text in response:', data)
+      throw new Error('No text content in Gemini response')
+    }
     
     // Parse JSON response
     let visionPacket
