@@ -1,11 +1,14 @@
 'use client'
 
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import MapContainer, { type MapContainerHandle } from './map/MapContainer'
 import ToolGrid from './ui/ToolGrid'
 import TonyChat, { type TonyChatHandle } from './chat/TonyChat'
 import BuckGridLogo from './ui/BuckGridLogo'
 import { TOOLS, type Tool } from './constants/tools'
+import { useTonyLogic } from './hooks/useTonyLogic'
+import { useTonyEyes } from './hooks/useTonyEyes'
+import html2canvas from 'html2canvas'
 
 export default function BuckGridProPage() {
   const mapRef = useRef<MapContainerHandle>(null)
@@ -14,6 +17,32 @@ export default function BuckGridProPage() {
   const [brushSize, setBrushSize] = useState(15)
   const [propertyAcres, setPropertyAcres] = useState(0)
   const [toolTab, setToolTab] = useState<'habitat' | 'food'>('habitat')
+  const [isCapturing, setIsCapturing] = useState(false)
+  
+  // Tony's Brain - H3 Grid Logic
+  const { h3Grid, generateGrid, getGridStats } = useTonyLogic()
+  
+  // Tony's Eyes - Vision Analysis
+  const { analyzeMap, isAnalyzing, analysisResult } = useTonyEyes()
+
+  // Automatically render H3 grid when it changes
+  // DISABLED: Grid is internal logic only, not visible to user
+  // useEffect(() => {
+  //   if (h3Grid && h3Grid.size > 0 && mapRef.current?.renderH3Grid) {
+  //     console.log('[BuckGridPro] Rendering H3 grid overlay...')
+  //     mapRef.current.renderH3Grid(h3Grid)
+  //   }
+  // }, [h3Grid])
+
+  // Log vision analysis results (Future: feed into Tony's Brain)
+  useEffect(() => {
+    if (analysisResult) {
+      console.log('[BuckGridPro] Jim sees:', analysisResult)
+      chatRef.current?.addTonyMessage(
+        `Vision Analysis Complete: Found ${analysisResult.features.length} habitat zones. Check console for details.`
+      )
+    }
+  }, [analysisResult])
 
   // Prevent duplicate lock actions (React Strict Mode guard)
   const lockOnceRef = useRef(false)
@@ -23,11 +52,58 @@ export default function BuckGridProPage() {
     const acres = mapRef.current?.lockBoundary()
     if (!acres) return
     setPropertyAcres(acres)
+    
+    // Get boundary GeoJSON and generate H3 grid
+    const mapContext = mapRef.current?.getMapContext()
+    if (mapContext?.boundary) {
+      console.log('[BuckGridPro] Generating H3 grid from locked boundary...')
+      generateGrid(mapContext.boundary)
+    }
+    
     chatRef.current?.addTonyMessage(`Locked: ${acres} acres. Send your notes.`)
     setActiveTool(TOOLS[0])
     // Reset ref after short delay to allow future locks if needed
     setTimeout(() => { lockOnceRef.current = false }, 500)
-  }, [])
+  }, [generateGrid])
+
+  // Handle Evaluate Property - Capture map and analyze with Vision AI
+  const handleEvaluateProperty = useCallback(async () => {
+    try {
+      setIsCapturing(true)
+      console.log('[BuckGridPro] Capturing map screenshot...')
+
+      // Get map container element
+      const mapElement = mapRef.current?.getCaptureElement()
+      if (!mapElement) {
+        throw new Error('Map container not found')
+      }
+
+      // Capture screenshot using html2canvas
+      const canvas = await html2canvas(mapElement, {
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#000',
+        scale: 1, // Lower scale for faster processing
+        logging: false,
+      })
+
+      // Convert to base64 JPEG
+      const imageData = canvas.toDataURL('image/jpeg', 0.8)
+      console.log('[BuckGridPro] Screenshot captured, sending to Vision API...')
+
+      // Send to Tony's Eyes (Gemini Vision)
+      await analyzeMap(imageData)
+
+      console.log('[BuckGridPro] Vision analysis complete')
+    } catch (error) {
+      console.error('[BuckGridPro] Evaluate failed:', error)
+      chatRef.current?.addTonyMessage(
+        `Vision analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
+    } finally {
+      setIsCapturing(false)
+    }
+  }, [analyzeMap])
 
   return (
     <div style={{ height: '100dvh', width: '100vw', background: '#0A0A08', overflow: 'hidden', position: 'fixed' }}>
@@ -140,6 +216,36 @@ export default function BuckGridProPage() {
             />
           );
         })()}
+        
+        {/* Temporary: Log Grid Stats Button */}
+        <button
+          style={{
+            marginTop: 12,
+            width: '100%',
+            padding: '8px 0',
+            background: 'rgba(200, 165, 92, 0.2)',
+            color: 'var(--gold)',
+            fontWeight: 700,
+            borderRadius: 6,
+            border: '1px solid var(--gold)',
+            cursor: 'pointer',
+            fontSize: 13
+          }}
+          onClick={() => {
+            const stats = getGridStats()
+            console.log('[H3 Grid Stats]', {
+              totalCells: h3Grid.size,
+              stats,
+              sampleCells: Array.from(h3Grid.values()).slice(0, 3)
+            })
+            chatRef.current?.addTonyMessage(
+              `H3 Grid: ${h3Grid.size} cells generated. Check console for details.`
+            )
+          }}
+        >
+          Log Grid Stats
+        </button>
+        
         {/* Dedicated Audit button for Tony */}
         <button
           style={{
@@ -157,12 +263,14 @@ export default function BuckGridProPage() {
           onClick={() => {
             // Build AuditContext
             const mapContext = mapRef.current?.getMapContext() ?? null;
-            let boundaryLocked = false, boundaryAcres = 0, features = [], totalsByType = {};
+            let boundaryLocked = false, boundaryAcres = 0;
+            let features: Array<{id: string; type: string; acres?: number; label: string}> = [];
+            let totalsByType: Record<string, { count: number; acres?: number }> = {};
             if (mapContext?.sceneGraphLite) {
               boundaryLocked = !!mapContext.sceneGraphLite.boundary.locked;
               boundaryAcres = mapContext.sceneGraphLite.boundary.acres || 0;
               // Build human-readable feature labels
-              const typeCounts = {};
+              const typeCounts: Record<string, number> = {};
               features = (mapContext.sceneGraphLite.features ?? []).map(f => {
                 const type = f.type || 'feature';
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
@@ -195,6 +303,27 @@ export default function BuckGridProPage() {
             chatRef.current?.addTonyMessage(`${prompt}\n\nAuditContext: ${JSON.stringify(auditContext)}`);
           }}
         >Audit Property</button>
+        
+        {/* Evaluate Property - Vision AI Analysis */}
+        <button
+          style={{
+            marginTop: 12,
+            width: '100%',
+            padding: '8px 0',
+            background: isAnalyzing || isCapturing ? 'rgba(200, 165, 92, 0.3)' : '#22c55e',
+            color: isAnalyzing || isCapturing ? 'var(--gold)' : '#000',
+            fontWeight: 700,
+            borderRadius: 6,
+            border: isAnalyzing || isCapturing ? '1px solid var(--gold)' : 'none',
+            cursor: isAnalyzing || isCapturing ? 'not-allowed' : 'pointer',
+            fontSize: 15,
+            opacity: isAnalyzing || isCapturing ? 0.6 : 1,
+          }}
+          onClick={handleEvaluateProperty}
+          disabled={isAnalyzing || isCapturing}
+        >
+          {isCapturing ? 'Capturing...' : isAnalyzing ? 'Analyzing...' : 'Evaluate Property'}
+        </button>
       </div>
 
       {/* ─── Tony Chat Panel ─── */}

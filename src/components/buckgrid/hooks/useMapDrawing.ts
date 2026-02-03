@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { Tool } from '../constants/tools'
 import type * as LeafletNS from 'leaflet'
 import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
+import { cellToBoundary } from 'h3-js'
+import type { GridCell } from './useTonyLogic'
 
 type LatLngLike = { lat: number; lng: number }
 
@@ -36,6 +38,7 @@ export type MapApi = {
   getCaptureElement: () => HTMLElement | null
   getMapContext: () => MapContext | null
   drawAISuggestions: (features: Feature[]) => void
+  renderH3Grid: (h3Grid: Map<string, GridCell>) => void
 }
 
 function calculateAreaAcres(pts: LatLngLike[]) {
@@ -73,6 +76,7 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
   const lockedBoundaryRef = useRef<Feature<Polygon> | null>(null)
   const lockedAcresRef = useRef<number>(0)
   const aiSuggestionsLayerRef = useRef<LeafletNS.FeatureGroup | null>(null)
+  const h3GridLayerRef = useRef<LeafletNS.LayerGroup | null>(null)
   const boundaryPointsRef = useRef<LatLngLike[]>([])
   const tempPathRef = useRef<LeafletNS.Polyline | null>(null)
   const isDrawingRef = useRef(false)
@@ -439,8 +443,59 @@ export function useMapDrawing(args: { containerRef: React.RefObject<HTMLDivEleme
               .addTo(aiSuggestionsLayerRef.current!)
             attachInteractivity(line)
           }
+        })      },
+      renderH3Grid: (h3Grid: Map<string, GridCell>) => {
+        const L = LRef.current
+        const map = mapRef.current
+        if (!L || !map) return
+
+        console.log(`[useMapDrawing] Rendering H3 grid with ${h3Grid.size} cells`)
+
+        // Clear existing H3 grid layer
+        if (h3GridLayerRef.current) {
+          map.removeLayer(h3GridLayerRef.current)
+          h3GridLayerRef.current = null
+        }
+
+        // Create new layer group with canvas renderer for performance
+        h3GridLayerRef.current = new L.LayerGroup()
+
+        // Track polygon count for performance monitoring
+        let polygonCount = 0
+
+        h3Grid.forEach((cell) => {
+          try {
+            // Get H3 cell boundary coordinates
+            const boundary = cellToBoundary(cell.h3Index, true) // true = GeoJSON format [lat, lng]
+            
+            // Create Leaflet polygon with canvas rendering
+            const polygon = L.polygon(boundary as [number, number][], {
+              color: '#FACC15', // Yellow
+              weight: 1,
+              fillOpacity: 0.1,
+              fillColor: '#FACC15',
+              renderer: L.canvas(), // CRITICAL: Use canvas renderer for performance
+            })
+
+            // Add tooltip showing habitat type
+            polygon.bindTooltip(`Habitat: ${cell.habitatType}`, {
+              sticky: true,
+              direction: 'top',
+              opacity: 0.9,
+            })
+
+            // Add to layer group
+            polygon.addTo(h3GridLayerRef.current!)
+            polygonCount++
+          } catch (error) {
+            console.error(`[useMapDrawing] Error rendering H3 cell ${cell.h3Index}:`, error)
+          }
         })
-      }
+
+        // Add layer group to map
+        h3GridLayerRef.current.addTo(map)
+
+        console.log(`[useMapDrawing] Successfully rendered ${polygonCount} H3 hexagons using canvas renderer`)      }
     }, 
     handlers: { onPointerDown, onPointerMove, onPointerUp } 
   }
