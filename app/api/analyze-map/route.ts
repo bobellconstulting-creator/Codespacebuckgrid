@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
     }
     mimeType = mimeType || 'image/jpeg'
 
-    // Initialize Gemini AI (Pro Vision - v1beta compatible)
+    // Initialize Gemini AI (1.5 Flash - gold standard stable)
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
     // Generate content
     const result = await model.generateContent({
@@ -84,20 +84,26 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ visionPacket })
   } catch (err) {
-    // Enhanced error logging with full error details
+    // Enhanced error logging - log FULL error object for debugging
+    console.error('[analyze-map] Vision analysis failed - Full error details:', err)
+    
     const errorMessage = err instanceof Error ? err.message : String(err)
     const errorStack = err instanceof Error ? err.stack : undefined
+    const errorStatus = (err as any)?.status || 500
+    const errorDetails = (err as any)?.errorDetails || undefined
     
-    console.error('[analyze-map] Vision analysis failed:', {
+    console.error('[analyze-map] Parsed error info:', {
       message: errorMessage,
-      stack: errorStack,
-      fullError: err
+      status: errorStatus,
+      details: errorDetails,
+      stack: errorStack
     })
     
     return NextResponse.json({ 
       error: 'Vision analysis failed', 
       message: errorMessage,
-      details: errorStack 
+      status: errorStatus,
+      details: errorDetails || errorStack 
     }, { status: 500 })
   }
 }
