@@ -6,31 +6,53 @@ import 'leaflet/dist/leaflet.css'
 
 export type LayerType = 'boundary' | 'bedding' | 'food' | 'water' | 'path' | 'structure'
 
+export interface LayerSummary {
+  boundary: number
+  food: number
+  bedding: number
+  water: number
+  path: number
+  other: number
+}
+
 export interface MapApi {
   flyTo: (center: [number, number], zoom: number) => void
   clearAll: () => void
   undoLast: () => void
   setDrawMode: (mode: LayerType) => void
   addSmartFeature: (geojson: any, type: LayerType, label: string) => void
-  lockAndBake: () => { count: number; acres: number; pathYards: number; layers: any[] }
+  lockAndBake: () => { count: number; acres: number; pathYards: number; layers: any[]; summary: LayerSummary }
 }
 
 interface UseMapDrawingProps {
   containerRef: React.RefObject<HTMLDivElement>
-  activeTool: string 
+  activeTool: string
   brushSize: number
+}
+
+// Colour palette keyed by tool id
+const TOOL_COLORS: Record<string, string> = {
+  boundary: '#FF6B00',
+  bedding:  '#8B4513',
+  food:     '#32CD32',
+  water:    '#00BFFF',
+  path:     '#FFD700',
+}
+
+function colorForTool(tool: string): string {
+  return TOOL_COLORS[tool] ?? '#FFD700'
 }
 
 export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDrawingProps) {
   const mapRef = useRef<L.Map | null>(null)
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null)
-  const currentDrawRef = useRef<L.Polyline | null>(null) 
-  
+  const currentDrawRef = useRef<L.Polyline | null>(null)
+
   // 1. INITIALIZE MAP
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
     const map = L.map(containerRef.current, { zoomControl: false, attributionControl: false }).setView([38.5, -98.0], 7)
-    
+
     // Satellite Layer
     L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
       maxZoom: 20,
@@ -54,19 +76,17 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
     const onMouseDown = (e: L.LeafletMouseEvent) => {
         if (activeTool === 'cursor') return
         const { lat, lng } = e.latlng
-        
-        let color = '#FFD700' 
-        if (activeTool === 'bedding') color = '#8B4513'
-        if (activeTool === 'food') color = '#32CD32'
-        if (activeTool === 'water') color = '#00BFFF'
-        
+        const color = colorForTool(activeTool)
+
         const polyline = L.polyline([[lat, lng]], { color, weight: brushSize || 4, opacity: 0.8 })
+        // Store which tool drew this layer for Tony's context
+        ;(polyline as any).options.layerType = activeTool
         polyline.addTo(drawnItemsRef.current!)
         currentDrawRef.current = polyline
     }
 
     const onMouseMove = (e: L.LeafletMouseEvent) => {
-        if (!currentDrawRef.current) return 
+        if (!currentDrawRef.current) return
         currentDrawRef.current.addLatLng(e.latlng)
     }
 
@@ -74,23 +94,27 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
         if (!currentDrawRef.current) return
         const shape = currentDrawRef.current
         const coords = shape.getLatLngs() as L.LatLng[]
-        
-        // Auto-Close Logic (The "Lazy Lock")
-        if (activeTool !== 'path' && coords.length > 2) {
+        const layerType = (shape as any).options.layerType
+
+        // Auto-Close Logic (The "Lazy Lock") — skip for path/cursor tools
+        if (layerType !== 'path' && layerType !== 'cursor' && coords.length > 2) {
              const start = coords[0]
              const end = coords[coords.length - 1]
-             if (start.distanceTo(end) > 5) shape.addLatLng(start) 
-             
-             const polygon = L.polygon(shape.getLatLngs() as L.LatLng[], { 
-                 color: shape.options.color, 
-                 fillColor: shape.options.color, 
-                 fillOpacity: 0.3, 
-                 weight: 2 
+             // FIX: Lower threshold from 5m to 0.5m for better UX on zoomed drawings
+             if (start.distanceTo(end) > 0.5) shape.addLatLng(start)
+
+             const polygon = L.polygon(shape.getLatLngs() as L.LatLng[], {
+                 color: shape.options.color,
+                 fillColor: shape.options.color,
+                 fillOpacity: 0.3,
+                 weight: 2
              })
+             // Preserve layer type on the final polygon
+             ;(polygon as any).options.layerType = layerType
              drawnItemsRef.current?.removeLayer(shape)
              drawnItemsRef.current?.addLayer(polygon)
         }
-        currentDrawRef.current = null 
+        currentDrawRef.current = null
     }
 
     // Explicit Touch Wrappers to prevent errors
@@ -117,49 +141,58 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
 
   // 3. SPATIAL RECOGNITION (Tony's Eyes)
   const lockAndBake = useCallback(() => {
-    if (!drawnItemsRef.current) return { count: 0, acres: 0, pathYards: 0, layers: [] }
-    
+    const empty = { count: 0, acres: 0, pathYards: 0, layers: [], summary: { boundary: 0, food: 0, bedding: 0, water: 0, path: 0, other: 0 } }
+    if (!drawnItemsRef.current) return empty
+
     const layers = drawnItemsRef.current.getLayers()
     let boundaryGeo: any = null
     const allFeatures: any[] = []
     let totalPathDistanceMeters = 0
+    const summary: LayerSummary = { boundary: 0, food: 0, bedding: 0, water: 0, path: 0, other: 0 }
 
     for (const layer of layers) {
       // @ts-ignore
-      if (layer.toGeoJSON) {
-        // @ts-ignore
-        const geo = layer.toGeoJSON()
-        
-        // Path Math
-        if (geo.geometry.type === 'LineString') {
-            // @ts-ignore
-            if (layer.getLatLngs) {
-               // @ts-ignore
-               const latlngs = layer.getLatLngs()
-               for(let i=0; i < latlngs.length -1; i++) {
-                   totalPathDistanceMeters += latlngs[i].distanceTo(latlngs[i+1])
-               }
-            }
-            // If it's the boundary tool, force it to be a polygon
-            if (activeTool === 'boundary' || activeTool === 'draw_poly') {
-                 const coords = geo.geometry.coordinates
-                 coords.push(coords[0]) 
-                 geo.geometry.type = 'Polygon'
-                 geo.geometry.coordinates = [coords]
-            }
-        }
+      if (!layer.toGeoJSON) continue
+      // @ts-ignore
+      const geo = layer.toGeoJSON()
+      const layerType: string = (layer as any).options?.layerType ?? 'other'
 
-        allFeatures.push(geo)
-        // The largest polygon becomes the "Property" for Tony to analyze
-        if (geo.geometry.type === 'Polygon') boundaryGeo = geo
+      // Tally layer summary
+      if (layerType in summary) {
+        (summary as any)[layerType]++
+      } else {
+        summary.other++
+      }
+
+      // Path distance
+      if (geo.geometry.type === 'LineString') {
+          // @ts-ignore
+          const latlngs: L.LatLng[] = layer.getLatLngs?.() ?? []
+          for (let i = 0; i < latlngs.length - 1; i++) {
+              totalPathDistanceMeters += latlngs[i].distanceTo(latlngs[i + 1])
+          }
+      }
+
+      // Attach layer type to GeoJSON properties for Tony's vision
+      geo.properties = { ...(geo.properties ?? {}), layerType }
+      allFeatures.push(geo)
+
+      // The boundary polygon drives the H3 calculation
+      if (geo.geometry.type === 'Polygon' && layerType === 'boundary') {
+        boundaryGeo = geo
+      }
+      // Fall back to any polygon if no explicit boundary drawn
+      if (!boundaryGeo && geo.geometry.type === 'Polygon') {
+        boundaryGeo = geo
       }
     }
 
-    if (!boundaryGeo) return { count: 0, acres: 0, pathYards: 0, layers: [] }
+    if (!boundaryGeo) return empty
 
     // H3 SPATIAL CALCULATION
-    const hexIds = polygonToCells(boundaryGeo.geometry.coordinates, 10, true)
-    
+    // Pass the full GeoJSON geometry object so h3-js handles lng/lat → lat/lng conversion correctly
+    const hexIds = polygonToCells(boundaryGeo.geometry, 10, true)
+
     // SAVE DATA FOR TONY
     if (mapRef.current) {
         // @ts-ignore
@@ -168,29 +201,30 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
         mapRef.current.options.drawnFeatures = allFeatures
     }
 
-    return { 
-        count: hexIds.length, 
-        acres: parseFloat((hexIds.length * 1.0).toFixed(1)), 
-        pathYards: Math.round(totalPathDistanceMeters * 1.09361), 
-        layers: allFeatures 
+    return {
+        count: hexIds.length,
+        acres: parseFloat((hexIds.length * 3.718).toFixed(1)), // H3 res-10 cell ≈ 3.718 acres
+        pathYards: Math.round(totalPathDistanceMeters * 1.09361),
+        layers: allFeatures,
+        summary,
     }
-  }, [activeTool])
+  }, [])
 
   const api = useMemo<MapApi>(() => ({
     flyTo: (center, zoom) => mapRef.current?.setView(center, zoom),
     clearAll: () => drawnItemsRef.current?.clearLayers(),
-    undoLast: () => { 
-        if (drawnItemsRef.current) { 
-            const l = drawnItemsRef.current.getLayers(); 
-            if (l.length > 0) drawnItemsRef.current.removeLayer(l[l.length - 1]) 
-        } 
+    undoLast: () => {
+        if (drawnItemsRef.current) {
+            const l = drawnItemsRef.current.getLayers();
+            if (l.length > 0) drawnItemsRef.current.removeLayer(l[l.length - 1])
+        }
     },
-    setDrawMode: () => {}, 
-    addSmartFeature: (geojson, type, label) => { 
-        if (mapRef.current) { 
-            const color = type === 'bedding' ? 'brown' : 'green'; 
-            L.geoJSON(geojson, { style: { color } }).bindPopup(label).addTo(mapRef.current) 
-        } 
+    setDrawMode: () => {},
+    addSmartFeature: (geojson, type, label) => {
+        if (mapRef.current) {
+            const color = type === 'bedding' ? 'brown' : 'green';
+            L.geoJSON(geojson, { style: { color } }).bindPopup(label).addTo(mapRef.current)
+        }
     },
     lockAndBake
   }), [lockAndBake])
