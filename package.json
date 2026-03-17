@@ -15,7 +15,8 @@
     "h3-js": "^4.1.0",
     "leaflet": "^1.9.4",
     "html2canvas": "^1.4.1",
-    "framer-motion": "^11.0.3"
+    "framer-motion": "^11.0.3",
+    "@google/genai": "^1.39.0"
   },
   "devDependencies": {
     "typescript": "^5",
