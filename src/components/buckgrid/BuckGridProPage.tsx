@@ -14,11 +14,27 @@ export default function BuckGridProPage() {
   const [propertyAcres, setPropertyAcres] = useState(0)
 
   const onLockBorder = useCallback(() => {
-    const acres = mapRef.current?.lockBoundary()
-    if (!acres) return
-    setPropertyAcres(acres)
-    chatRef.current?.addTonyMessage(`Locked: ${acres} acres. Send your notes.`)
+    const result = mapRef.current?.lockBoundary()
+    if (!result || result.count === 0) return
+    setPropertyAcres(result.acres)
+
+    // Build a human-readable layer breakdown for Tony's context
+    const { summary } = result
+    const parts: string[] = []
+    if (summary.food > 0)    parts.push(`${summary.food} food plot${summary.food > 1 ? 's' : ''}`)
+    if (summary.bedding > 0) parts.push(`${summary.bedding} bedding area${summary.bedding > 1 ? 's' : ''}`)
+    if (summary.water > 0)   parts.push(`${summary.water} water source${summary.water > 1 ? 's' : ''}`)
+    if (summary.path > 0)    parts.push(`${summary.path} trail${summary.path > 1 ? 's' : ''}`)
+    const layerLine = parts.length > 0 ? ` I can see ${parts.join(', ')}.` : ''
+
+    const contextPrompt =
+      `Property locked at ${result.acres} acres.${layerLine}` +
+      (result.pathYards > 0 ? ` Total trail: ${result.pathYards} yds.` : '') +
+      ` Give me a quick habitat audit.`
+
     setActiveTool(TOOLS[0])
+    // Auto-trigger Tony's visual scan with the spatial context
+    chatRef.current?.triggerScan(contextPrompt)
   }, [])
 
   return (
