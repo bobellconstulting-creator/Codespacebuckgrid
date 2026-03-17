@@ -3,8 +3,10 @@
 import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react'
 import { useMapDrawing, type LayerType } from '../hooks/useMapDrawing'
 
+import type { LayerSummary } from '../hooks/useMapDrawing'
+
 export interface MapContainerHandle {
-  lockBoundary: () => any // CHANGED: Returns full object, not just number
+  lockBoundary: () => { count: number; acres: number; pathYards: number; layers: any[]; summary: LayerSummary }
   wipeAll: () => void
   getCaptureElement: () => HTMLDivElement | null
 }
