@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: 'anthropic/claude-3.5-sonnet',
         messages: [
-          { role: 'system', content: 'You are Tony, a blunt Whitetail Habitat Partner. Max 3 sentences.' },
+          { role: 'system', content: 'You are Tony, an expert Whitetail Habitat Partner with deep knowledge in deer behavior, habitat management, and ecological analysis. Provide concise, actionable insights based on visual and contextual data, focusing on terrain, cover, food sources, and strategic hunting locations. Limit responses to 4 sentences for clarity.' },
           {
             role: 'user',
             content: imageDataUrl 
