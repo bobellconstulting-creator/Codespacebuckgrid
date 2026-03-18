@@ -48,8 +48,9 @@ export async function POST(req: NextRequest) {
     })
 
     // Initialize Gemini AI
-    const genAI = new GoogleGenAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     // Generate content with image + prompt
     const result = await model.generateContent({
