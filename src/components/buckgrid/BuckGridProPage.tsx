@@ -38,15 +38,15 @@ export default function BuckGridProPage() {
   }, [])
 
   return (
-    <div style={{ height: '100dvh', width: '100vw', background: '#000', overflow: 'hidden', position: 'fixed' }}>
+    <div className="h-screen w-screen bg-neural-noir-primary overflow-hidden fixed">
       <MapContainer ref={mapRef} activeTool={activeTool} brushSize={brushSize} />
-      <div className="glass" style={{ position: 'absolute', left: 10, top: 10, padding: 12, borderRadius: 12, width: 180 }}>
-        <div style={{ fontSize: 11, fontWeight: 900, color: '#FF6B00', letterSpacing: 1 }}>BUCKGRID PRO</div>
+      <div className="bg-neural-noir-secondary bg-opacity-80 backdrop-blur-lg p-3 rounded-neural shadow-neural-bold absolute left-3 top-3 w-48">
+        <div className="text-xs font-bold text-neural-noir-accent uppercase tracking-wide">BuckGrid Pro</div>
         <ToolGrid tools={TOOLS} activeToolId={activeTool.id} brushSize={brushSize} onSelectTool={setActiveTool} onBrushSize={setBrushSize} onLockBorder={onLockBorder} onWipeAll={() => { mapRef.current?.wipeAll(); setPropertyAcres(0); }} />
       </div>
       <TonyChat ref={chatRef} getCaptureTarget={() => mapRef.current?.getCaptureElement() ?? null} />
-      <div className="glass" style={{ position: 'absolute', left: 10, bottom: 10, padding: '10px 15px', borderRadius: 10, borderLeft: '4px solid #FF6B00' }}>
-        <div style={{ fontSize: 22, fontWeight: 900, color: '#FF6B00' }}>{propertyAcres} <span style={{ fontSize: 10, color: '#888' }}>ACRES</span></div>
+      <div className="bg-neural-noir-secondary bg-opacity-80 backdrop-blur-lg p-3 rounded-neural border-l-4 border-neural-noir-accent absolute left-3 bottom-3">
+        <div className="text-xl font-bold text-neural-noir-accent">{propertyAcres} <span className="text-xs text-neural-noir-text opacity-70">ACRES</span></div>
       </div>
     </div>
   )

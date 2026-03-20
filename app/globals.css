@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
+  --foreground-rgb: 229, 231, 235; /* neural-noir text color */
+  --background-start-rgb: 10, 14, 23; /* neural-noir primary */
+  --background-end-rgb: 26, 30, 41; /* neural-noir secondary */
 }
 
 body {
