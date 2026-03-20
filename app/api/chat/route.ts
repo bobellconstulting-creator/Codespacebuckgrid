@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -9,10 +10,12 @@ type ChatRequestBody = {
   imageDataUrl?: string
 }
 
+const TONY_PROMPT = 'You are Tony, a blunt Whitetail Habitat Partner. Give specific, actionable habitat advice based on what you see. Max 3 sentences.'
+
 export async function POST(req: NextRequest) {
   try {
-    const key = process.env.OPENROUTER_KEY
-    if (!key) return NextResponse.json({ error: 'Missing OPENROUTER_KEY' }, { status: 500 })
+    const key = process.env.GOOGLE_API_KEY
+    if (!key) return NextResponse.json({ error: 'Missing GOOGLE_API_KEY' }, { status: 500 })
 
     const body = (await req.json()) as ChatRequestBody
     const message = body.message?.trim() || ''
@@ -20,30 +23,22 @@ export async function POST(req: NextRequest) {
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
 
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'anthropic/claude-3.5-sonnet',
-        messages: [
-          { role: 'system', content: 'You are Tony, a blunt Whitetail Habitat Partner. Max 3 sentences.' },
-          {
-            role: 'user',
-            content: imageDataUrl 
-              ? [{ type: 'text', text: message }, { type: 'image_url', image_url: { url: imageDataUrl } }]
-              : [{ type: 'text', text: message }]
-          }
-        ]
-      }),
-    })
+    const genAI = new GoogleGenerativeAI(key)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', systemInstruction: TONY_PROMPT })
 
-    const data = await res.json()
-    const reply = data?.choices?.[0]?.message?.content || 'No reply.'
+    const parts: any[] = [{ text: message }]
+
+    if (imageDataUrl) {
+      const [meta, base64] = imageDataUrl.split(',')
+      const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/png'
+      parts.push({ inlineData: { mimeType, data: base64 } })
+    }
+
+    const result = await model.generateContent(parts)
+    const reply = result.response.text() || 'No reply.'
     return NextResponse.json({ reply })
   } catch (err) {
+    console.error('[chat] error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
