@@ -15,12 +15,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: theme('colors.neural-noir.secondary');
-  color: theme('colors.neural-noir.text');
+  background: var(--color-neural-noir-secondary);
+  color: var(--color-neural-noir-text);
 }
 
 .btnToolActive {
-  background: rgba(58, 134, 255, 0.15); /* Adjusted to match accent */
-  border-color: theme('colors.neural-noir.accent');
-  color: theme('colors.neural-noir.accent');
+  background: rgba(58, 134, 255, 0.15);
+  border-color: var(--color-neural-noir-accent);
+  color: var(--color-neural-noir-accent);
 }
