@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --color-neural-noir-primary: #0A0E17;
+  --color-neural-noir-secondary: #1A1E29;
+  --color-neural-noir-accent: #FF3E3E;
+  --color-neural-noir-text: #E5E7EB;
+  --color-neural-noir-highlight: #FF6B6B;
+  --radius-neural: 12px;
+  --shadow-neural-bold: 0 10px 30px -15px rgba(255, 62, 62, 0.5);
+  --font-sans: Inter, sans-serif;
+  --font-display: "Bebas Neue", sans-serif;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: var(--color-neural-noir-primary);
+  color: var(--color-neural-noir-text);
+  box-sizing: border-box;
+}
+
+.chatArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scrollbar-width: none;
+}
+.chatArea::-webkit-scrollbar { display: none; }

@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -45,7 +45,7 @@ type TonyResponse = {
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.GOOGLE_API_KEY ?? 'AIzaSyBRiqfk0YsNcxpjlT0PCAFf7j7Bfr_Yr8A'
+    const key = process.env.GOOGLE_API_KEY ?? 'AIzaSyBRiqfk0YsNcxpjlT0PCAFf7j7Bfr_Yr8A'
 
     const body = (await req.json()) as ChatRequestBody
     const message = body.message?.trim() || ''
@@ -53,29 +53,23 @@ export async function POST(req: NextRequest) {
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
 
-    const ai = new GoogleGenAI({ apiKey })
+    const genAI = new GoogleGenerativeAI(key)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', systemInstruction: TONY_SYSTEM })
 
     const parts: any[] = [{ text: message }]
 
     if (imageDataUrl) {
-      const match = imageDataUrl.match(/^data:([^;]+);base64,(.+)$/)
-      if (match) {
-        parts.push({ inlineData: { mimeType: match[1], data: match[2] } })
-      }
+      const [meta, base64] = imageDataUrl.split(',')
+      const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg'
+      parts.push({ inlineData: { mimeType, data: base64 } })
     }
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: [{ role: 'user', parts }],
-      config: { systemInstruction: TONY_SYSTEM }
-    })
-
-    const rawText = response.text ?? ''
+    const result = await model.generateContent(parts)
+    const rawText = result.response.text() ?? ''
 
     // Parse Tony's structured JSON response
     let tonyResponse: TonyResponse = { reply: rawText, annotations: [] }
     try {
-      // Gemini sometimes wraps JSON in markdown code blocks
       const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
       const jsonStr = jsonMatch ? jsonMatch[1].trim() : rawText.trim()
       const parsed = JSON.parse(jsonStr)
@@ -86,7 +80,6 @@ export async function POST(req: NextRequest) {
         }
       }
     } catch {
-      // Not JSON — use raw text, no annotations
       tonyResponse = { reply: rawText || 'No response from Tony.', annotations: [] }
     }
 
@@ -105,7 +98,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ reply: tonyResponse.reply, annotations: features })
   } catch (err) {
-    console.error('[chat] Error:', err)
+    console.error('[chat] error:', err)
     return NextResponse.json({ error: 'Server error', reply: 'Tony is unavailable right now. Try again.' }, { status: 500 })
   }
 }

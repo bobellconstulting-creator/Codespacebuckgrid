@@ -1,10 +1,10 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react'
-import { useMapDrawing, type LayerType, type TonyAnnotation } from '../hooks/useMapDrawing'
+import React, { forwardRef, useImperativeHandle, useRef } from 'react'
+import { useMapDrawing, type LayerType, type TonyAnnotation, type LayerSummary } from '../hooks/useMapDrawing'
 
 export interface MapContainerHandle {
-  lockBoundary: () => any
+  lockBoundary: () => { count: number; acres: number; pathYards: number; layers: any[]; summary: LayerSummary }
   wipeAll: () => void
   getCaptureElement: () => HTMLDivElement | null
   addFeature: (geojson: any, type: string, label: string) => void
@@ -18,23 +18,18 @@ interface Props {
 
 const MapContainer = forwardRef<MapContainerHandle, Props>(({ activeTool, brushSize }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null)
-  
-  // Initialize the Ferrari Engine
-  const { api } = useMapDrawing({ 
-    containerRef, 
-    activeTool: activeTool.id, 
-    brushSize 
+
+  const { api } = useMapDrawing({
+    containerRef,
+    activeTool: activeTool.id,
+    brushSize
   })
 
   useImperativeHandle(ref, () => ({
-    // PASS THE FULL DATA PACKET
-    lockBoundary: () => {
-      const stats = api.lockAndBake()
-      return stats // Returns { count, acres, pathYards, layers }
-    },
+    lockBoundary: () => api.lockAndBake(),
     wipeAll: () => api.clearAll(),
     getCaptureElement: () => containerRef.current,
-    addFeature: (geojson: any, type: string, label: string) => api.addSmartFeature(geojson, type as any, label),
+    addFeature: (geojson: any, type: string, label: string) => api.addSmartFeature(geojson, type as LayerType, label),
     drawTonyAnnotations: (annotations: TonyAnnotation[]) => api.drawAnnotations(annotations),
   }))
 

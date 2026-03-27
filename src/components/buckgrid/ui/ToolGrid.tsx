@@ -16,9 +16,9 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
           </button>
         ))}
       </div>
-      <input type="range" min={10} max={150} value={brushSize} onChange={e => onBrushSize(Number(e.target.value))} style={{ width: '100%', accentColor: '#FF6B00' }} />
-      <button onClick={onLockBorder} style={{ width: '100%', background: '#FF6B00', color: '#000', padding: 12, borderRadius: 8, fontWeight: 900, cursor: 'pointer' }}>LOCK BORDER</button>
-      <button onClick={onWipeAll} style={{ width: '100%', color: '#555', background: 'none', border: 'none', padding: 8, cursor: 'pointer' }}>WIPE ALL</button>
+      <input type="range" min={10} max={150} value={brushSize} onChange={e => onBrushSize(Number(e.target.value))} className="w-full accent-neural-noir-accent" />
+      <button onClick={onLockBorder} className="w-full bg-neural-noir-accent text-neural-noir-primary py-3 px-2 rounded-neural font-bold cursor-pointer hover:bg-neural-noir-highlight transition-colors">LOCK BORDER</button>
+      <button onClick={onWipeAll} className="w-full text-neural-noir-text bg-transparent border-none p-2 cursor-pointer hover:text-neural-noir-accent transition-colors">WIPE ALL</button>
     </>
   )
 }

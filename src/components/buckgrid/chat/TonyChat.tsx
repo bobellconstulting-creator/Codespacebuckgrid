@@ -69,7 +69,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, 
         }
         setLoading(false)
     }
-  }), [loading, getCaptureTarget])
+  }), [loading, getCaptureTarget, drawOnMap])
 
   const send = async () => {
     if (!input.trim() || loading) return
@@ -94,20 +94,20 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, 
   }
 
   return (
-    <div className="glass" style={{ position: 'absolute', right: 10, top: 10, width: isOpen ? 300 : 50, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '80vh', transition: 'width 0.3s' }}>
-      <div onClick={() => setIsOpen(!isOpen)} style={{ padding: 12, background: '#1a1a1a', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 10, color: '#FF6B00' }}>
-        <span>{isOpen ? 'TONY PARTNER' : '🦌'}</span>
+    <div className={`bg-neural-noir-secondary bg-opacity-80 backdrop-blur-lg rounded-neural overflow-hidden flex flex-col max-h-[80vh] transition-all duration-300 absolute right-3 top-3 ${isOpen ? 'w-72' : 'w-12'}`}>
+      <div onClick={() => setIsOpen(!isOpen)} className="p-3 bg-neural-noir-primary cursor-pointer flex justify-between font-bold text-xs text-neural-noir-accent uppercase tracking-wide">
+        <span>{isOpen ? 'Tony Partner' : '🦌'}</span>
         <span>{isOpen ? '—' : '+'}</span>
       </div>
       {isOpen && (
         <>
-          <div ref={containerRef} className="chatArea" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8, padding: 10 }}>
+          <div ref={containerRef} className="chatArea overflow-y-auto flex-1 flex flex-col gap-2 p-3">
             {chat.map((m, i) => (
-              <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', background: m.role === 'user' ? '#FF6B00' : '#333', color: '#fff', padding: '8px 12px', borderRadius: '10px', fontSize: '12px', maxWidth: '85%', lineHeight: '1.4' }}>{m.text}</div>
+              <div key={i} className={`self-${m.role === 'user' ? 'end' : 'start'} bg-${m.role === 'user' ? 'neural-noir-accent' : 'neural-noir-secondary/50'} text-neural-noir-text p-2 rounded-lg text-sm max-w-[85%] leading-relaxed`}>{m.text}</div>
             ))}
-            {loading && <div style={{ alignSelf: 'flex-start', color: '#888', fontSize: 10, paddingLeft: 4 }}>Tony is looking...</div>}
+            {loading && <div className="self-start text-neural-noir-text text-xs opacity-70 pl-1">Tony is looking...</div>}
           </div>
-          <div style={{ padding: 10, display: 'flex', gap: 6, background: '#111' }}><input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="Ask Tony..." style={{ flex: 1, background: '#222', border: 'none', color: '#fff', padding: 8, borderRadius: 6, fontSize: 12 }} /><button onClick={send} style={{background: '#FF6B00', border: 'none', borderRadius: 4, cursor: 'pointer', color: '#000', fontWeight: 'bold', padding: '0 10px'}}>➤</button></div>
+          <div className="p-3 flex gap-2 bg-neural-noir-primary/90"><input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} placeholder="Ask Tony..." className="flex-1 bg-neural-noir-secondary/50 border-none text-neural-noir-text p-2 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-neural-noir-accent" /><button onClick={send} className="bg-neural-noir-accent border-none rounded-sm cursor-pointer text-neural-noir-primary font-bold px-3 hover:bg-neural-noir-highlight transition-colors">➤</button></div>
         </>
       )}
     </div>
