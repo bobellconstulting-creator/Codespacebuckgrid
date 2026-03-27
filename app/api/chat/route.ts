@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -45,7 +44,11 @@ type TonyResponse = {
 
 export async function POST(req: NextRequest) {
   try {
-    const key = process.env.GOOGLE_API_KEY ?? 'AIzaSyBRiqfk0YsNcxpjlT0PCAFf7j7Bfr_Yr8A'
+    const apiKey = process.env.OPENROUTER_API_KEY
+    if (!apiKey) {
+      console.error('[chat] OPENROUTER_API_KEY not set')
+      return NextResponse.json({ error: 'Server configuration error', reply: 'Tony is unavailable right now. Try again.' }, { status: 500 })
+    }
 
     const body = (await req.json()) as ChatRequestBody
     const message = body.message?.trim() || ''
@@ -53,19 +56,42 @@ export async function POST(req: NextRequest) {
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
 
-    const genAI = new GoogleGenerativeAI(key)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash', systemInstruction: TONY_SYSTEM })
-
-    const parts: any[] = [{ text: message }]
+    const userContent: any[] = [{ type: 'text', text: message }]
 
     if (imageDataUrl) {
-      const [meta, base64] = imageDataUrl.split(',')
-      const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg'
-      parts.push({ inlineData: { mimeType, data: base64 } })
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: imageDataUrl }
+      })
     }
 
-    const result = await model.generateContent(parts)
-    const rawText = result.response.text() ?? ''
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://codespacebuckgrid.vercel.app',
+        'X-Title': 'BuckGrid Pro - Tony AI'
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-001',
+        messages: [
+          { role: 'system', content: TONY_SYSTEM },
+          { role: 'user', content: userContent }
+        ],
+        temperature: 0.7,
+        max_tokens: 1500
+      })
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      console.error('[chat] OpenRouter error:', response.status, errText)
+      return NextResponse.json({ error: 'AI service error', reply: 'Tony is unavailable right now. Try again.' }, { status: 500 })
+    }
+
+    const data = await response.json()
+    const rawText = data.choices?.[0]?.message?.content ?? ''
 
     // Parse Tony's structured JSON response
     let tonyResponse: TonyResponse = { reply: rawText, annotations: [] }

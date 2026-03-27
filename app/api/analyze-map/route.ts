@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { GoogleGenAI } from '@google/genai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,9 +14,9 @@ type AnalyzeMapRequest = {
 
 export async function POST(req: NextRequest) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY
+    const apiKey = process.env.OPENROUTER_API_KEY
     if (!apiKey) {
-      return NextResponse.json({ error: 'Missing GEMINI_API_KEY' }, { status: 500 })
+      return NextResponse.json({ error: 'Missing OPENROUTER_API_KEY' }, { status: 500 })
     }
 
     const body = (await req.json()) as AnalyzeMapRequest
@@ -28,18 +27,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'imageBase64 required' }, { status: 400 })
     }
 
-    // Strip data URL prefix if present (e.g., "data:image/jpeg;base64,")
-    const dataUrlMatch = imageBase64.match(/^data:([^;]+);base64,(.+)$/)
-    if (dataUrlMatch) {
-      mimeType = mimeType || dataUrlMatch[1]
-      imageBase64 = dataUrlMatch[2]
+    // Normalize to a data URL for OpenRouter
+    let imageUrl: string
+    if (imageBase64.startsWith('data:')) {
+      imageUrl = imageBase64
+    } else {
+      const resolvedMime = mimeType || 'image/jpeg'
+      imageUrl = `data:${resolvedMime};base64,${imageBase64}`
     }
-    mimeType = mimeType || 'image/jpeg'
 
-    // Calculate size for logging (base64 size * 0.75 ≈ binary size)
     const imageSizeMB = (imageBase64.length * 0.75) / (1024 * 1024)
-
-    // Log metadata only (NO base64 logging)
     console.log('[analyze-map]', {
       hasImage: true,
       imageSizeMB: imageSizeMB.toFixed(2),
@@ -47,33 +44,41 @@ export async function POST(req: NextRequest) {
       promptLength: prompt.length
     })
 
-    // Initialize Gemini AI
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-
-    // Generate content with image + prompt
-    const result = await model.generateContent({
-      contents: [{
-        role: 'user',
-        parts: [
-          { text: prompt },
-          { 
-            inlineData: {
-              mimeType,
-              data: imageBase64
-            }
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://codespacebuckgrid.vercel.app',
+        'X-Title': 'BuckGrid Pro - Habitat Analyzer'
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-001',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image_url', image_url: { url: imageUrl } }
+            ]
           }
-        ]
-      }]
+        ],
+        temperature: 0.2,
+        max_tokens: 1000
+      })
     })
 
-    const response = await result.response
-    const text = response.text()
+    if (!response.ok) {
+      const errText = await response.text()
+      console.error('[analyze-map] OpenRouter error:', response.status, errText)
+      return NextResponse.json({ error: 'Vision analysis failed', details: errText }, { status: 500 })
+    }
 
-    console.log('[analyze-map] Raw Gemini response:', text.substring(0, 200))
+    const data = await response.json()
+    const text = data.choices?.[0]?.message?.content ?? ''
 
-    // Parse JSON response (strip markdown fences if present)
+    console.log('[analyze-map] Raw response:', text.substring(0, 200))
+
     let visionPacket
     try {
       const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
@@ -81,7 +86,7 @@ export async function POST(req: NextRequest) {
     } catch (parseErr) {
       console.error('[analyze-map] JSON parse error:', parseErr)
       return NextResponse.json({
-        error: 'Failed to parse Gemini response as JSON',
+        error: 'Failed to parse response as JSON',
         rawResponse: text.substring(0, 500)
       }, { status: 500 })
     }
