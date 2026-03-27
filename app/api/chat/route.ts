@@ -1,18 +1,51 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
+import { GoogleGenAI } from '@google/genai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+const TONY_SYSTEM = `You are Tony, an expert wildlife biologist and whitetail habitat consultant with 25 years of field experience. You analyze satellite map screenshots of hunting properties and give specific, actionable habitat management advice.
+
+Your expertise covers:
+- Food plot placement, size, and crop selection for maximum deer attraction
+- Bedding area identification and enhancement (thermal cover, screening, sanctuary creation)
+- Deer movement corridors — pinch points, funnels, ridge saddles, creek crossings
+- Stand and blind placement for prevailing wind directions and entry/exit routes
+- Water source management — natural ponds, man-made water holes, creek access
+- Timber and brush management — TSI, hinge cutting, edge creation
+- Mast production — oak identification, hard mast diversity
+- Property layout and habitat diversity (30% food, 40% bedding, 30% travel)
+
+When you analyze a map, give SPECIFIC location recommendations tied to visible terrain features. Explain the WHY. Prioritize the 2-3 highest-impact improvements.
+
+CRITICAL: You must ALWAYS respond with valid JSON in this exact format:
+{"reply": "Your detailed analysis text here", "annotations": [{"type": "food", "label": "Food plot - SE corner", "lat": 38.5, "lng": -98.0}]}
+
+Annotation types: "food" (food plots), "bedding" (bedding areas), "stand" (stand locations), "water" (water sources), "path" (travel corridors), "structure" (blinds/feeders)
+Only include annotations when you can confidently identify specific map locations from the image. If coordinates are unclear, return an empty annotations array [].
+The reply field should be your full conversational analysis — detailed, expert, specific.`
 
 type ChatRequestBody = {
   message: string
   imageDataUrl?: string
 }
 
+type Annotation = {
+  type: string
+  label: string
+  lat: number
+  lng: number
+}
+
+type TonyResponse = {
+  reply: string
+  annotations: Annotation[]
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const key = process.env.OPENROUTER_KEY
-    if (!key) return NextResponse.json({ error: 'Missing OPENROUTER_KEY' }, { status: 500 })
+    const apiKey = process.env.GOOGLE_API_KEY ?? 'AIzaSyBRiqfk0YsNcxpjlT0PCAFf7j7Bfr_Yr8A'
 
     const body = (await req.json()) as ChatRequestBody
     const message = body.message?.trim() || ''
@@ -20,30 +53,59 @@ export async function POST(req: NextRequest) {
 
     if (!message) return NextResponse.json({ error: 'Message required' }, { status: 400 })
 
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'anthropic/claude-3.5-sonnet',
-        messages: [
-          { role: 'system', content: 'You are Tony, an expert Whitetail Habitat Partner with deep knowledge in deer behavior, habitat management, and ecological analysis. Provide concise, actionable insights based on visual and contextual data, focusing on terrain, cover, food sources, and strategic hunting locations. Limit responses to 4 sentences for clarity.' },
-          {
-            role: 'user',
-            content: imageDataUrl 
-              ? [{ type: 'text', text: message }, { type: 'image_url', image_url: { url: imageDataUrl } }]
-              : [{ type: 'text', text: message }]
-          }
-        ]
-      }),
+    const ai = new GoogleGenAI({ apiKey })
+
+    const parts: any[] = [{ text: message }]
+
+    if (imageDataUrl) {
+      const match = imageDataUrl.match(/^data:([^;]+);base64,(.+)$/)
+      if (match) {
+        parts.push({ inlineData: { mimeType: match[1], data: match[2] } })
+      }
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-1.5-flash',
+      contents: [{ role: 'user', parts }],
+      config: { systemInstruction: TONY_SYSTEM }
     })
 
-    const data = await res.json()
-    const reply = data?.choices?.[0]?.message?.content || 'No reply.'
-    return NextResponse.json({ reply })
+    const rawText = response.text ?? ''
+
+    // Parse Tony's structured JSON response
+    let tonyResponse: TonyResponse = { reply: rawText, annotations: [] }
+    try {
+      // Gemini sometimes wraps JSON in markdown code blocks
+      const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/)
+      const jsonStr = jsonMatch ? jsonMatch[1].trim() : rawText.trim()
+      const parsed = JSON.parse(jsonStr)
+      if (parsed.reply) {
+        tonyResponse = {
+          reply: parsed.reply,
+          annotations: Array.isArray(parsed.annotations) ? parsed.annotations : []
+        }
+      }
+    } catch {
+      // Not JSON — use raw text, no annotations
+      tonyResponse = { reply: rawText || 'No response from Tony.', annotations: [] }
+    }
+
+    // Convert lat/lng annotations to GeoJSON points
+    const features = tonyResponse.annotations
+      .filter((a: Annotation) => typeof a.lat === 'number' && typeof a.lng === 'number')
+      .map((a: Annotation) => ({
+        type: a.type,
+        label: a.label,
+        geojson: {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [a.lng, a.lat] },
+          properties: { type: a.type, label: a.label }
+        }
+      }))
+
+    return NextResponse.json({ reply: tonyResponse.reply, annotations: features })
   } catch (err) {
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    console.error('[chat] Error:', err)
+    return NextResponse.json({ error: 'Server error', reply: 'Tony is unavailable right now. Try again.' }, { status: 500 })
   }
 }

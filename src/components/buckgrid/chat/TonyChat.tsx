@@ -8,7 +8,12 @@ export type TonyChatHandle = {
   triggerScan: (prompt: string) => void; 
 }
 
-const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElement | null }>(({ getCaptureTarget }, ref) => {
+type TonyChatProps = {
+  getCaptureTarget: () => HTMLElement | null
+  drawOnMap?: (geojson: any, type: string, label: string) => void
+}
+
+const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(({ getCaptureTarget, drawOnMap }, ref) => {
   const [chat, setChat] = useState([{ role: 'tony', text: "Ready. Lock the border and let's start the audit." }])
   const [input, setInput] = useState('')
   const [isOpen, setIsOpen] = useState(true)
@@ -44,7 +49,7 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
                 body: JSON.stringify({ message: contextPrompt, imageDataUrl: image })
             })
             const data = await res.json()
-            
+
             // 3. SHOW REPLY
             setChat(p => {
                 const newChat = [...p]
@@ -52,6 +57,13 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
                 newChat.push({ role: 'tony', text: data.reply || "Connection error." })
                 return newChat
             })
+
+            // 4. DRAW ANNOTATIONS ON MAP
+            if (drawOnMap && Array.isArray(data.annotations)) {
+                for (const a of data.annotations) {
+                    drawOnMap(a.geojson, a.type, a.label)
+                }
+            }
         } catch (e) {
             setChat(p => [...p, { role: 'tony', text: "I couldn't get a clear visual. Try again." }])
         }
@@ -71,7 +83,12 @@ const TonyChat = forwardRef<TonyChatHandle, { getCaptureTarget: () => HTMLElemen
         body: JSON.stringify({ message: input, imageDataUrl: canvas.toDataURL('image/jpeg', 0.6) })
       })
       const data = await res.json()
-      setChat(p => [...p, { role: 'tony', text: data.reply }])
+      setChat(p => [...p, { role: 'tony', text: data.reply || 'No response.' }])
+      if (drawOnMap && Array.isArray(data.annotations)) {
+        for (const a of data.annotations) {
+          drawOnMap(a.geojson, a.type, a.label)
+        }
+      }
     } catch { setChat(p => [...p, { role: 'tony', text: 'Capture failed.' }]) }
     setLoading(false)
   }

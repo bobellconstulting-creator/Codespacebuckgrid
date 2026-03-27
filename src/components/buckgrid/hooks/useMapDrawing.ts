@@ -6,6 +6,12 @@ import 'leaflet/dist/leaflet.css'
 
 export type LayerType = 'boundary' | 'bedding' | 'food' | 'water' | 'path' | 'structure'
 
+export interface TonyAnnotation {
+  type: string
+  label: string
+  geojson: any // GeoJSON Feature with Point geometry
+}
+
 export interface MapApi {
   flyTo: (center: [number, number], zoom: number) => void
   clearAll: () => void
@@ -13,6 +19,8 @@ export interface MapApi {
   setDrawMode: (mode: LayerType) => void
   addSmartFeature: (geojson: any, type: LayerType, label: string) => void
   lockAndBake: () => { count: number; acres: number; pathYards: number; layers: any[] }
+  drawAnnotations: (annotations: TonyAnnotation[]) => void
+  clearAnnotations: () => void
 }
 
 interface UseMapDrawingProps {
@@ -24,7 +32,8 @@ interface UseMapDrawingProps {
 export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDrawingProps) {
   const mapRef = useRef<L.Map | null>(null)
   const drawnItemsRef = useRef<L.FeatureGroup | null>(null)
-  const currentDrawRef = useRef<L.Polyline | null>(null) 
+  const tonyAnnotationsRef = useRef<L.FeatureGroup | null>(null)
+  const currentDrawRef = useRef<L.Polyline | null>(null)
   
   // 1. INITIALIZE MAP
   useEffect(() => {
@@ -41,6 +50,11 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
     const drawnItems = new L.FeatureGroup()
     map.addLayer(drawnItems)
     drawnItemsRef.current = drawnItems
+
+    const tonyAnnotations = new L.FeatureGroup()
+    map.addLayer(tonyAnnotations)
+    tonyAnnotationsRef.current = tonyAnnotations
+
     mapRef.current = map
 
     return () => { map.remove(); mapRef.current = null }
@@ -176,24 +190,55 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
     }
   }, [activeTool])
 
+  const ANNOTATION_COLORS: Record<string, string> = {
+    food: '#4ade80',
+    bedding: '#a16207',
+    stand: '#ef4444',
+    water: '#38bdf8',
+    path: '#FFD700',
+    structure: '#FF6B00',
+  }
+
+  const drawAnnotations = useCallback((annotations: TonyAnnotation[]) => {
+    const layer = tonyAnnotationsRef.current
+    if (!layer) return
+    layer.clearLayers()
+
+    for (const ann of annotations) {
+      const coords = ann.geojson?.geometry?.coordinates
+      if (!Array.isArray(coords) || coords.length < 2) continue
+      const [lng, lat] = coords
+      const color = ANNOTATION_COLORS[ann.type] ?? '#FF6B00'
+      L.circleMarker([lat, lng], {
+        radius: 10,
+        color,
+        weight: 2,
+        fillColor: color,
+        fillOpacity: 0.7,
+      }).bindTooltip(ann.label, { permanent: true, direction: 'top', offset: [0, -12] }).addTo(layer)
+    }
+  }, [])
+
   const api = useMemo<MapApi>(() => ({
     flyTo: (center, zoom) => mapRef.current?.setView(center, zoom),
     clearAll: () => drawnItemsRef.current?.clearLayers(),
-    undoLast: () => { 
-        if (drawnItemsRef.current) { 
-            const l = drawnItemsRef.current.getLayers(); 
-            if (l.length > 0) drawnItemsRef.current.removeLayer(l[l.length - 1]) 
-        } 
+    undoLast: () => {
+        if (drawnItemsRef.current) {
+            const l = drawnItemsRef.current.getLayers();
+            if (l.length > 0) drawnItemsRef.current.removeLayer(l[l.length - 1])
+        }
     },
-    setDrawMode: () => {}, 
-    addSmartFeature: (geojson, type, label) => { 
-        if (mapRef.current) { 
-            const color = type === 'bedding' ? 'brown' : 'green'; 
-            L.geoJSON(geojson, { style: { color } }).bindPopup(label).addTo(mapRef.current) 
-        } 
+    setDrawMode: () => {},
+    addSmartFeature: (geojson, type, label) => {
+        if (mapRef.current) {
+            const color = type === 'bedding' ? 'brown' : 'green';
+            L.geoJSON(geojson, { style: { color } }).bindPopup(label).addTo(mapRef.current)
+        }
     },
-    lockAndBake
-  }), [lockAndBake])
+    lockAndBake,
+    drawAnnotations,
+    clearAnnotations: () => tonyAnnotationsRef.current?.clearLayers(),
+  }), [lockAndBake, drawAnnotations])
 
   return { api }
 }

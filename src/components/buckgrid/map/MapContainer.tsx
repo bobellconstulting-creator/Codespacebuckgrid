@@ -1,12 +1,14 @@
 'use client'
 
 import React, { forwardRef, useImperativeHandle, useRef, useEffect } from 'react'
-import { useMapDrawing, type LayerType } from '../hooks/useMapDrawing'
+import { useMapDrawing, type LayerType, type TonyAnnotation } from '../hooks/useMapDrawing'
 
 export interface MapContainerHandle {
-  lockBoundary: () => any // CHANGED: Returns full object, not just number
+  lockBoundary: () => any
   wipeAll: () => void
   getCaptureElement: () => HTMLDivElement | null
+  addFeature: (geojson: any, type: string, label: string) => void
+  drawTonyAnnotations: (annotations: TonyAnnotation[]) => void
 }
 
 interface Props {
@@ -31,7 +33,8 @@ const MapContainer = forwardRef<MapContainerHandle, Props>(({ activeTool, brushS
       return stats // Returns { count, acres, pathYards, layers }
     },
     wipeAll: () => api.clearAll(),
-    getCaptureElement: () => containerRef.current
+    getCaptureElement: () => containerRef.current,
+    addFeature: (geojson: any, type: string, label: string) => api.addSmartFeature(geojson, type as any, label)
   }))
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
