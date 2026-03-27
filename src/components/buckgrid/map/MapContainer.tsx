@@ -34,7 +34,8 @@ const MapContainer = forwardRef<MapContainerHandle, Props>(({ activeTool, brushS
     },
     wipeAll: () => api.clearAll(),
     getCaptureElement: () => containerRef.current,
-    addFeature: (geojson: any, type: string, label: string) => api.addSmartFeature(geojson, type as any, label)
+    addFeature: (geojson: any, type: string, label: string) => api.addSmartFeature(geojson, type as any, label),
+    drawTonyAnnotations: (annotations: TonyAnnotation[]) => api.drawAnnotations(annotations),
   }))
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
