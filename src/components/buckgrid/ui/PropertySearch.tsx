@@ -10,6 +10,7 @@ interface NominatimResult {
 
 interface Props {
   onResult: (lat: number, lng: number, label: string) => void
+  compact?: boolean
 }
 
 export default function PropertySearch({ onResult }: Props) {

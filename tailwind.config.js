@@ -16,6 +16,18 @@ module.exports = {
           text: '#E5E7EB',
           highlight: '#FF6B6B',
         },
+        'field': {
+          bg: '#080F07',
+          panel: '#0D1A0B',
+          card: '#111F0E',
+          border: '#243020',
+          accent: '#E8840A',
+          orange: '#FF6B00',
+          green: '#3A7D2B',
+          text: '#D4C9A8',
+          muted: '#7A8A68',
+          dim: '#4A5A3A',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

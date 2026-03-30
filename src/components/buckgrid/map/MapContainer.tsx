@@ -9,6 +9,8 @@ export interface MapContainerHandle {
   getCaptureElement: () => HTMLDivElement | null
   addFeature: (geojson: any, type: string, label: string) => void
   drawTonyAnnotations: (annotations: TonyAnnotation[]) => void
+  getBoundsAndFeatures: () => { bounds: { north: number; south: number; east: number; west: number }; zoom: number; features: any[] } | null
+  flyTo: (lat: number, lng: number, zoom: number) => void
 }
 
 interface Props {
@@ -31,6 +33,8 @@ const MapContainer = forwardRef<MapContainerHandle, Props>(({ activeTool, brushS
     getCaptureElement: () => containerRef.current,
     addFeature: (geojson: any, type: string, label: string) => api.addSmartFeature(geojson, type as LayerType, label),
     drawTonyAnnotations: (annotations: TonyAnnotation[]) => api.drawAnnotations(annotations),
+    getBoundsAndFeatures: () => api.getBoundsAndFeatures(),
+    flyTo: (lat: number, lng: number, zoom: number) => api.flyTo([lat, lng], zoom),
   }))
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />

@@ -1,0 +1,11 @@
+[
+  {"id": "season_inject", "priority": 1, "task": "Inject season into Tony API prompt — season shown in UI but never sent to Gemini", "file": "src/components/buckgrid/chat/TonyChat.tsx + app/api/chat/route.ts"},
+  {"id": "rate_limit", "priority": 2, "task": "Add rate limiting to /api/chat — currently zero protection, open to abuse", "file": "app/api/chat/route.ts"},
+  {"id": "tony_prompt_season", "priority": 3, "task": "Rewrite Tony prompt with seasonal priority tiers — spring vs rut vs late season advice completely different", "file": "app/api/chat/route.ts"},
+  {"id": "why_in_chat", "priority": 4, "task": "Surface Tony's 'why' field in chat messages — currently only in map tooltips", "file": "src/components/buckgrid/chat/TonyChat.tsx"},
+  {"id": "money_back_guarantee", "priority": 5, "task": "Add 30-day money-back guarantee to landing page hero and pricing section", "file": "app/page.tsx"},
+  {"id": "address_search", "priority": 6, "task": "Add property address search / GPS button to map — hunters can't find their land by panning", "file": "src/components/buckgrid/BuckGridProPage.tsx + MapContainer"},
+  {"id": "mobile_panels", "priority": 7, "task": "Fix mobile layout — Tony chat (300px) + left panel (208px) leaves 0px for map on 375px screen", "file": "src/components/buckgrid/chat/TonyChat.tsx + BuckGridProPage.tsx"},
+  {"id": "onboarding_modal", "priority": 8, "task": "Add first-visit onboarding modal with 4-step guide and View Demo option", "file": "src/components/buckgrid/BuckGridProPage.tsx"},
+  {"id": "tos_privacy", "priority": 9, "task": "Create TOS and Privacy Policy pages — required before Stripe", "file": "app/tos/page.tsx + app/privacy/page.tsx"}
+]

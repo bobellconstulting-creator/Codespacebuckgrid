@@ -1,0 +1,12 @@
+{
+  "patterns": [
+    {
+      "id": "nextjs-leaflet-ssr",
+      "title": "Next.js App Router + Leaflet: must use dynamic ssr:false",
+      "symptom": "window is not defined during prerender of /buckgrid",
+      "root_cause": "Leaflet accesses window at import time; App Router tries to SSR all pages",
+      "fix": "dynamic(() => import('@/components/buckgrid/BuckGridProPage'), { ssr: false })",
+      "tags": ["nextjs", "leaflet", "ssr", "buckgrid"]
+    }
+  ]
+}

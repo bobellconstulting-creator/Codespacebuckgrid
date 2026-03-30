@@ -20,6 +20,8 @@ type TonyChatProps = {
   propertyName?: string
   seasonBanner?: { label: string; tip: string; color: string }
   isMobile?: boolean
+  topOffset?: number
+  panelWidth?: number
 }
 
 type AnnotationSummary = { type: string; label: string; why: string }
@@ -69,7 +71,7 @@ function renderMarkdown(text: string): React.ReactNode {
 const PANEL_W = 310
 
 const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
-  ({ getBoundsAndFeatures, drawAnnotations, propertyName, seasonBanner, isMobile }, ref) => {
+  ({ getBoundsAndFeatures, drawAnnotations, propertyName, seasonBanner, isMobile, topOffset = 12, panelWidth = 310 }, ref) => {
     const [chat, setChat] = useState<ChatMessage[]>([{ role: 'tony', text: ONBOARDING_MESSAGE }])
     const [input, setInput] = useState('')
     const [isOpen, setIsOpen] = useState(true)
@@ -416,24 +418,24 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
       )
     }
 
-    // ── DESKTOP LAYOUT: original panel ──
+    // ── DESKTOP LAYOUT: right sidebar panel ──
     return (
       <div
         style={{
           position: 'absolute',
-          right: '12px',
-          top: '12px',
+          right: 0,
+          top: `${topOffset}px`,
+          bottom: 0,
           zIndex: 1000,
-          width: isOpen ? `${PANEL_W}px` : '48px',
-          maxHeight: isOpen ? 'calc(100vh - 24px)' : '48px',
+          width: isOpen ? `${panelWidth}px` : '48px',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          borderRadius: '4px',
-          background: '#1A1A1A',
-          border: '1px solid #2E2E2E',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.8)',
-          transition: 'width 0.25s ease, max-height 0.25s ease',
+          borderRadius: 0,
+          background: '#0B0B0B',
+          borderLeft: '1px solid #161616',
+          boxShadow: 'none',
+          transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
           fontFamily: "'Barlow Condensed', 'Inter', sans-serif",
         }}
       >
@@ -441,9 +443,10 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         <div
           onClick={() => setIsOpen(v => !v)}
           style={{
-            padding: '10px 12px',
-            background: '#141414',
-            borderBottom: isOpen ? '1px solid #2A2A2A' : 'none',
+            padding: '0 14px',
+            height: '52px',
+            background: '#0B0B0B',
+            borderBottom: '1px solid #161616',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -453,20 +456,22 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BuckLogo size={22} color="#C8650A" />
+            <BuckLogo size={20} color="#C8650A" />
             {isOpen && (
               <div>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#C8650A', lineHeight: 1 }}>
-                  Tony — Field AI
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '13px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: '#C0C0C0', lineHeight: 1 }}>
+                  Tony <span style={{ color: '#C8650A' }}>AI</span>
                 </div>
-                {loading && (
-                  <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#C8650A', marginTop: '2px', letterSpacing: '0.08em' }}>ANALYZING TERRAIN...</div>
-                )}
+                <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: loading ? '#C8650A' : '#2A2A2A', marginTop: '3px', letterSpacing: '0.1em', transition: 'color 0.2s' }}>
+                  {loading ? 'ANALYZING TERRAIN...' : 'FIELD CONSULTANT'}
+                </div>
               </div>
             )}
           </div>
-          {isOpen && (
-            <span style={{ color: '#444', fontSize: '12px', fontWeight: 700 }}>—</span>
+          {isOpen ? (
+            <span style={{ color: '#2A2A2A', fontSize: '16px', fontWeight: 300, lineHeight: 1 }}>‹</span>
+          ) : (
+            <span style={{ color: '#2A2A2A', fontSize: '16px', fontWeight: 300, lineHeight: 1, transform: 'rotate(180deg)', display: 'block' }}>‹</span>
           )}
         </div>
 
