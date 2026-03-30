@@ -49,7 +49,7 @@ function renderMarkdown(text: string): React.ReactNode {
     const parts = content.split(/(\*\*[^*]+\*\*)/)
     const rendered = parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-semibold" style={{ color: '#C8650A' }}>{part.slice(2, -2)}</strong>
+        return <strong key={i} className="font-semibold" style={{ color: '#C8963C' }}>{part.slice(2, -2)}</strong>
       }
       return <span key={i}>{part}</span>
     })
@@ -57,7 +57,7 @@ function renderMarkdown(text: string): React.ReactNode {
       <React.Fragment key={lineIdx}>
         {isBullet ? (
           <span className="flex gap-1.5 items-start">
-            <span className="mt-0.5 shrink-0" style={{ color: '#C8650A' }}>•</span>
+            <span className="mt-0.5 shrink-0" style={{ color: '#C8963C' }}>•</span>
             <span>{rendered}</span>
           </span>
         ) : rendered}
@@ -178,11 +178,11 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           {chat.map((m, i) => {
             if (m.text === '__thinking__') {
               return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: '#111', border: '1px solid #2A2A2A', borderRadius: '3px', alignSelf: 'flex-start' }}>
-                  <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#C8650A', letterSpacing: '0.08em' }}>SCANNING TERRAIN</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: '#0D110B', border: '1px solid rgba(200,150,60,0.12)', borderRadius: '3px', alignSelf: 'flex-start' }}>
+                  <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#C8963C', letterSpacing: '0.08em' }}>SCANNING TERRAIN</span>
                   <span style={{ display: 'flex', gap: '3px' }}>
                     {[0, 150, 300].map(d => (
-                      <span key={d} style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#C8650A', animation: 'bounce 1s infinite', animationDelay: `${d}ms`, display: 'inline-block' }} />
+                      <span key={d} style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#C8963C', animation: 'bounce 1s infinite', animationDelay: `${d}ms`, display: 'inline-block' }} />
                     ))}
                   </span>
                 </div>
@@ -198,8 +198,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                     fontSize: '13px',
                     lineHeight: '1.55',
                     maxWidth: '92%',
-                    background: isUser ? '#C8650A' : '#242424',
-                    color: isUser ? '#fff' : '#E0E0E0',
+                    background: isUser ? '#1e2a18' : '#131710',
+                    color: isUser ? '#D8D3C5' : '#D8D3C5',
                     fontWeight: isUser ? 600 : 400,
                     fontFamily: isUser ? "'Barlow Condensed', sans-serif" : 'inherit',
                     letterSpacing: isUser ? '0.02em' : 'normal',
@@ -210,10 +210,10 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                 {m.annotations && m.annotations.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', width: '100%', maxWidth: '92%' }}>
                     {m.annotations.map((ann, ai) => (
-                      <div key={ai} style={{ background: '#111', border: '1px solid #2A2A2A', borderLeft: '2px solid #C8650A', borderRadius: '2px', padding: '5px 9px', fontSize: '11px' }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", color: '#C8650A', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', fontSize: '10px' }}>{ann.type.replace('_', ' ')}</span>
-                        {ann.label && <span style={{ color: '#E0E0E0', opacity: 0.75 }}> — {ann.label}</span>}
-                        {ann.why && <div style={{ color: '#666', marginTop: '2px', lineHeight: '1.3', fontSize: '10.5px' }}>{ann.why}</div>}
+                      <div key={ai} style={{ background: '#0D110B', border: '1px solid rgba(200,150,60,0.12)', borderLeft: '2px solid #C8963C', borderRadius: '2px', padding: '5px 9px', fontSize: '11px' }}>
+                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", color: '#C8963C', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', fontSize: '10px' }}>{ann.type.replace('_', ' ')}</span>
+                        {ann.label && <span style={{ color: '#D8D3C5', opacity: 0.75 }}> — {ann.label}</span>}
+                        {ann.why && <div style={{ color: '#6E6A5C', marginTop: '2px', lineHeight: '1.3', fontSize: '10.5px' }}>{ann.why}</div>}
                       </div>
                     ))}
                   </div>
@@ -232,7 +232,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             {legendOpen ? '▲ HIDE LEGEND' : '▼ MAP LEGEND'}
           </button>
           {legendOpen && (
-            <div style={{ marginTop: '6px', marginBottom: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px', background: '#111', border: '1px solid #2A2A2A', borderRadius: '2px', padding: '8px', fontFamily: "'Barlow Condensed', sans-serif", fontSize: '10px', letterSpacing: '0.06em', color: '#666' }}>
+            <div style={{ marginTop: '6px', marginBottom: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px', background: '#0D110B', border: '1px solid rgba(200,150,60,0.12)', borderRadius: '2px', padding: '8px', fontFamily: "'Barlow Condensed', sans-serif", fontSize: '10px', letterSpacing: '0.06em', color: '#6E6A5C' }}>
               <span><span style={{ color: '#FF6B00' }}>■</span> Boundary</span>
               <span><span style={{ color: '#8B4513' }}>■</span> Bedding</span>
               <span><span style={{ color: '#C8650A' }}>■</span> Clover</span>
@@ -240,27 +240,27 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               <span><span style={{ color: '#c084fc' }}>■</span> Brassicas</span>
               <span><span style={{ color: '#86efac' }}>■</span> Soybeans</span>
               <span><span style={{ color: '#ef4444' }}>●</span> Stand</span>
-              <span><span style={{ color: '#C8650A' }}>▲</span> Tony rec</span>
+              <span><span style={{ color: '#C8963C' }}>▲</span> Tony rec</span>
             </div>
           )}
         </div>
 
         {/* Input */}
-        <div style={{ padding: '8px 12px', paddingBottom: 'env(safe-area-inset-bottom, 16px)', borderTop: '1px solid #2A2A2A', background: '#141414', display: 'flex', gap: '8px', flexShrink: 0 }}>
+        <div style={{ padding: '8px 12px', paddingBottom: 'env(safe-area-inset-bottom, 16px)', borderTop: '1px solid rgba(200,150,60,0.12)', background: '#0D110B', display: 'flex', gap: '8px', flexShrink: 0 }}>
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && send()}
-            onFocus={e => { e.currentTarget.style.borderColor = 'rgba(200,101,10,0.6)' }}
-            onBlur={e => { e.currentTarget.style.borderColor = '#2E2E2E' }}
+            onFocus={e => { e.currentTarget.style.borderColor = '#C8963C' }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(200,150,60,0.2)' }}
             placeholder="Intel request..."
             disabled={loading}
             style={{
               flex: 1,
-              background: '#111',
-              border: '1px solid #2E2E2E',
-              color: '#E0E0E0',
+              background: '#090C08',
+              border: '1px solid rgba(200,150,60,0.2)',
+              color: '#D8D3C5',
               padding: '7px 10px',
               borderRadius: '2px',
               fontSize: '13px',
@@ -273,7 +273,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             onClick={send}
             disabled={loading || !input.trim()}
             style={{
-              background: loading || !input.trim() ? '#2A2A2A' : '#C8650A',
+              background: loading || !input.trim() ? '#1A2018' : '#C8963C',
               color: '#fff',
               fontWeight: 700,
               padding: '0 12px',

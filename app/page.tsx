@@ -356,8 +356,12 @@ function Hero() {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest mb-8"
             style={{ background: 'rgba(200,150,60,0.1)', color: C.accent, border: `1px solid rgba(200,150,60,0.2)` }}
           >
-            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: C.accent }} />
-            AI-Powered Habitat Management
+            {/* Topo line icon */}
+            <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+              <path d="M1 9 C3 9 3 7 5 7 C7 7 7 5 9 5 C11 5 11 3 13 3" stroke="#C8963C" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+              <path d="M1 6 C3 6 3 4 5 4 C7 4 7 2 9 2 C11 2 11 1 13 1" stroke="#C8963C" strokeWidth="0.7" strokeLinecap="round" fill="none" opacity="0.5" />
+            </svg>
+            Satellite-Grade Habitat Intelligence
           </motion.div>
 
           {/* Headline */}
@@ -447,8 +451,8 @@ function Hero() {
 const STATS = [
   { val: '847', label: 'Properties Analyzed' },
   { val: '14,200+', label: 'Acres Mapped' },
-  { val: '<60s', label: 'First Plan' },
-  { val: '5-Star', label: 'Rating' },
+  { val: '<60s', label: 'Time to First Plan' },
+  { val: '5-Star', label: 'Hunter Rating' },
 ]
 
 function TrustBar() {
@@ -460,10 +464,12 @@ function TrustBar() {
             <div
               key={s.val}
               className="flex flex-col items-center py-4 text-center"
-              style={{ borderRight: i < STATS.length - 1 ? `1px solid ${C.border}` : 'none' }}
+              style={{
+                borderRight: i < STATS.length - 1 ? `1px solid rgba(200,150,60,0.15)` : 'none',
+              }}
             >
-              <div className="text-3xl font-bold text-white font-display tracking-wide">{s.val}</div>
-              <div className="text-xs mt-1 font-medium" style={{ color: C.muted }}>{s.label}</div>
+              <div className="text-3xl font-bold font-display tracking-wide" style={{ color: C.accent }}>{s.val}</div>
+              <div className="text-xs mt-1.5 font-semibold uppercase tracking-widest" style={{ color: C.muted }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -531,16 +537,24 @@ function HowItWorks() {
                 >
                   {step.num}
                 </div>
-                {/* Step number pill */}
-                <div
-                  className="inline-flex items-center justify-center w-10 h-10 rounded-xl mb-6"
-                  style={{ background: `${step.color}15`, color: step.color }}
-                >
-                  {step.icon}
-                </div>
-                {/* Step number label */}
-                <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: step.color }}>
-                  Step {step.num}
+                {/* Brass step number circle */}
+                <div className="flex items-center gap-3 mb-6">
+                  <div
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold flex-shrink-0"
+                    style={{
+                      background: 'linear-gradient(135deg, #C8963C, #9A6E28)',
+                      color: '#0C0F0A',
+                      boxShadow: '0 0 12px -4px rgba(200,150,60,0.5)',
+                    }}
+                  >
+                    {parseInt(step.num, 10)}
+                  </div>
+                  <div
+                    className="w-8 h-8 rounded-xl flex items-center justify-center"
+                    style={{ background: `${step.color}15`, color: step.color }}
+                  >
+                    {step.icon}
+                  </div>
                 </div>
                 <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
                 <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{step.desc}</p>
@@ -739,7 +753,12 @@ function Features() {
                 <div className="flex items-start justify-between mb-5">
                   <div
                     className="w-11 h-11 rounded-xl flex items-center justify-center"
-                    style={{ background: `${feat.color}15`, color: feat.color }}
+                    style={{
+                      background: '#161B12',
+                      color: C.accent,
+                      border: `1px solid rgba(200,150,60,0.2)`,
+                      boxShadow: '0 2px 8px -4px rgba(0,0,0,0.5)',
+                    }}
                   >
                     {feat.icon}
                   </div>
@@ -835,9 +854,9 @@ function ComparisonTable() {
                   >
                     {typeof val === 'boolean' ? (
                       val ? (
-                        <span style={{ color: C.green }}><IconCheck /></span>
+                        <span style={{ color: vi === 2 ? C.accent : C.green }}><IconCheck /></span>
                       ) : (
-                        <span style={{ color: C.muted }}><IconX /></span>
+                        <span style={{ color: '#3a3a3a' }}><IconX /></span>
                       )
                     ) : (
                       <span style={{ color: vi === 2 ? C.accent : C.muted, fontWeight: vi === 2 ? 700 : 400 }}>
@@ -1012,6 +1031,7 @@ function FAQ() {
                 style={{
                   background: openIdx === i ? C.card : 'rgba(26,30,41,0.5)',
                   border: `1px solid ${openIdx === i ? 'rgba(200,150,60,0.2)' : C.border}`,
+                  borderLeft: openIdx === i ? '3px solid #C8963C' : `1px solid ${C.border}`,
                 }}
                 onClick={() => setOpenIdx(openIdx === i ? null : i)}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenIdx(openIdx === i ? null : i) } }}
@@ -1128,8 +1148,11 @@ function Footer() {
                 BuckGrid <span style={{ color: C.accent }}>Pro</span>
               </span>
             </div>
+            <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: C.muted }}>
+              Precision habitat intelligence for serious hunters.
+            </p>
             <p className="text-sm max-w-xs" style={{ color: C.muted }}>
-              Your land&apos;s AI habitat consultant. Expert advice 24/7 for less than a tank of gas.
+              Expert AI advice 24/7 for less than a tank of gas.
             </p>
           </div>
 

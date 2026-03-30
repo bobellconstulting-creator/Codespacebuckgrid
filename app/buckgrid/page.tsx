@@ -1,6 +1,11 @@
-'use client'
-
+import type { Metadata } from 'next'
 import dynamic from 'next/dynamic'
+
+export const metadata: Metadata = {
+  title: 'Analyze My Land — BuckGrid Pro',
+  description: 'Draw your habitat features and let Tony AI give you expert recommendations for food plots, stand placement, and land management.',
+  robots: { index: false, follow: false },
+}
 
 const BuckGridProPage = dynamic(
   () => import('@/components/buckgrid/BuckGridProPage'),
