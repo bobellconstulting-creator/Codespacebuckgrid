@@ -1,26 +1,221 @@
-.gridTools {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin: 10px 0;
+/* BuckGrid Pro — Premium Hunting Brand UI */
+/* Aesthetic: onX Hunt / Sitka / KUIU — dark charcoal, hunter orange, field-journal cream */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-.btnTool {
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 800;
+/* ── Section header ─────────────────────────────────── */
+.sectionHeader {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--color-neural-noir-secondary);
-  color: var(--color-neural-noir-text);
+  padding: 10px 0 4px 0;
+  margin-top: 2px;
 }
 
+
+.sectionLabel {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #555;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sectionLine {
+  flex: 1;
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+}
+
+/* ── Tool grid ──────────────────────────────────────── */
+.gridTools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 0 0 4px 0;
+}
+
+.gridToolsFull {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin: 0 0 4px 0;
+}
+
+/* ── Tool button base ───────────────────────────────── */
+.btnTool {
+  position: relative;
+  padding: 6px 8px 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #1E1E1E;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  background: #0D0D0D;
+  color: #666;
+  text-align: left;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.btnTool:hover {
+  color: #DCDCDC;
+  background: #161616;
+}
+
+/* Active state is applied via inline styles for per-tool color */
 .btnToolActive {
-  background: rgba(58, 134, 255, 0.15);
-  border-color: var(--color-neural-noir-accent);
-  color: var(--color-neural-noir-accent);
+  color: #FFFFFF;
+  font-weight: 700;
+  border-left-width: 3px;
+}
+
+.toolIcon {
+  font-size: 14px;
+  line-height: 1;
+  display: block;
+}
+
+.toolName {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  display: block;
+}
+
+/* ── Brush size control ─────────────────────────────── */
+.brushControl {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0 4px 0;
+}
+
+.brushLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brushLabelText {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #555;
+}
+
+.brushLabelValue {
+  font-size: 9px;
+  font-weight: 700;
+  color: #C8650A;
+  font-variant-numeric: tabular-nums;
+}
+
+.brushSlider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 2px;
+  background: #1E1E1E;
+  outline: none;
+  cursor: pointer;
+}
+
+.brushSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #C8650A;
+  cursor: pointer;
+  border: 2px solid #080F07;
+  box-shadow: 0 0 0 1px #C8650A;
+}
+
+.brushSlider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #C8650A;
+  cursor: pointer;
+  border: 2px solid #080F07;
+  box-shadow: 0 0 0 1px #C8650A;
+}
+
+/* ── Action buttons ─────────────────────────────────── */
+.actionArea {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #1E1E1E;
+  margin-top: 4px;
+}
+
+.btnLock {
+  width: 100%;
+  padding: 14px 14px;
+  border-radius: 3px;
+  border: 1px solid #C8650A;
+  background: #C8650A;
+  color: #0A0A0A;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 16px rgba(200, 101, 10, 0.3);
+}
+
+.btnLock:hover {
+  background: #D97515;
+  border-color: #D97515;
+  box-shadow: 0 0 20px rgba(200, 101, 10, 0.4), 0 4px 24px rgba(200, 101, 10, 0.3);
+}
+
+.btnLock:active {
+  background: #A85208;
+  border-color: #A85208;
+  box-shadow: none;
+}
+
+.btnWipe {
+  width: 100%;
+  padding: 6px 14px;
+  border-radius: 3px;
+  border: 1px solid #3A1818;
+  background: #0F0A0A;
+  color: #6B3030;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.btnWipe:hover {
+  color: #C0504A;
+  border-color: #5A2020;
+  background: rgba(192, 80, 74, 0.08);
 }
