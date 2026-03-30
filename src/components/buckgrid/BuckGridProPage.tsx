@@ -220,7 +220,7 @@ export default function BuckGridProPage() {
 
         {/* Acres */}
         {propertyAcres > 0 ? (
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', paddingLeft: '14px', borderLeft: '1px solid #1A1A1A', marginLeft: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', paddingLeft: '14px', borderLeft: '1px solid rgba(200,150,60,0.12)', marginLeft: '8px' }}>
             <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: '24px', letterSpacing: '0.02em', color: '#C8963C', lineHeight: 1 }}>
               {propertyAcres.toLocaleString()}
             </span>
@@ -232,7 +232,7 @@ export default function BuckGridProPage() {
             )}
           </div>
         ) : (
-          <div style={{ paddingLeft: '14px', borderLeft: '1px solid #1A1A1A', marginLeft: '8px' }}>
+          <div style={{ paddingLeft: '14px', borderLeft: '1px solid rgba(200,150,60,0.12)', marginLeft: '8px' }}>
             <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', color: '#2A2A2A', letterSpacing: '0.1em' }}>NO PROPERTY</span>
           </div>
         )}

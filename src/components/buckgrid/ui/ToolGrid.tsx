@@ -47,7 +47,7 @@ function ToolButton({ tool, isActive, onSelect }: { tool: Tool; isActive: boolea
         },
         onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
           e.currentTarget.style.borderLeftColor = 'transparent'
-          e.currentTarget.style.background = '#0D0D0D'
+          e.currentTarget.style.background = '#090C08'
         },
       }
     : {}

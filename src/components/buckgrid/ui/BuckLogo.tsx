@@ -8,7 +8,7 @@ type BuckLogoProps = {
   className?: string
 }
 
-function BuckLogo({ size = 32, color = '#C8650A', className }: BuckLogoProps) {
+function BuckLogo({ size = 32, color = '#C8963C', className }: BuckLogoProps) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

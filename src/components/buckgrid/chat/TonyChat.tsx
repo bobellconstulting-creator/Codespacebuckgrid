@@ -325,8 +325,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               height: '85vh',
               display: 'flex',
               flexDirection: 'column',
-              background: '#1A1A1A',
-              border: '1px solid #2E2E2E',
+              background: '#0D110B',
+              border: '1px solid rgba(200,150,60,0.12)',
               borderBottom: 'none',
               borderRadius: '12px 12px 0 0',
               boxShadow: '0 -8px 40px rgba(0,0,0,0.8)',
@@ -345,8 +345,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             <div
               style={{
                 padding: '6px 12px 10px',
-                background: '#141414',
-                borderBottom: '1px solid #2A2A2A',
+                background: '#090C08',
+                borderBottom: '1px solid rgba(200,150,60,0.12)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -354,13 +354,13 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <BuckLogo size={22} color="#C8650A" />
+                <BuckLogo size={22} color="#C8963C" />
                 <div>
-                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#C8650A', lineHeight: 1 }}>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#C8963C', lineHeight: 1 }}>
                     Tony — Field AI
                   </div>
                   {loading && (
-                    <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#C8650A', marginTop: '2px', letterSpacing: '0.08em' }}>ANALYZING TERRAIN...</div>
+                    <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#C8963C', marginTop: '2px', letterSpacing: '0.08em' }}>ANALYZING TERRAIN...</div>
                   )}
                 </div>
               </div>
@@ -387,13 +387,13 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                 width: '50px',
                 height: '50px',
                 borderRadius: '50%',
-                background: '#C8650A',
+                background: '#C8963C',
                 border: 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 20px rgba(200,101,10,0.5)',
+                boxShadow: '0 4px 20px rgba(200,150,60,0.4)',
               }}
             >
               <BuckLogo size={26} color="#fff" />
@@ -407,7 +407,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                     height: '10px',
                     borderRadius: '50%',
                     background: '#fff',
-                    border: '2px solid #C8650A',
+                    border: '2px solid #C8963C',
                     animation: 'pulse 1.5s infinite',
                   }}
                 />
@@ -432,8 +432,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           flexDirection: 'column',
           overflow: 'hidden',
           borderRadius: 0,
-          background: '#0B0B0B',
-          borderLeft: '1px solid #161616',
+          background: '#090C08',
+          borderLeft: '1px solid rgba(200,150,60,0.12)',
           boxShadow: 'none',
           transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
           fontFamily: "'Barlow Condensed', 'Inter', sans-serif",
@@ -445,8 +445,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           style={{
             padding: '0 14px',
             height: '52px',
-            background: '#0B0B0B',
-            borderBottom: '1px solid #161616',
+            background: '#090C08',
+            borderBottom: '1px solid rgba(200,150,60,0.12)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -456,20 +456,20 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BuckLogo size={20} color="#C8650A" />
+            <BuckLogo size={20} color="#C8963C" />
             {isOpen && (
               <div>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '13px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: '#C0C0C0', lineHeight: 1 }}>
-                  Tony <span style={{ color: '#C8650A' }}>AI</span>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '13px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: '#D8D3C5', lineHeight: 1 }}>
+                  Tony <span style={{ color: '#C8963C' }}>AI</span>
                 </div>
-                <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: loading ? '#C8650A' : '#2A2A2A', marginTop: '3px', letterSpacing: '0.1em', transition: 'color 0.2s' }}>
+                <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: loading ? '#C8963C' : '#6E6A5C', marginTop: '3px', letterSpacing: '0.1em', transition: 'color 0.2s' }}>
                   {loading ? 'ANALYZING TERRAIN...' : 'FIELD CONSULTANT'}
                 </div>
               </div>
             )}
           </div>
           {isOpen ? (
-            <span style={{ color: '#2A2A2A', fontSize: '16px', fontWeight: 300, lineHeight: 1 }}>‹</span>
+            <span style={{ color: '#6E6A5C', fontSize: '16px', fontWeight: 300, lineHeight: 1 }}>‹</span>
           ) : (
             <span style={{ color: '#2A2A2A', fontSize: '16px', fontWeight: 300, lineHeight: 1, transform: 'rotate(180deg)', display: 'block' }}>‹</span>
           )}
