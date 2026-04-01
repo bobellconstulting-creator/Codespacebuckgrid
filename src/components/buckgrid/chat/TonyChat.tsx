@@ -173,6 +173,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             gap: '8px',
             padding: '12px',
             minHeight: 0,
+            background: '#0A0F09',
           }}
         >
           {chat.map((m, i) => {
@@ -198,11 +199,14 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                     fontSize: '13px',
                     lineHeight: '1.55',
                     maxWidth: '92%',
-                    background: isUser ? '#1e2a18' : '#131710',
+                    background: isUser ? '#1e2a18' : '#0D110B',
                     color: isUser ? '#D8D3C5' : '#D8D3C5',
                     fontWeight: isUser ? 600 : 400,
                     fontFamily: isUser ? "'Barlow Condensed', sans-serif" : 'inherit',
                     letterSpacing: isUser ? '0.02em' : 'normal',
+                    border: isUser ? 'none' : '1px solid rgba(90,138,95,0.4)',
+                    boxShadow: isUser ? 'none' : '0 0 16px rgba(90,138,95,0.25), inset 0 0 12px rgba(90,138,95,0.12)',
+                    position: 'relative' as const,
                   }}
                 >
                   {renderMarkdown(m.text)}
@@ -224,15 +228,15 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         </div>
 
         {/* Map Legend */}
-        <div style={{ padding: '0 12px 6px' }}>
+        <div style={{ padding: '6px 12px', background: '#0A0F09', borderTop: '1px solid rgba(200,150,60,0.12)' }}>
           <button
             onClick={() => setLegendOpen(v => !v)}
-            style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '9px', letterSpacing: '0.12em', color: '#444', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' as const, padding: 0, textTransform: 'uppercase' as const }}
+            style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '9px', letterSpacing: '0.12em', color: '#5A8A5F', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' as const, padding: 0, textTransform: 'uppercase' as const }}
           >
             {legendOpen ? '▲ HIDE LEGEND' : '▼ MAP LEGEND'}
           </button>
           {legendOpen && (
-            <div style={{ marginTop: '6px', marginBottom: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px', background: '#0D110B', border: '1px solid rgba(200,150,60,0.12)', borderRadius: '2px', padding: '8px', fontFamily: "'Barlow Condensed', sans-serif", fontSize: '10px', letterSpacing: '0.06em', color: '#6E6A5C' }}>
+            <div style={{ marginTop: '6px', marginBottom: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px', background: 'rgba(10,15,9,0.7)', border: '1px solid rgba(90,138,95,0.2)', borderRadius: '2px', padding: '8px', fontFamily: "'Barlow Condensed', sans-serif", fontSize: '10px', letterSpacing: '0.06em', color: '#6E6A5C' }}>
               <span><span style={{ color: '#FF6B00' }}>■</span> Boundary</span>
               <span><span style={{ color: '#8B4513' }}>■</span> Bedding</span>
               <span><span style={{ color: '#C8650A' }}>■</span> Clover</span>
@@ -246,7 +250,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         </div>
 
         {/* Input */}
-        <div style={{ padding: '8px 12px', paddingBottom: 'env(safe-area-inset-bottom, 16px)', borderTop: '1px solid rgba(200,150,60,0.12)', background: '#0D110B', display: 'flex', gap: '8px', flexShrink: 0 }}>
+        <div style={{ padding: '8px 12px', paddingBottom: 'env(safe-area-inset-bottom, 16px)', borderTop: '1px solid rgba(200,150,60,0.15)', background: '#0A0F09', display: 'flex', gap: '8px', flexShrink: 0 }}>
           <input
             ref={inputRef}
             value={input}
@@ -344,13 +348,14 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             {/* Sheet header */}
             <div
               style={{
-                padding: '6px 12px 10px',
-                background: '#090C08',
-                borderBottom: '1px solid rgba(200,150,60,0.12)',
+                padding: '8px 12px 12px',
+                background: 'linear-gradient(135deg, #0A0F09 0%, #0F1A14 100%)',
+                borderBottom: '1px solid rgba(90,138,95,0.2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(90,138,95,0.1)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -432,9 +437,9 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           flexDirection: 'column',
           overflow: 'hidden',
           borderRadius: 0,
-          background: '#090C08',
-          borderLeft: '1px solid rgba(200,150,60,0.12)',
-          boxShadow: 'none',
+          background: '#0A0F09',
+          borderLeft: '1px solid rgba(200,150,60,0.15)',
+          boxShadow: 'inset 0 0 20px rgba(90,138,95,0.05)',
           transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
           fontFamily: "'Barlow Condensed', 'Inter', sans-serif",
         }}
@@ -444,15 +449,16 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           onClick={() => setIsOpen(v => !v)}
           style={{
             padding: '0 14px',
-            height: '52px',
-            background: '#090C08',
-            borderBottom: '1px solid rgba(200,150,60,0.12)',
+            height: '56px',
+            background: 'linear-gradient(135deg, #0A0F09 0%, #0F1A14 50%, #0A0F09 100%)',
+            borderBottom: '1px solid rgba(90,138,95,0.2)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             userSelect: 'none' as const,
             flexShrink: 0,
+            boxShadow: '0 2px 12px rgba(90,138,95,0.15), inset 0 1px 0 rgba(90,138,95,0.1)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

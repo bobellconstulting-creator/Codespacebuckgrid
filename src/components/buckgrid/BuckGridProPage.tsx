@@ -22,7 +22,7 @@ function getSeason(now: Date): SeasonInfo {
 
 const SIDEBAR_W = 220
 const TONY_W = 300
-const HEADER_H = 52
+const HEADER_H = 70
 
 export default function BuckGridProPage() {
   const mapRef = useRef<MapContainerHandle>(null)
@@ -119,35 +119,36 @@ export default function BuckGridProPage() {
       ═══════════════════════════════════════════════ */}
       <header style={{
         position: 'absolute', top: 0, left: 0, right: 0, height: `${HEADER_H}px`,
-        background: '#090C08',
-        borderBottom: '1px solid rgba(200,150,60,0.12)',
+        background: 'linear-gradient(135deg, #090C08 0%, #0A0F09 50%, #090C08 100%)',
+        borderBottom: '1px solid rgba(200,150,60,0.15)',
         display: 'flex', alignItems: 'center',
         paddingLeft: '0', paddingRight: '16px',
         zIndex: 1100,
         gap: 0,
+        boxShadow: '0 2px 12px rgba(200,150,60,0.08)',
       }}>
         {/* Brand lockup — same width as sidebar */}
         <div style={{
           width: `${SIDEBAR_W}px`,
           height: '100%',
-          display: 'flex', alignItems: 'center', gap: '10px',
+          display: 'flex', alignItems: 'center', gap: '12px',
           padding: '0 16px',
-          borderRight: '1px solid rgba(200,150,60,0.12)',
+          borderRight: '1px solid rgba(200,150,60,0.15)',
           flexShrink: 0,
         }}>
-          <BuckLogo size={30} color="#C8963C" />
+          <BuckLogo size={36} color="#C8963C" />
           <div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: '17px', letterSpacing: '0.1em', color: '#D8D3C5', textTransform: 'uppercase', lineHeight: 1 }}>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: '19px', letterSpacing: '0.1em', color: '#D8D3C5', textTransform: 'uppercase', lineHeight: 1 }}>
               Buck<span style={{ color: '#C8963C' }}>Grid</span> Pro
             </div>
-            <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '7px', letterSpacing: '0.2em', color: '#6E6A5C', textTransform: 'uppercase', marginTop: '3px' }}>
-              Precision Land Intelligence
+            <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '7.5px', letterSpacing: '0.2em', color: '#5A8A5F', textTransform: 'uppercase', marginTop: '4px' }}>
+              Habitat Intelligence
             </div>
           </div>
         </div>
 
         {/* Property search */}
-        <div style={{ width: '180px', padding: '0 12px', borderRight: '1px solid rgba(200,150,60,0.12)', flexShrink: 0 }}>
+        <div style={{ width: '180px', padding: '0 12px', borderRight: '1px solid rgba(200,150,60,0.15)', flexShrink: 0 }}>
           <PropertySearch
             onResult={(lat, lng) => { mapRef.current?.flyTo(lat, lng, 15) }}
             compact
@@ -155,7 +156,7 @@ export default function BuckGridProPage() {
         </div>
 
         {/* Property name inline input */}
-        <div style={{ padding: '0 12px', borderRight: '1px solid rgba(200,150,60,0.12)' }}>
+        <div style={{ padding: '0 12px', borderRight: '1px solid rgba(200,150,60,0.15)' }}>
           <input
             type="text"
             value={propertyName}
@@ -181,7 +182,7 @@ export default function BuckGridProPage() {
         </div>
 
         {hasRestorable && !savedIndicator && (
-          <div style={{ padding: '0 12px', borderRight: '1px solid rgba(200,150,60,0.12)' }}>
+          <div style={{ padding: '0 12px', borderRight: '1px solid rgba(200,150,60,0.15)' }}>
             <button
               onClick={handleRestoreSession}
               style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '10px', fontWeight: 600, letterSpacing: '0.08em', color: '#C8963C', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textTransform: 'uppercase' }}
@@ -198,12 +199,13 @@ export default function BuckGridProPage() {
           <div style={{
             display: 'flex', alignItems: 'center', gap: '6px',
             padding: '4px 10px',
-            background: `${activeTool.color}15`,
-            border: `1px solid ${activeTool.color}40`,
+            background: `${activeTool.color}22`,
+            border: `1px solid ${activeTool.color}50`,
             borderRadius: '2px',
             marginRight: '12px',
+            boxShadow: `0 0 12px ${activeTool.color}25`,
           }}>
-            <span style={{ width: '6px', height: '6px', borderRadius: '1px', background: activeTool.color, display: 'block', boxShadow: `0 0 8px ${activeTool.color}` }} />
+            <span style={{ width: '6px', height: '6px', borderRadius: '1px', background: activeTool.color, display: 'block', boxShadow: `0 0 12px ${activeTool.color}` }} />
             <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', color: activeTool.color, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
               {activeTool.name}
             </span>
@@ -211,16 +213,16 @@ export default function BuckGridProPage() {
         )}
 
         {/* Season chip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '12px', borderLeft: '1px solid #141414', marginLeft: '4px' }}>
-          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#5A8A5F', display: 'inline-block' }} />
-          <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', letterSpacing: '0.14em', color: '#5A8A5F', textTransform: 'uppercase' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '12px', borderLeft: '1px solid #1A2A1F', marginLeft: '4px' }}>
+          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#5A8A5F', display: 'inline-block', boxShadow: '0 0 8px #5A8A5F' }} />
+          <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', letterSpacing: '0.14em', color: '#6DB87F', textTransform: 'uppercase' }}>
             {season.label}
           </span>
         </div>
 
         {/* Acres */}
         {propertyAcres > 0 ? (
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', paddingLeft: '14px', borderLeft: '1px solid rgba(200,150,60,0.12)', marginLeft: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', paddingLeft: '14px', borderLeft: '1px solid rgba(200,150,60,0.15)', marginLeft: '8px' }}>
             <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: '24px', letterSpacing: '0.02em', color: '#C8963C', lineHeight: 1 }}>
               {propertyAcres.toLocaleString()}
             </span>
@@ -232,7 +234,7 @@ export default function BuckGridProPage() {
             )}
           </div>
         ) : (
-          <div style={{ paddingLeft: '14px', borderLeft: '1px solid rgba(200,150,60,0.12)', marginLeft: '8px' }}>
+          <div style={{ paddingLeft: '14px', borderLeft: '1px solid rgba(200,150,60,0.15)', marginLeft: '8px' }}>
             <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', color: '#2A2A2A', letterSpacing: '0.1em' }}>NO PROPERTY</span>
           </div>
         )}
@@ -274,15 +276,16 @@ export default function BuckGridProPage() {
           left: 0,
           width: `${SIDEBAR_W}px`,
           bottom: 0,
-          background: '#090C08',
-          borderRight: '1px solid rgba(200,150,60,0.12)',
+          background: '#0A0F09',
+          borderRight: '1px solid rgba(200,150,60,0.15)',
           overflowY: 'auto',
           zIndex: 1000,
           display: 'flex',
           flexDirection: 'column',
+          boxShadow: '2px 0 12px rgba(0,0,0,0.4)',
         }}>
           {/* Season advisory */}
-          <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(200,150,60,0.08)' }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(200,150,60,0.12)' }}>
             <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.18em', color: '#5A8A5F', textTransform: 'uppercase', marginBottom: '5px' }}>
               {season.label.toUpperCase()} // ADVISORY
             </div>
@@ -359,54 +362,85 @@ export default function BuckGridProPage() {
           ONBOARDING MODAL
       ═══════════════════════════════════════════════ */}
       {showOnboarding && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.88)', backdropFilter: 'blur(6px)' }}>
+        <div style={{ position: 'absolute', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)' }}>
           <div style={{
-            width: '380px', maxWidth: 'calc(100vw - 32px)',
+            width: '420px', maxWidth: 'calc(100vw - 32px)',
             background: '#0D110B',
-            border: '1px solid rgba(200,150,60,0.12)',
-            borderTop: '3px solid #C8963C',
-            borderRadius: '4px',
-            boxShadow: '0 32px 80px rgba(0,0,0,0.95)',
+            border: '1px solid rgba(200,150,60,0.15)',
+            borderTop: '4px solid #C8963C',
+            borderRadius: '6px',
+            boxShadow: '0 8px 32px rgba(200,150,60,0.12), 0 32px 80px rgba(0,0,0,0.95)',
             overflow: 'hidden',
           }}>
-            {/* Modal header */}
-            <div style={{ padding: '24px 28px 20px', borderBottom: '1px solid rgba(200,150,60,0.1)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                <BuckLogo size={44} color="#C8963C" />
-                <div>
-                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: '26px', letterSpacing: '0.06em', color: '#D8D3C5', textTransform: 'uppercase', lineHeight: 1 }}>
+            {/* Hero section with gradient background */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(10,15,9,0.9) 0%, rgba(90,138,95,0.2) 50%, rgba(200,150,60,0.1) 100%)',
+              padding: '36px 32px 32px',
+              borderBottom: '1px solid rgba(200,150,60,0.15)',
+              position: 'relative',
+              overflow: 'hidden',
+            }}>
+              {/* Accent glow */}
+              <div style={{
+                position: 'absolute',
+                top: '-50%',
+                right: '-30%',
+                width: '400px',
+                height: '400px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(200,150,60,0.2) 0%, transparent 70%)',
+                pointerEvents: 'none',
+              }} />
+
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
+                  <BuckLogo size={72} color="#C8963C" />
+                </div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: '42px', letterSpacing: '0.12em', color: '#D8D3C5', textTransform: 'uppercase', lineHeight: 1, marginBottom: '8px' }}>
                     Buck<span style={{ color: '#C8963C' }}>Grid</span> Pro
                   </div>
-                  <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', color: '#6E6A5C', textTransform: 'uppercase', marginTop: '5px' }}>
-                    AI Habitat Intelligence System
+                  <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '11px', letterSpacing: '0.3em', color: '#5A8A5F', textTransform: 'uppercase', fontWeight: 700, marginBottom: '16px' }}>
+                    ▲ PRECISION HABITAT INTELLIGENCE ▲
                   </div>
+                  <p style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '14px', color: '#D8D3C5', letterSpacing: '0.02em', lineHeight: 1.7, margin: 0 }}>
+                    Master your hunting land. Deploy AI-powered habitat analysis. Hunt smarter.
+                  </p>
                 </div>
               </div>
             </div>
 
             {/* Steps */}
-            <div style={{ padding: '20px 28px' }}>
-              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.2em', color: '#6E6A5C', textTransform: 'uppercase', marginBottom: '16px' }}>
-                MISSION BRIEFING — 4 STEPS
+            <div style={{ padding: '24px 28px' }}>
+              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.24em', color: '#6DB87F', textTransform: 'uppercase', marginBottom: '18px', fontWeight: 700 }}>
+                ▲ 4-STEP MISSION BRIEFING ▲
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {[
-                  { n: '01', label: 'Navigate to your land', desc: 'Search an address or tap GPS to find your property on the map.' },
-                  { n: '02', label: 'Trace your boundary', desc: 'Select Boundary tool and draw your property perimeter.' },
-                  { n: '03', label: 'Mark habitat features', desc: 'Draw food plots, bedding areas, stand locations, pinch points.' },
-                  { n: '04', label: 'Lock Border — deploy Tony', desc: 'Tony analyzes your exact terrain and delivers a full habitat audit.' },
-                ].map(({ n, label, desc }) => (
+                  { n: '01', icon: '📍', label: 'Navigate', desc: 'Search an address or GPS to your property on the satellite map.' },
+                  { n: '02', icon: '🛑', label: 'Trace Boundary', desc: 'Draw your property perimeter with precision. Lock it down.' },
+                  { n: '03', icon: '🎯', label: 'Mark Habitat', desc: 'Plot food sources, bedding zones, stands, and kill zones.' },
+                  { n: '04', icon: '⚡', label: 'Lock & Deploy Tony', desc: 'AI habitat audit. Terrain analysis. Actionable intel. Go hunting.' },
+                ].map(({ n, icon, label, desc }) => (
                   <div key={n} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
                     <div style={{
-                      fontFamily: "'Share Tech Mono', monospace", fontWeight: 700, fontSize: '11px', color: '#C8963C',
-                      width: '28px', flexShrink: 0, paddingTop: '1px',
-                      letterSpacing: '0.04em',
+                      fontFamily: "'Share Tech Mono', monospace", fontWeight: 700, fontSize: '16px', color: '#C8963C',
+                      width: '36px', height: '36px', flexShrink: 0, paddingTop: '0px',
+                      letterSpacing: '0.08em',
+                      background: 'linear-gradient(135deg, rgba(200,150,60,0.15) 0%, rgba(200,150,60,0.08) 100%)',
+                      border: '2px solid rgba(200,150,60,0.3)',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 0 12px rgba(200,150,60,0.15), inset 0 0 8px rgba(200,150,60,0.1)',
                     }}>{n}</div>
-                    <div>
-                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: '14px', color: '#D8D3C5', letterSpacing: '0.02em', lineHeight: 1, marginBottom: '3px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: '13px', color: '#D8D3C5', letterSpacing: '0.02em', lineHeight: 1, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '14px' }}>{icon}</span>
                         {label}
                       </div>
-                      <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', color: '#6E6A5C', lineHeight: 1.6 }}>
+                      <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9.5px', color: '#6E6A5C', lineHeight: 1.6 }}>
                         {desc}
                       </div>
                     </div>
@@ -416,23 +450,35 @@ export default function BuckGridProPage() {
             </div>
 
             {/* CTA */}
-            <div style={{ padding: '0 28px 24px' }}>
+            <div style={{ padding: '24px 28px', borderTop: '1px solid rgba(200,150,60,0.15)', background: 'rgba(10,15,9,0.5)' }}>
               <button
                 onClick={() => { localStorage.setItem('buckgrid_onboarded', '1'); setShowOnboarding(false) }}
                 style={{
                   width: '100%',
-                  background: '#C8963C',
+                  background: 'linear-gradient(135deg, #C8963C 0%, #E8B860 100%)',
                   color: '#090C08',
                   fontFamily: "'Barlow Condensed', sans-serif",
-                  fontWeight: 800, fontSize: '14px', letterSpacing: '0.14em', textTransform: 'uppercase',
-                  padding: '13px', borderRadius: '3px', border: 'none', cursor: 'pointer',
-                  transition: 'background 0.15s',
+                  fontWeight: 800, fontSize: '14px', letterSpacing: '0.16em', textTransform: 'uppercase',
+                  padding: '14px 16px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  boxShadow: '0 4px 16px rgba(200,150,60,0.25)',
+                  position: 'relative',
+                  overflow: 'hidden',
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#E8B860' }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#C8963C' }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.boxShadow = '0 8px 32px rgba(200,150,60,0.4), 0 0 20px rgba(200,150,60,0.2)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(200,150,60,0.25)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
               >
-                DEPLOY TO MAP
+                ⚡ DEPLOY TO MAP
               </button>
+              <div style={{ marginTop: '12px', textAlign: 'center', fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#5A8A5F', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                Start mapping your habitat now
+              </div>
             </div>
           </div>
         </div>

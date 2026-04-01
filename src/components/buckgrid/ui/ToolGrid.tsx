@@ -33,9 +33,10 @@ function ToolButton({ tool, isActive, onSelect }: { tool: Tool; isActive: boolea
   const activeStyle: React.CSSProperties = isActive
     ? {
         borderLeftColor: tool.color,
-        borderColor: `${tool.color}40`,
-        background: `${tool.color}22`,
+        borderColor: `${tool.color}50`,
+        background: `${tool.color}28`,
         color: tool.color,
+        boxShadow: `0 0 16px ${tool.color}30, inset 0 0 8px ${tool.color}15`,
       }
     : {}
 
@@ -43,11 +44,13 @@ function ToolButton({ tool, isActive, onSelect }: { tool: Tool; isActive: boolea
     ? {
         onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
           e.currentTarget.style.borderLeftColor = `${tool.color}80`
-          e.currentTarget.style.background = `${tool.color}0A`
+          e.currentTarget.style.background = `${tool.color}12`
+          e.currentTarget.style.boxShadow = `0 0 8px ${tool.color}20`
         },
         onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
           e.currentTarget.style.borderLeftColor = 'transparent'
-          e.currentTarget.style.background = '#090C08'
+          e.currentTarget.style.background = '#0A0F09'
+          e.currentTarget.style.boxShadow = 'none'
         },
       }
     : {}
@@ -106,7 +109,7 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
   const structureTools = byId(STRUCTURE_IDS)
 
   return (
-    <div className={styles.panel}>
+    <div className={styles.panel} style={{ background: '#0A0F09' }}>
       <ToolSection label="Navigation" tools={navTools} activeToolId={activeToolId} onSelectTool={onSelectTool} fullWidth />
       <ToolSection label="Boundary" tools={boundaryTools} activeToolId={activeToolId} onSelectTool={onSelectTool} fullWidth />
       <ToolSection label="Food Plots" tools={foodPlotTools} activeToolId={activeToolId} onSelectTool={onSelectTool} />
