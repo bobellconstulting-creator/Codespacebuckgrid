@@ -1,6 +1,5 @@
 import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -147,9 +146,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests', reply: 'Slow down — Tony can only handle so many questions per minute. Try again shortly.' }, { status: 429 })
     }
 
-    const apiKey = process.env.GOOGLE_AI_KEY
+    const apiKey = process.env.OPENROUTER_API_KEY
     if (!apiKey) {
-      return NextResponse.json({ error: 'Server configuration error', reply: 'Tony needs a fresh API key — the current Google AI key was revoked. Contact support to get Tony back online.' }, { status: 500 })
+      return NextResponse.json({ error: 'Server configuration error', reply: 'Tony needs a fresh API key — contact support to get Tony back online.' }, { status: 500 })
     }
 
     const body = await req.json()
@@ -181,24 +180,43 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
-
     let rawText: string
     try {
-      const geminiPromise = model.generateContent([
-        { inlineData: { data: imgBase64, mimeType: 'image/png' } },
-        { text: buildTonyPrompt(trimmedMsg, bounds, zoom ?? 14, safeFeatures, typeof season === 'string' ? season : '', typeof propertyName === 'string' ? propertyName : '') }
-      ])
+      const tonyPrompt = buildTonyPrompt(trimmedMsg, bounds, zoom ?? 14, safeFeatures, typeof season === 'string' ? season : '', typeof propertyName === 'string' ? propertyName : '')
+      const orPromise = fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://codespacebuckgrid.vercel.app',
+          'X-Title': 'BuckGrid Pro',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.0-flash-001',
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
+              { type: 'text', text: tonyPrompt }
+            ]
+          }],
+          max_tokens: 2048,
+        })
+      })
       const result = await Promise.race([
-        geminiPromise,
+        orPromise,
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('GeminiTimeout')), GEMINI_TIMEOUT_MS)
+          setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)
         )
       ])
-      rawText = result.response.text().trim()
+      if (!result.ok) {
+        const errBody = await result.text()
+        throw new Error(`OpenRouter ${result.status}: ${errBody}`)
+      }
+      const orJson = await result.json()
+      rawText = orJson.choices?.[0]?.message?.content?.trim() ?? ''
     } catch (err: unknown) {
-      const isTimeout = err instanceof Error && err.message === 'GeminiTimeout'
+      const isTimeout = err instanceof Error && err.message === 'TonyTimeout'
       return NextResponse.json({
         error: 'AI timeout',
         reply: isTimeout
