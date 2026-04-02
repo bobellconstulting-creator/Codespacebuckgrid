@@ -88,7 +88,7 @@ The satellite image covers exactly:
 - Longitude: ${bounds.west.toFixed(5)}° to ${bounds.east.toFixed(5)}° (west to east)
 - Zoom level: ${zoom}
 
-The image is 1280×960 pixels. Pixel x=0 is lng=${bounds.west.toFixed(5)}°, x=1280 is lng=${bounds.east.toFixed(5)}°. Pixel y=0 is lat=${bounds.north.toFixed(5)}°, y=960 is lat=${bounds.south.toFixed(5)}°. Use this to estimate real coordinates for any feature you recommend.
+The image is 640×480 pixels. Pixel x=0 is lng=${bounds.west.toFixed(5)}°, x=640 is lng=${bounds.east.toFixed(5)}°. Pixel y=0 is lat=${bounds.north.toFixed(5)}°, y=480 is lat=${bounds.south.toFixed(5)}°. Use this to estimate real coordinates for any feature you recommend.
 ${featureDesc}
 
 User says: "${message}"
@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
     // Fetch satellite image — Esri World Imagery (free, no key, no CORS)
     const esriUrl = `https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export` +
       `?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}` +
-      `&bboxSR=4326&imageSR=4326&size=1280,960&format=png&f=image`
+      `&bboxSR=4326&imageSR=4326&size=640,480&format=png&f=image`
 
     let imgBase64: string
     try {
