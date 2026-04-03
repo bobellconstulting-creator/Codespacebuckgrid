@@ -209,7 +209,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             if (m.text === '__thinking__') {
               return (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: '#1E2122', border: '1px solid rgba(107,122,87,0.12)', borderRadius: '3px', alignSelf: 'flex-start' }}>
-                  <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#6B7A57', letterSpacing: '0.08em' }}>SCANNING TERRAIN</span>
+                  <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', color: '#6B7A57', letterSpacing: '0.06em' }}>ANALYZING</span>
                   <span style={{ display: 'flex', gap: '3px' }}>
                     {[0, 150, 300].map(d => (
                       <span key={d} style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#6B7A57', animation: 'bounce 1s infinite', animationDelay: `${d}ms`, display: 'inline-block' }} />

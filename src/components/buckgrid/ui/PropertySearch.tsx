@@ -104,8 +104,8 @@ export default function PropertySearch({ onResult }: Props) {
             transition: 'border-color 0.12s ease, box-shadow 0.12s ease',
           }}
           onFocus={e => {
-            e.currentTarget.style.borderColor = '#C8963C'
-            e.currentTarget.style.boxShadow = '0 0 0 2px rgba(200,150,60,0.15), inset 0 0 8px rgba(200,150,60,0.04)'
+            e.currentTarget.style.borderColor = '#6B7A57'
+            e.currentTarget.style.boxShadow = '0 0 0 2px rgba(107,122,87,0.15), inset 0 0 8px rgba(107,122,87,0.04)'
           }}
           onBlur={e => {
             e.currentTarget.style.borderColor = '#243020'
@@ -116,7 +116,7 @@ export default function PropertySearch({ onResult }: Props) {
           onClick={() => search(query)}
           disabled={loading || !query.trim()}
           style={{
-            background: loading || !query.trim() ? '#1E2E1A' : '#C8963C',
+            background: loading || !query.trim() ? '#1E2E1A' : '#6B7A57',
             border: '1px solid transparent',
             borderRadius: '4px',
             color: loading || !query.trim() ? '#4A5A3A' : '#080F07',
@@ -147,6 +147,7 @@ export default function PropertySearch({ onResult }: Props) {
           fontWeight: 600,
           letterSpacing: '0.1em',
           textTransform: 'uppercase' as const,
+          minHeight: '44px',
           padding: '5px 8px',
           cursor: loading ? 'not-allowed' : 'pointer',
           opacity: loading ? 0.4 : 1,
@@ -156,8 +157,8 @@ export default function PropertySearch({ onResult }: Props) {
         }}
         onMouseEnter={e => {
           if (!loading) {
-            e.currentTarget.style.color = '#C8963C'
-            e.currentTarget.style.borderColor = 'rgba(200,150,60,0.3)'
+            e.currentTarget.style.color = '#6B7A57'
+            e.currentTarget.style.borderColor = 'rgba(107,122,87,0.3)'
           }
         }}
         onMouseLeave={e => {

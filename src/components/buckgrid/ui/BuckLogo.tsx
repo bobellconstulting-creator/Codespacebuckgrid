@@ -9,55 +9,76 @@ type BuckLogoProps = {
 }
 
 /**
- * BuckGrid Pro — Buck head, frontal silhouette + 3-point rack.
- * Single continuous form. Reads clean at 16px and up.
- * Inspired by: KUIU, OnX Maps, Garmin — heritage + precision.
+ * BuckGrid Pro mark — directly from the reference SVG provided by Bo.
+ * Uses the exact hexagon + topo lines + geometric deer face structure.
+ * color prop maps to the olive stroke/fill color (#6B7A57 by default).
  */
-function BuckLogo({ size = 32, color = '#C8963C', className }: BuckLogoProps) {
+export default function BuckLogo({ size = 48, color = '#6B7A57', className }: BuckLogoProps) {
+  const bg = '#36393b'
+  const w  = size
+  const h  = size   // badge portion is roughly square
+
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 100 100"
-      width={size}
-      height={size}
-      fill={color}
+      // Crop to just the badge area (hex: x120–480, y50–450)
+      viewBox="110 40 380 420"
+      width={w}
+      height={h}
       role="img"
-      aria-label="BuckGrid"
+      aria-label="BuckGrid Pro"
       className={className}
+      style={{ display: 'block', flexShrink: 0 }}
     >
-      {/* ── HEAD silhouette — frontal, slightly tapered jaw ── */}
-      <path d="M50 98 L30 91 L20 76 L20 62 L26 52 L36 46 L50 44 L64 46 L74 52 L80 62 L80 76 L70 91 Z" />
+      {/* ── HEXAGON BADGE ─────────────────────────────────────────── */}
+      <polygon
+        points="300,50 480,150 480,350 300,450 120,350 120,150"
+        fill={bg}
+        stroke={color}
+        strokeWidth="12"
+        strokeLinejoin="round"
+      />
 
-      {/* ── LEFT ANTLER — 3 points: brow, G2, main tip ── */}
-      {/*   Traces outer edge of beam + two tine bumps, closes at base   */}
-      <path d="
-        M 44 46
-        L 36 28
-        L 16 18  L 16 13  L 37 22
-        L 38 14
-        L 24 2   L 30 0   L 42 12
-        L 48 44
-        Z
-      " />
+      {/* ── TOPO CONTOUR LINES (clipped to hex) ───────────────────── */}
+      <g clipPath="url(#bgHexClip)" fill="none" stroke={color} strokeWidth="2" opacity="0.4">
+        <defs>
+          <clipPath id="bgHexClip">
+            <polygon points="300,50 480,150 480,350 300,450 120,350 120,150" />
+          </clipPath>
+        </defs>
+        <path d="M100,100 Q200,150 250,80 T400,120 T500,80" />
+        <path d="M80,150 Q180,200 300,150 T520,180" />
+        <path d="M100,220 Q200,280 280,210 T450,250 T550,220" />
+        <path d="M120,300 Q250,350 350,280 T500,340" />
+        <path d="M150,380 Q300,400 400,360 T550,420" />
+        <path d="M250,150 Q300,200 350,150 T400,200" />
+        <path d="M220,250 Q300,300 380,250" />
+      </g>
 
-      {/* ── RIGHT ANTLER — mirrored ── */}
-      <path d="
-        M 56 46
-        L 64 28
-        L 84 18  L 84 13  L 63 22
-        L 62 14
-        L 76 2   L 70 0   L 58 12
-        L 52 44
-        Z
-      " />
+      {/* ── GEOMETRIC DEER FACE ────────────────────────────────────── */}
+      <g
+        fill="none"
+        stroke={color}
+        strokeWidth="8"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      >
+        {/* Muzzle / chin */}
+        <polygon points="300,400 270,330 330,330" />
+        {/* Jaw / lower face */}
+        <polygon points="270,330 230,250 300,280 370,250 330,330" />
+        {/* Center face / nose bridge */}
+        <polygon points="230,250 300,180 370,250 300,280" />
+        {/* Left ear / cheek */}
+        <polygon points="230,250 160,230 210,180" />
+        {/* Right ear / cheek */}
+        <polygon points="370,250 440,230 390,180" />
 
-      {/* ── GRID ACCENT — 3 horizontal lines across antler zone ── */}
-      {/*   Subtle nod to "Grid" — precision, intelligence            */}
-      <rect x="30" y="15" width="40" height="2.5" rx="1" opacity="0.22" />
-      <rect x="26" y="23" width="48" height="2.5" rx="1" opacity="0.18" />
-      <rect x="22" y="31" width="56" height="2.5" rx="1" opacity="0.14" />
+        {/* Left antler beams + tines */}
+        <path d="M260,210 L230,120 L200,90 M230,120 L270,80 L250,50 M250,160 L180,140" />
+        {/* Right antler beams + tines */}
+        <path d="M340,210 L370,120 L400,90 M370,120 L330,80 L350,50 M350,160 L420,140" />
+      </g>
     </svg>
   )
 }
-
-export default BuckLogo

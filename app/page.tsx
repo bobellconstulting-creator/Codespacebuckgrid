@@ -3,17 +3,18 @@
 import { motion, useInView, AnimatePresence } from 'framer-motion'
 import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
+import BuckLogo from '../src/components/buckgrid/ui/BuckLogo'
 
 // ─── Color tokens ─────────────────────────────────────────────────────────────
 const C = {
-  bg: '#090C08',
-  bgAlt: '#0D110B',
+  bg: '#1E2122',
+  bgAlt: '#1E2122',
   card: '#131710',
-  accent: '#C8963C',
-  highlight: '#E8B860',
+  accent: '#6B7A57',
+  highlight: '#6B7A57',
   text: '#D8D3C5',
   muted: '#6E6A5C',
-  border: 'rgba(200,150,60,0.1)',
+  border: 'rgba(107,122,87,0.1)',
   green: '#5A8A5F',
   greenDim: 'rgba(90,138,95,0.15)',
 }
@@ -65,28 +66,14 @@ function Nav() {
     >
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div
-            className="w-8 h-8 rounded-lg flex items-center justify-center"
-            style={{
-              background: 'linear-gradient(135deg, #1e2a18, #2a3820)',
-              border: `1px solid rgba(200,150,60,0.35)`,
-              boxShadow: '0 0 12px -4px rgba(200,150,60,0.3)',
-            }}
-          >
-            {/* Crosshair scope icon */}
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="5" stroke="#C8963C" strokeWidth="1.2" />
-              <circle cx="8" cy="8" r="1.5" fill="#C8963C" />
-              <line x1="8" y1="1" x2="8" y2="4.5" stroke="#C8963C" strokeWidth="1.2" />
-              <line x1="8" y1="11.5" x2="8" y2="15" stroke="#C8963C" strokeWidth="1.2" />
-              <line x1="1" y1="8" x2="4.5" y2="8" stroke="#C8963C" strokeWidth="1.2" />
-              <line x1="11.5" y1="8" x2="15" y2="8" stroke="#C8963C" strokeWidth="1.2" />
-            </svg>
+        <Link href="/" className="flex items-center gap-3 group">
+          <BuckLogo size={30} color="#6B7A57" />
+          <div style={{ lineHeight: 1 }}>
+            <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '18px', letterSpacing: '0.14em', color: '#D8D3C5', textTransform: 'uppercase', display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+              <span>BUCK<span style={{ color: C.accent }}>GRID</span></span>
+              <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.16em', color: '#6E6A5C' }}>PRO</span>
+            </div>
           </div>
-          <span className="font-bold text-white text-base tracking-tight">
-            BuckGrid <span style={{ color: C.accent }}>Pro</span>
-          </span>
         </Link>
 
         {/* Center links */}
@@ -107,7 +94,7 @@ function Nav() {
         <Link
           href="/buckgrid"
           className="px-5 py-2 rounded-lg text-sm font-bold transition-all hover:opacity-90 hover:scale-105 active:scale-100"
-          style={{ background: 'linear-gradient(135deg, #C8963C, #9A6E28)', color: '#0C0F0A' }}
+          style={{ background: 'linear-gradient(135deg, #6B7A57, #4A543D)', color: '#0C0F0A' }}
         >
           Try Free
         </Link>
@@ -216,7 +203,7 @@ function HeroMockPanel() {
       className="relative w-full max-w-2xl mx-auto rounded-2xl overflow-hidden"
       style={{
         border: `1px solid ${C.border}`,
-        boxShadow: '0 40px 80px -20px rgba(0,0,0,0.8), 0 0 60px -10px rgba(200,150,60,0.1)',
+        boxShadow: '0 40px 80px -20px rgba(0,0,0,0.8), 0 0 60px -10px rgba(107,122,87,0.1)',
       }}
     >
       {/* Simulated satellite map bg */}
@@ -247,7 +234,7 @@ function HeroMockPanel() {
           {/* Trail line */}
           <path d="M 230 150 Q 310 140 370 125 Q 420 115 460 95" stroke="rgba(251,191,36,0.8)" strokeWidth="2" fill="none" strokeLinecap="round" strokeDasharray="6 3" />
           {/* Stand marker — brass crosshair */}
-          <circle cx="340" cy="75" r="9" fill="rgba(200,150,60,0.9)" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
+          <circle cx="340" cy="75" r="9" fill="rgba(107,122,87,0.9)" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
           <line x1="340" y1="68" x2="340" y2="82" stroke="rgba(0,0,0,0.65)" strokeWidth="1.2" />
           <line x1="333" y1="75" x2="347" y2="75" stroke="rgba(0,0,0,0.65)" strokeWidth="1.2" />
           <circle cx="340" cy="75" r="2" fill="rgba(0,0,0,0.55)" />
@@ -274,8 +261,8 @@ function HeroMockPanel() {
             className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 mt-0.5"
             style={{
               background: 'linear-gradient(135deg, #1e2a18, #2a3820)',
-              border: `1px solid rgba(200,150,60,0.4)`,
-              color: '#C8963C',
+              border: `1px solid rgba(107,122,87,0.4)`,
+              color: '#6B7A57',
             }}
           >
             T
@@ -293,7 +280,7 @@ function HeroMockPanel() {
                 { label: 'Food Plot', color: C.green, bg: 'rgba(34,197,94,0.12)' },
                 { label: 'Bedding', color: '#c47830', bg: 'rgba(180,120,60,0.12)' },
                 { label: 'Trail', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
-                { label: 'Stand', color: C.accent, bg: 'rgba(200,150,60,0.12)' },
+                { label: 'Stand', color: C.accent, bg: 'rgba(107,122,87,0.12)' },
               ].map(({ label, color, bg }) => (
                 <span
                   key={label}
@@ -324,7 +311,7 @@ function Hero() {
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: 'linear-gradient(rgba(200,150,60,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(200,150,60,0.025) 1px, transparent 1px)',
+            backgroundImage: 'linear-gradient(rgba(107,122,87,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(107,122,87,0.025) 1px, transparent 1px)',
             backgroundSize: '80px 80px',
           }}
         />
@@ -333,7 +320,7 @@ function Hero() {
           style={{
             width: 900, height: 900,
             top: -280, left: '50%', transform: 'translateX(-50%)',
-            background: 'radial-gradient(circle, rgba(200,150,60,0.055) 0%, transparent 65%)',
+            background: 'radial-gradient(circle, rgba(107,122,87,0.055) 0%, transparent 65%)',
           }}
         />
         <div
@@ -354,12 +341,12 @@ function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest mb-8"
-            style={{ background: 'rgba(200,150,60,0.1)', color: C.accent, border: `1px solid rgba(200,150,60,0.2)` }}
+            style={{ background: 'rgba(107,122,87,0.1)', color: C.accent, border: `1px solid rgba(107,122,87,0.2)` }}
           >
             {/* Topo line icon */}
             <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
-              <path d="M1 9 C3 9 3 7 5 7 C7 7 7 5 9 5 C11 5 11 3 13 3" stroke="#C8963C" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-              <path d="M1 6 C3 6 3 4 5 4 C7 4 7 2 9 2 C11 2 11 1 13 1" stroke="#C8963C" strokeWidth="0.7" strokeLinecap="round" fill="none" opacity="0.5" />
+              <path d="M1 9 C3 9 3 7 5 7 C7 7 7 5 9 5 C11 5 11 3 13 3" stroke="#6B7A57" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+              <path d="M1 6 C3 6 3 4 5 4 C7 4 7 2 9 2 C11 2 11 1 13 1" stroke="#6B7A57" strokeWidth="0.7" strokeLinecap="round" fill="none" opacity="0.5" />
             </svg>
             Satellite-Grade Habitat Intelligence
           </motion.div>
@@ -372,19 +359,21 @@ function Hero() {
             className="font-display text-7xl md:text-8xl lg:text-9xl leading-none mb-6 tracking-tight uppercase"
             style={{ color: '#fff' }}
           >
-            Your Land&apos;s{' '}
+            Draw Your Land.
+            <br />
+            Talk To{' '}
             <span
               style={{
-                backgroundImage: `linear-gradient(135deg, ${C.accent} 0%, #E8B860 100%)`,
+                backgroundImage: `linear-gradient(135deg, ${C.accent} 0%, #6B7A57 100%)`,
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
               }}
             >
-              AI Habitat
+              Tony.
             </span>
             <br />
-            Consultant
+            Kill Bigger Bucks.
           </motion.h1>
 
           {/* Subheadline */}
@@ -395,7 +384,7 @@ function Hero() {
             className="text-lg md:text-xl leading-relaxed mb-10 max-w-xl mx-auto"
             style={{ color: C.muted }}
           >
-            Tony sees your satellite map, finds what you&apos;ve been missing, and draws your habitat plan in under a minute.
+            Other apps show you a map. Tony reads your terrain — bedding zones, funnels, thermals — and tells you exactly where to hang your stand.
           </motion.p>
 
           {/* CTAs */}
@@ -409,9 +398,9 @@ function Hero() {
               href="/buckgrid"
               className="group flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-white text-base transition-all hover:scale-105 hover:-translate-y-0.5 active:scale-100"
               style={{
-                background: 'linear-gradient(135deg, #C8963C, #9A6E28)',
+                background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
                 color: '#0C0F0A',
-                boxShadow: `0 8px 30px -8px rgba(200,150,60,0.5)`,
+                boxShadow: `0 8px 30px -8px rgba(107,122,87,0.5)`,
               }}
             >
               Analyze My Land Free
@@ -433,7 +422,7 @@ function Hero() {
             className="text-xs"
             style={{ color: C.muted }}
           >
-            No credit card required · 30-day money-back guarantee
+            No account required · Free to start · No credit card
           </motion.p>
         </div>
 
@@ -465,7 +454,7 @@ function TrustBar() {
               key={s.val}
               className="flex flex-col items-center py-4 text-center"
               style={{
-                borderRight: i < STATS.length - 1 ? `1px solid rgba(200,150,60,0.15)` : 'none',
+                borderRight: i < STATS.length - 1 ? `1px solid rgba(107,122,87,0.15)` : 'none',
               }}
             >
               <div className="text-3xl font-bold font-display tracking-wide" style={{ color: C.accent }}>{s.val}</div>
@@ -542,9 +531,9 @@ function HowItWorks() {
                   <div
                     className="inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold flex-shrink-0"
                     style={{
-                      background: 'linear-gradient(135deg, #C8963C, #9A6E28)',
+                      background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
                       color: '#0C0F0A',
-                      boxShadow: '0 0 12px -4px rgba(200,150,60,0.5)',
+                      boxShadow: '0 0 12px -4px rgba(107,122,87,0.5)',
                     }}
                   >
                     {parseInt(step.num, 10)}
@@ -595,7 +584,7 @@ const TESTIMONIALS = [
 
 function Testimonials() {
   return (
-    <section id="testimonials" className="py-28 px-6" style={{ background: '#0D110B' }}>
+    <section id="testimonials" className="py-28 px-6" style={{ background: '#1E2122' }}>
       <div className="max-w-6xl mx-auto">
         <FadeIn className="text-center mb-16">
           <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Early Results</div>
@@ -610,8 +599,8 @@ function Testimonials() {
             className="relative p-10 rounded-2xl mb-6"
             style={{
               background: `linear-gradient(135deg, ${C.card} 0%, rgba(30,34,50,1) 100%)`,
-              border: `1px solid rgba(200,150,60,0.2)`,
-              boxShadow: `0 0 60px -20px rgba(200,150,60,0.15)`,
+              border: `1px solid rgba(107,122,87,0.2)`,
+              boxShadow: `0 0 60px -20px rgba(107,122,87,0.15)`,
             }}
           >
             {/* Quote mark */}
@@ -630,7 +619,7 @@ function Testimonials() {
             <div className="flex items-center gap-4">
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-sm"
-                style={{ background: 'linear-gradient(135deg, #1e2a18, #2a3820)', border: '1px solid rgba(200,150,60,0.4)', color: C.accent }}
+                style={{ background: 'linear-gradient(135deg, #1e2a18, #2a3820)', border: '1px solid rgba(107,122,87,0.4)', color: C.accent }}
               >
                 {TESTIMONIALS[0].initials}
               </div>
@@ -640,7 +629,7 @@ function Testimonials() {
               </div>
               <div
                 className="ml-auto px-4 py-2 rounded-xl font-bold text-sm"
-                style={{ background: 'rgba(200,150,60,0.1)', color: C.accent, border: `1px solid rgba(200,150,60,0.2)` }}
+                style={{ background: 'rgba(107,122,87,0.1)', color: C.accent, border: `1px solid rgba(107,122,87,0.2)` }}
               >
                 {TESTIMONIALS[0].score}
               </div>
@@ -704,7 +693,7 @@ const FEATURES = [
   {
     icon: <IconBrain />,
     title: 'Tony AI Vision Analysis',
-    desc: 'GPT-4 vision reads your map like a trained wildlife biologist and generates a specific habitat plan.',
+    desc: 'Gemini Vision reads your satellite map like a trained wildlife biologist and generates a specific, drawn habitat plan.',
     color: C.accent,
   },
   {
@@ -754,9 +743,9 @@ function Features() {
                   <div
                     className="w-11 h-11 rounded-xl flex items-center justify-center"
                     style={{
-                      background: '#161B12',
-                      color: C.accent,
-                      border: `1px solid rgba(200,150,60,0.2)`,
+                      background: `${feat.color}12`,
+                      color: feat.color,
+                      border: `1px solid ${feat.color}30`,
                       boxShadow: '0 2px 8px -4px rgba(0,0,0,0.5)',
                     }}
                   >
@@ -764,7 +753,7 @@ function Features() {
                   </div>
                   <span
                     className="text-xs font-semibold px-2 py-1 rounded-full"
-                    style={{ background: 'rgba(200,150,60,0.08)', color: C.accent, border: `1px solid rgba(200,150,60,0.15)` }}
+                    style={{ background: 'rgba(107,122,87,0.08)', color: C.accent, border: `1px solid rgba(107,122,87,0.15)` }}
                   >
                     AI-powered
                   </span>
@@ -783,24 +772,25 @@ function Features() {
 // ─── Comparison Table ─────────────────────────────────────────────────────────
 
 const COMPARE_ROWS = [
-  { label: 'Cost', vals: ['Free (guessing)', '$150–300/hr', '$29/mo'] },
-  { label: 'Knows your specific land', vals: [false, 'One visit', true] },
-  { label: 'Available 24/7', vals: [false, false, true] },
-  { label: 'Draws on your actual map', vals: [false, false, true] },
-  { label: 'Improves each season', vals: [false, false, true] },
-  { label: 'No scheduling required', vals: [true, false, true] },
+  { label: 'Cost', vals: ['$100/yr', '$79.99/yr', 'Free to start'] },
+  { label: 'Satellite layers + topo', vals: [true, true, true] },
+  { label: 'AI terrain analysis', vals: [false, false, true] },
+  { label: 'Tells you WHERE to hang your stand', vals: [false, false, true] },
+  { label: 'Explains the reasoning', vals: [false, false, true] },
+  { label: 'Conversational — asks it anything', vals: [false, false, true] },
+  { label: 'No account required to try', vals: [false, false, true] },
 ]
 
 function ComparisonTable() {
   return (
-    <section id="comparison" className="py-28 px-6" style={{ background: '#0D110B' }}>
+    <section id="comparison" className="py-28 px-6" style={{ background: '#1E2122' }}>
       <div className="max-w-4xl mx-auto">
         <FadeIn className="text-center mb-16">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>The Difference</div>
+          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Head to Head</div>
           <h2 className="font-display text-6xl md:text-7xl text-white uppercase tracking-tight">
-            Stop guessing.
+            Maps are not enough.
             <br />
-            <span style={{ color: C.muted, fontSize: '0.85em' }}>Stop paying by the hour.</span>
+            <span style={{ color: C.muted, fontSize: '0.85em' }}>You need answers.</span>
           </h2>
         </FadeIn>
 
@@ -810,13 +800,13 @@ function ComparisonTable() {
             {/* Header */}
             <div className="grid grid-cols-4" style={{ background: C.card, borderBottom: `1px solid ${C.border}` }}>
               <div className="p-5" />
-              {['Guessing', 'Human Consultant', 'BuckGrid Pro'].map((col, i) => (
+              {['onX Hunt', 'Spartan Forge', 'BuckGrid Pro'].map((col, i) => (
                 <div
                   key={col}
                   className="p-5 text-center"
                   style={{
                     borderLeft: `1px solid ${C.border}`,
-                    background: i === 2 ? 'rgba(200,150,60,0.05)' : 'transparent',
+                    background: i === 2 ? 'rgba(107,122,87,0.05)' : 'transparent',
                     borderTop: i === 2 ? `2px solid ${C.accent}` : 'none',
                   }}
                 >
@@ -849,7 +839,7 @@ function ComparisonTable() {
                     className="p-4 flex items-center justify-center text-sm text-center"
                     style={{
                       borderLeft: `1px solid ${C.border}`,
-                      background: vi === 2 ? 'rgba(200,150,60,0.03)' : 'transparent',
+                      background: vi === 2 ? 'rgba(107,122,87,0.03)' : 'transparent',
                     }}
                   >
                     {typeof val === 'boolean' ? (
@@ -926,9 +916,9 @@ function Pricing() {
               <div
                 className="relative p-8 rounded-2xl flex flex-col h-full transition-all"
                 style={{
-                  background: plan.highlight ? `linear-gradient(160deg, rgba(200,150,60,0.08) 0%, ${C.card} 100%)` : C.card,
+                  background: plan.highlight ? `linear-gradient(160deg, rgba(107,122,87,0.08) 0%, ${C.card} 100%)` : C.card,
                   border: plan.highlight ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
-                  boxShadow: plan.highlight ? `0 0 50px -15px rgba(200,150,60,0.25)` : 'none',
+                  boxShadow: plan.highlight ? `0 0 50px -15px rgba(107,122,87,0.25)` : 'none',
                 }}
               >
                 {plan.highlight && (
@@ -960,7 +950,7 @@ function Pricing() {
                   href={plan.href}
                   className="block text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90 hover:scale-105 active:scale-100"
                   style={{
-                    background: plan.highlight ? 'linear-gradient(135deg, #C8963C, #9A6E28)' : 'transparent',
+                    background: plan.highlight ? 'linear-gradient(135deg, #6B7A57, #4A543D)' : 'transparent',
                     color: plan.highlight ? '#0C0F0A' : C.text,
                     border: plan.highlight ? 'none' : `1px solid ${C.border}`,
                   }}
@@ -974,7 +964,7 @@ function Pricing() {
 
         <FadeIn>
           <p className="text-center text-sm" style={{ color: C.muted }}>
-            30-day money-back guarantee. No questions asked. Cancel anytime.
+            Free tier available forever. Pro & Elite on early-access waitlist — join now.
           </p>
         </FadeIn>
       </div>
@@ -987,7 +977,7 @@ function Pricing() {
 const FAQS = [
   {
     q: 'How does Tony know about my specific land?',
-    a: 'Tony uses GPT-4 vision to actually read your satellite map — the same way a consultant would look at your property from the air. The more features you draw, the more specific his recommendations become.',
+    a: 'Tony uses Gemini Vision AI to actually read your satellite map — the same way a consultant would look at your property from the air. The more features you draw, the more specific his recommendations become.',
   },
   {
     q: 'Does Tony replace a real habitat consultant?',
@@ -1011,7 +1001,7 @@ function FAQ() {
   const [openIdx, setOpenIdx] = useState<number | null>(null)
 
   return (
-    <section id="faq" className="py-28 px-6" style={{ background: '#0D110B' }}>
+    <section id="faq" className="py-28 px-6" style={{ background: '#1E2122' }}>
       <div className="max-w-2xl mx-auto">
         <FadeIn className="text-center mb-14">
           <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>FAQ</div>
@@ -1030,8 +1020,8 @@ function FAQ() {
                 className="w-full text-left p-6 rounded-2xl transition-all cursor-pointer"
                 style={{
                   background: openIdx === i ? C.card : 'rgba(26,30,41,0.5)',
-                  border: `1px solid ${openIdx === i ? 'rgba(200,150,60,0.2)' : C.border}`,
-                  borderLeft: openIdx === i ? '3px solid #C8963C' : `1px solid ${C.border}`,
+                  border: `1px solid ${openIdx === i ? 'rgba(107,122,87,0.2)' : C.border}`,
+                  borderLeft: openIdx === i ? '3px solid #6B7A57' : `1px solid ${C.border}`,
                 }}
                 onClick={() => setOpenIdx(openIdx === i ? null : i)}
                 onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenIdx(openIdx === i ? null : i) } }}
@@ -1075,13 +1065,13 @@ function FinalCTA() {
         <div
           className="absolute inset-0"
           style={{
-            background: 'radial-gradient(ellipse at center, rgba(200,150,60,0.07) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse at center, rgba(107,122,87,0.07) 0%, transparent 70%)',
           }}
         />
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: 'linear-gradient(rgba(200,150,60,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(200,150,60,0.03) 1px, transparent 1px)',
+            backgroundImage: 'linear-gradient(rgba(107,122,87,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(107,122,87,0.03) 1px, transparent 1px)',
             backgroundSize: '60px 60px',
           }}
         />
@@ -1101,9 +1091,9 @@ function FinalCTA() {
             href="/buckgrid"
             className="inline-flex items-center gap-3 px-10 py-5 rounded-xl font-bold text-white text-lg transition-all hover:scale-105 hover:-translate-y-1 active:scale-100"
             style={{
-              background: 'linear-gradient(135deg, #C8963C, #9A6E28)',
+              background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
               color: '#0C0F0A',
-              boxShadow: `0 16px 40px -8px rgba(200,150,60,0.45)`,
+              boxShadow: `0 16px 40px -8px rgba(107,122,87,0.45)`,
             }}
           >
             Analyze My Land Free
@@ -1132,16 +1122,16 @@ function Footer() {
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{
                   background: 'linear-gradient(135deg, #1e2a18, #2a3820)',
-                  border: `1px solid rgba(200,150,60,0.35)`,
+                  border: `1px solid rgba(107,122,87,0.35)`,
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="5" stroke="#C8963C" strokeWidth="1.2" />
-                  <circle cx="8" cy="8" r="1.5" fill="#C8963C" />
-                  <line x1="8" y1="1" x2="8" y2="4.5" stroke="#C8963C" strokeWidth="1.2" />
-                  <line x1="8" y1="11.5" x2="8" y2="15" stroke="#C8963C" strokeWidth="1.2" />
-                  <line x1="1" y1="8" x2="4.5" y2="8" stroke="#C8963C" strokeWidth="1.2" />
-                  <line x1="11.5" y1="8" x2="15" y2="8" stroke="#C8963C" strokeWidth="1.2" />
+                  <circle cx="8" cy="8" r="5" stroke="#6B7A57" strokeWidth="1.2" />
+                  <circle cx="8" cy="8" r="1.5" fill="#6B7A57" />
+                  <line x1="8" y1="1" x2="8" y2="4.5" stroke="#6B7A57" strokeWidth="1.2" />
+                  <line x1="8" y1="11.5" x2="8" y2="15" stroke="#6B7A57" strokeWidth="1.2" />
+                  <line x1="1" y1="8" x2="4.5" y2="8" stroke="#6B7A57" strokeWidth="1.2" />
+                  <line x1="11.5" y1="8" x2="15" y2="8" stroke="#6B7A57" strokeWidth="1.2" />
                 </svg>
               </div>
               <span className="font-bold text-white">

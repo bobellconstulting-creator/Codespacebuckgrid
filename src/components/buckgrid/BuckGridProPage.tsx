@@ -145,7 +145,7 @@ export default function BuckGridProPage() {
           /* ── Mobile header: logo + hamburger only ── */
           <>
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', flex: 1 }}>
-              <img src="/buckgrid-logo.png" height="54" alt="BuckGrid Pro" style={{ display: 'block', objectFit: 'contain' }} />
+              <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: '54px', width: 'auto', objectFit: 'contain', display: 'block', maxHeight: '54px' }} />
             </div>
             <button
               onClick={handleAnalyze}
@@ -176,7 +176,7 @@ export default function BuckGridProPage() {
               borderRight: '1px solid rgba(107,122,87,0.15)',
               flexShrink: 0,
             }}>
-              <img src="/buckgrid-logo.png" height="58" alt="BuckGrid Pro" style={{ display: 'block', objectFit: 'contain' }} />
+              <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: '58px', width: 'auto', objectFit: 'contain', display: 'block', maxHeight: '58px', maxWidth: '100%' }} />
             </div>
 
             {/* Property search */}
@@ -199,14 +199,14 @@ export default function BuckGridProPage() {
                 style={{
                   background: 'transparent', border: 'none',
                   borderBottom: '1px solid rgba(107,122,87,0.2)',
-                  color: '#6E6A5C', fontSize: '12px',
-                  padding: '2px 0', outline: 'none',
+                  color: '#8A8580', fontSize: '14px', fontWeight: 600,
+                  padding: '4px 0', outline: 'none',
                   fontFamily: "'Teko', 'Oswald', sans-serif",
                   letterSpacing: '0.04em', width: '140px',
                   transition: 'border-color 0.15s, color 0.15s',
                 }}
                 onFocus={e => { e.currentTarget.style.borderBottomColor = '#6B7A57'; e.currentTarget.style.color = '#D8D3C5' }}
-                onBlur={e => { e.currentTarget.style.borderBottomColor = 'rgba(107,122,87,0.2)'; e.currentTarget.style.color = '#6E6A5C' }}
+                onBlur={e => { e.currentTarget.style.borderBottomColor = 'rgba(107,122,87,0.2)'; e.currentTarget.style.color = '#8A8580' }}
               />
               {savedIndicator && (
                 <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#6B7A57', letterSpacing: '0.1em', marginLeft: '6px' }}>SAVED</span>
@@ -258,7 +258,7 @@ export default function BuckGridProPage() {
             {/* Season chip */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '12px', borderLeft: '1px solid #1A2A1F', marginLeft: '4px' }}>
               <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#5A8A5F', display: 'inline-block', boxShadow: '0 0 8px #5A8A5F' }} />
-              <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', letterSpacing: '0.14em', color: '#6DB87F', textTransform: 'uppercase' }}>
+              <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em', color: '#6B7A57', textTransform: 'uppercase' }}>
                 {season.label}
               </span>
             </div>
@@ -266,20 +266,18 @@ export default function BuckGridProPage() {
             {/* Acres */}
             {propertyAcres > 0 ? (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', paddingLeft: '14px', borderLeft: '1px solid rgba(107,122,87,0.15)', marginLeft: '8px' }}>
-                <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 800, fontSize: '24px', letterSpacing: '0.02em', color: '#6B7A57', lineHeight: 1 }}>
+                <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '28px', letterSpacing: '0.04em', color: '#6B7A57', lineHeight: 1 }}>
                   {propertyAcres.toLocaleString()}
                 </span>
-                <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#444', letterSpacing: '0.12em', paddingBottom: '2px' }}>AC</span>
+                <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '11px', color: '#6B7A57', letterSpacing: '0.12em', paddingBottom: '2px', opacity: 0.7 }}>AC</span>
                 {featureCount > 0 && (
-                  <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#555', letterSpacing: '0.08em', paddingBottom: '2px', marginLeft: '2px' }}>
-                    · {featureCount} FEAT
+                  <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontSize: '10px', color: '#6B7A57', letterSpacing: '0.08em', paddingBottom: '2px', marginLeft: '2px', opacity: 0.5 }}>
+                    · {featureCount}
                   </span>
                 )}
               </div>
             ) : (
-              <div style={{ paddingLeft: '14px', borderLeft: '1px solid rgba(107,122,87,0.15)', marginLeft: '8px' }}>
-                <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', color: '#4A4A4A', letterSpacing: '0.1em' }}>NO PROPERTY</span>
-              </div>
+              <div style={{ paddingLeft: '14px', borderLeft: '1px solid rgba(107,122,87,0.15)', marginLeft: '8px' }} />
             )}
           </>
         )}
@@ -398,12 +396,12 @@ export default function BuckGridProPage() {
       {showOnboarding && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)' }}>
           <div style={{
-            width: '420px', maxWidth: 'calc(100vw - 32px)',
-            background: '#3A4042',
-            border: '1px solid rgba(107,122,87,0.15)',
-            borderTop: '4px solid #6B7A57',
-            borderRadius: '6px',
-            boxShadow: '0 8px 32px rgba(107,122,87,0.12), 0 32px 80px rgba(0,0,0,0.95)',
+            width: '440px', maxWidth: 'calc(100vw - 32px)',
+            background: '#2E3335',
+            border: '1px solid rgba(107,122,87,0.2)',
+            borderTop: '3px solid #6B7A57',
+            borderRadius: '8px',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.6), 0 24px 80px rgba(0,0,0,0.85), 0 0 0 1px rgba(107,122,87,0.08)',
             overflow: 'hidden',
           }}>
             {/* Hero section with gradient background */}
@@ -428,18 +426,18 @@ export default function BuckGridProPage() {
 
               <div style={{ position: 'relative', zIndex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                  <img src="/buckgrid-logo.png" height="160" alt="BuckGrid Pro" style={{ display: 'block', objectFit: 'contain' }} />
+                  <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: '160px', width: 'auto', objectFit: 'contain', display: 'block', maxWidth: '100%' }} />
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '42px', letterSpacing: '0.12em', color: '#D8D3C5', textTransform: 'uppercase', lineHeight: 1, marginBottom: '8px', display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '10px' }}>
                     <span>BUCK<span style={{ color: '#6B7A57' }}>GRID</span></span>
                     <span style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '0.16em', color: '#6E6A5C' }}>PRO</span>
                   </div>
-                  <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '11px', letterSpacing: '0.3em', color: '#5A8A5F', textTransform: 'uppercase', fontWeight: 700, marginBottom: '16px' }}>
-                    ▲ PRECISION HABITAT INTELLIGENCE ▲
+                  <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', letterSpacing: '0.28em', color: '#5A8A5F', textTransform: 'uppercase', fontWeight: 700, marginBottom: '18px' }}>
+                    AI-POWERED HUNTING PROPERTY INTELLIGENCE
                   </div>
-                  <p style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontSize: '14px', color: '#D8D3C5', letterSpacing: '0.02em', lineHeight: 1.7, margin: 0 }}>
-                    Master your hunting land. Deploy AI-powered habitat analysis. Hunt smarter.
+                  <p style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontSize: '15px', color: '#C8C3B5', letterSpacing: '0.03em', lineHeight: 1.8, margin: 0, maxWidth: '320px', marginLeft: 'auto', marginRight: 'auto' }}>
+                    Transform raw acreage into an unfair advantage. Map terrain, model habitat, and receive precision AI analysis — before you ever pull the trigger.
                   </p>
                 </div>
               </div>
@@ -447,33 +445,33 @@ export default function BuckGridProPage() {
 
             {/* Steps */}
             <div style={{ padding: '24px 28px' }}>
-              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.24em', color: '#6DB87F', textTransform: 'uppercase', marginBottom: '18px', fontWeight: 700 }}>
-                ▲ 4-STEP MISSION BRIEFING ▲
+              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.22em', color: '#6B7A57', textTransform: 'uppercase', marginBottom: '20px', fontWeight: 700, borderBottom: '1px solid rgba(107,122,87,0.15)', paddingBottom: '10px' }}>
+                GET STARTED IN 4 STEPS
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 {[
-                  { n: '01', icon: '⊕', label: 'Navigate', desc: 'Search an address or GPS to your property on the satellite map.' },
-                  { n: '02', icon: '◻', label: 'Trace Boundary', desc: 'Draw your property perimeter with precision. Lock it down.' },
-                  { n: '03', icon: '◉', label: 'Mark Habitat', desc: 'Plot food sources, bedding zones, stands, and kill zones.' },
-                  { n: '04', icon: '▲', label: 'Lock & Deploy Tony', desc: 'AI habitat audit. Terrain analysis. Actionable intel. Go hunting.' },
+                  { n: '01', icon: '⊕', label: 'Navigate to Your Property', desc: 'Search by address or GPS coordinates. Satellite imagery loads instantly.' },
+                  { n: '02', icon: '◻', label: 'Trace Your Boundary', desc: 'Draw your exact property perimeter with precision polygon tools.' },
+                  { n: '03', icon: '◉', label: 'Mark Key Habitat Features', desc: 'Plot food plots, bedding zones, stand locations, and kill zones.' },
+                  { n: '04', icon: '▲', label: 'Run AI Analysis', desc: 'Receive a full habitat audit, terrain breakdown, and hunt strategy from Tony.' },
                 ].map(({ n, icon, label, desc }) => (
                   <div key={n} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
                     <div style={{
-                      fontFamily: "'Share Tech Mono', monospace", fontWeight: 700, fontSize: '14px', color: '#6B7A57',
+                      fontFamily: "'Share Tech Mono', monospace", fontWeight: 700, fontSize: '13px', color: '#6B7A57',
                       width: '36px', height: '36px', flexShrink: 0,
-                      letterSpacing: '0.08em',
-                      background: 'rgba(107,122,87,0.1)',
-                      border: '1px solid rgba(107,122,87,0.35)',
-                      borderRadius: '3px',
+                      letterSpacing: '0.05em',
+                      background: 'rgba(107,122,87,0.08)',
+                      border: '1px solid rgba(107,122,87,0.3)',
+                      borderRadius: '4px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}>{icon}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '14px', color: '#D8D3C5', letterSpacing: '0.06em', lineHeight: 1, marginBottom: '5px', textTransform: 'uppercase' as const }}>
+                      <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '15px', color: '#D8D3C5', letterSpacing: '0.05em', lineHeight: 1, marginBottom: '6px', textTransform: 'uppercase' as const }}>
                         {label}
                       </div>
-                      <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#7A7A6A', lineHeight: 1.6 }}>
+                      <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#8A8A7A', lineHeight: 1.65 }}>
                         {desc}
                       </div>
                     </div>

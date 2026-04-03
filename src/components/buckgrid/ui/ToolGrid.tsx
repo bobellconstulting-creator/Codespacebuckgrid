@@ -12,6 +12,7 @@ type Props = {
   onBrushSize: (n: number) => void
   onLockBorder: () => void
   onWipeAll: () => void
+  onUndoLast: () => void
 }
 
 // Tool groupings — ids must match constants/tools.ts
@@ -49,7 +50,7 @@ function ToolButton({ tool, isActive, onSelect }: { tool: Tool; isActive: boolea
         },
         onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
           e.currentTarget.style.borderLeftColor = 'transparent'
-          e.currentTarget.style.background = '#0A0F09'
+          e.currentTarget.style.background = '#3A4042'
           e.currentTarget.style.boxShadow = 'none'
         },
       }
@@ -100,7 +101,7 @@ function ToolSection({
   )
 }
 
-function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, onLockBorder, onWipeAll }: Props) {
+function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, onLockBorder, onWipeAll, onUndoLast }: Props) {
   const byId = (ids: string[]) => tools.filter(t => ids.includes(t.id))
 
   const navTools = byId(NAV_IDS)
@@ -109,7 +110,7 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
   const structureTools = byId(STRUCTURE_IDS)
 
   return (
-    <div className={styles.panel} style={{ background: '#0A0F09' }}>
+    <div className={styles.panel} style={{ background: '#3A4042' }}>
       <ToolSection label="Navigation" tools={navTools} activeToolId={activeToolId} onSelectTool={onSelectTool} fullWidth />
       <ToolSection label="Boundary" tools={boundaryTools} activeToolId={activeToolId} onSelectTool={onSelectTool} fullWidth />
       <ToolSection label="Food Plots" tools={foodPlotTools} activeToolId={activeToolId} onSelectTool={onSelectTool} />
@@ -134,9 +135,14 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
         <button className={styles.btnLock} onClick={onLockBorder}>
           Lock Border
         </button>
-        <button className={styles.btnWipe} onClick={onWipeAll}>
-          Wipe All
-        </button>
+        <div className={styles.btnRow}>
+          <button className={styles.btnUndo} onClick={onUndoLast} title="Undo last feature">
+            ↩ Undo
+          </button>
+          <button className={styles.btnWipe} onClick={onWipeAll}>
+            ✕ Wipe All
+          </button>
+        </div>
       </div>
     </div>
   )

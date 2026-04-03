@@ -6,6 +6,7 @@ import { useMapDrawing, type LayerType, type TonyAnnotation, type LayerSummary }
 export interface MapContainerHandle {
   lockBoundary: () => { count: number; acres: number; pathYards: number; layers: any[]; summary: LayerSummary }
   wipeAll: () => void
+  undoLast: () => void
   getCaptureElement: () => HTMLDivElement | null
   addFeature: (geojson: any, type: string, label: string) => void
   drawTonyAnnotations: (annotations: TonyAnnotation[]) => void
@@ -30,6 +31,7 @@ const MapContainer = forwardRef<MapContainerHandle, Props>(({ activeTool, brushS
   useImperativeHandle(ref, () => ({
     lockBoundary: () => api.lockAndBake(),
     wipeAll: () => api.clearAll(),
+    undoLast: () => api.undoLast(),
     getCaptureElement: () => containerRef.current,
     addFeature: (geojson: any, type: string, label: string) => api.addSmartFeature(geojson, type as LayerType, label),
     drawTonyAnnotations: (annotations: TonyAnnotation[]) => api.drawAnnotations(annotations),

@@ -1,26 +1,26 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: #090C08;
-  --color-bg-alt: #0D110B;
-  --color-surface: #131710;
-  --color-brass: #C8963C;
-  --color-brass-light: #E8B860;
-  --color-timber: #5A8A5F;
-  --color-text: #D8D3C5;
-  --color-muted: #6E6A5C;
-  --radius-neural: 12px;
-  --shadow-brass: 0 10px 30px -15px rgba(200, 150, 60, 0.5);
-  --font-sans: Inter, sans-serif;
-  --font-display: "Bebas Neue", sans-serif;
+  /* BuckGrid Pro Brand System */
+  --color-bg-deep:    #1E2122;
+  --color-bg-base:    #3A4042;
+  --color-olive:      #6B7A57;
+  --color-olive-dark: #4A543D;
+  --color-orange:     #C86633;
+  --color-text:       #E2E2E2;
+  --color-text-dim:   #9AA090;
+  --color-border:     rgba(107,122,87,0.35);
+  --color-border-strong: rgba(107,122,87,0.65);
+  --font-display: 'Teko', 'Oswald', 'Impact', sans-serif;
+  --font-mono: 'Roboto Mono', 'Inter', monospace;
 }
 
 html, body {
   height: 100%;
   margin: 0;
   padding: 0;
-  background: var(--color-neural-noir-primary);
-  color: var(--color-neural-noir-text);
+  background: #1E2122;
+  color: #E2E2E2;
   box-sizing: border-box;
 }
 
