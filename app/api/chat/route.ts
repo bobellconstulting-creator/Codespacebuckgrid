@@ -285,7 +285,7 @@ export async function POST(req: NextRequest) {
       const safeSpatialContext = spatialContext && typeof spatialContext === 'object' ? spatialContext as SpatialContext : undefined
       const tonyPrompt = buildTonyPrompt(trimmedMsg, bounds, zoom ?? 14, safeFeatures, typeof season === 'string' ? season : '', typeof propertyName === 'string' ? propertyName : '', safeSpatialContext)
       const geminiPromise = fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -296,7 +296,7 @@ export async function POST(req: NextRequest) {
                 { text: tonyPrompt }
               ]
             }],
-            generationConfig: { maxOutputTokens: 8192 },
+            generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } },
           })
         }
       )
