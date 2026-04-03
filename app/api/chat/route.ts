@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic'
 const MAX_MESSAGE_LENGTH = 2000
 const MAX_FEATURES = 50
 const ESRI_TIMEOUT_MS = 7000
+const NVIDIA_TIMEOUT_MS = 60000
 const GEMINI_TIMEOUT_MS = 55000
 
 // ─── Terrain conflict detection ───────────────────────────────────────────────
@@ -179,36 +180,58 @@ function buildTonyPrompt(message: string, bounds: Bounds, zoom: number, features
   const seasonGuidance = season ? getSeasonalGuidance(season) : ''
   const propertyLine = propertyName ? `Property name: "${propertyName}"` : ''
 
+  const centerLat = ((bounds.north + bounds.south) / 2).toFixed(5)
+  const centerLng = ((bounds.east + bounds.west) / 2).toFixed(5)
+
   return `You are Tony — a blunt, 25-year whitetail habitat consultant. You've walked thousands of properties. You see what others miss. You give specific, no-BS field advice tied to exactly what you see in this satellite image. No generic tips. No hedging.
 ${propertyLine}
 
 ${seasonGuidance}
 
-WHAT YOU SEE — satellite image coordinates:
-- Latitude range: ${bounds.south.toFixed(5)}° to ${bounds.north.toFixed(5)}° (${((bounds.north - bounds.south) * 111000).toFixed(0)} meters N–S)
-- Longitude range: ${bounds.west.toFixed(5)}° to ${bounds.east.toFixed(5)}° (${((bounds.east - bounds.west) * 111000 * Math.cos((bounds.north + bounds.south) / 2 * Math.PI / 180)).toFixed(0)} meters E–W)
-- Zoom: ${zoom} | Image: 640×480px
-- Pixel→coord: x=0 → lng ${bounds.west.toFixed(5)}, x=640 → lng ${bounds.east.toFixed(5)}, y=0 → lat ${bounds.north.toFixed(5)}, y=480 → lat ${bounds.south.toFixed(5)}
+IMAGE ORIENTATION — READ THIS CAREFULLY:
+- TOP of image = NORTH (lat ${bounds.north.toFixed(5)})
+- BOTTOM of image = SOUTH (lat ${bounds.south.toFixed(5)})
+- LEFT of image = WEST (lng ${bounds.west.toFixed(5)})
+- RIGHT of image = EAST (lng ${bounds.east.toFixed(5)})
+- Center of image ≈ lat ${centerLat}, lng ${centerLng}
+- Image is 640×480px. Each pixel ≈ ${(((bounds.north - bounds.south) * 111000) / 480).toFixed(1)}m N–S, ${(((bounds.east - bounds.west) * 111000 * Math.cos((bounds.north + bounds.south) / 2 * Math.PI / 180)) / 640).toFixed(1)}m E–W
+- Pixel→coord formula: lng = ${bounds.west.toFixed(5)} + (pixel_x/640) × ${(bounds.east - bounds.west).toFixed(5)}, lat = ${bounds.north.toFixed(5)} - (pixel_y/480) × ${(bounds.north - bounds.south).toFixed(5)}
+
+TERRAIN READING RULES — follow these before placing ANY feature:
+- DARK GREEN pixels = dense tree canopy (timber). Do NOT place food_plot or stand directly on dark green.
+- LIGHT GREEN / TAN / BROWN pixels = open ground, fields, clearings. These are food plot and stand candidates.
+- GREY/WHITE lines = roads or paths. Avoid placing stands within 100m of roads.
+- BLUE/DARK pixels = water, wet areas. Do NOT place stands or food plots here.
+- TIMBER EDGES (dark green meeting open ground) = the #1 stand location on any property.
+- HILLTOPS = poor stand sites (wind thermals betray you). Saddles and benches beat hilltops every time.
+- Every feature you place must match what you actually see at those pixel coordinates.
+
 ${featureDesc}
 
-${spatialContext ? buildSpatialContextBlock(spatialContext) + '\n\n' : ''}SCAN THE IMAGE. Identify and note:
-1. CANOPY STRUCTURE — Dense timber (bedding), open canopy (food/staging), timber edge transitions
-2. TOPOGRAPHY — Ridgelines, saddles, creek bottoms, drainages, flat benches, south-facing slopes
-3. WATER — Creek lines, ponds, wet areas, drainage channels
-4. OPENINGS — Fields, clearings, powerlines, logged areas, old ag fields
-5. FUNNELS — Pinch points between cover types, creek crossings, terrain narrows
-6. HUMAN SIGN — Roads, buildings, property lines that create pressure/avoidance zones
+${spatialContext ? buildSpatialContextBlock(spatialContext) + '\n\n' : ''}SCAN THE IMAGE NOW. Before placing features, answer internally:
+1. Where is the timber? Where does it end? (That edge is money.)
+2. Where are the open fields or clearings? (Food plot candidates.)
+3. Where is the high ground vs low ground? (Saddles and benches, not hilltops.)
+4. Where is water or drainage? (Pinch points near water = trail/stand locations.)
+5. Where are the roads/structures creating human pressure? (Avoid downwind of these.)
+6. What is the dominant wind direction from NW? Place stands with clean approach.
 
 User says: "${message}"
 
-CRITICAL: Respond ONLY with raw valid JSON — no markdown, no code fences, no explanation outside the JSON. Exact format:
+CRITICAL OUTPUT RULES:
+- Respond ONLY with raw valid JSON — no markdown, no code fences, zero text outside JSON
+- Every feature coordinate must be placed on the correct terrain type (verify against pixel color)
+- Reference actual visible terrain in your reply — name what you see (field edge, timber corner, creek bottom, etc.)
+- Use compass directions (NW, SE, etc.) relative to the image orientation defined above
+
+Exact JSON format:
 {
-  "reply": "Your detailed expert analysis. Reference specific terrain you see. Be direct.",
+  "reply": "Your detailed expert analysis. Reference specific visible terrain. Use compass directions. Be direct and specific.",
   "features": [
     {
       "type": "food_plot",
-      "label": "3-acre soybean plot — SE field",
-      "why": "Southern exposure, timber wind block on north, 80 yards from creek bedding",
+      "label": "3-acre soybean plot — SE field edge",
+      "why": "Open ground on SE corner, timber wind block on north, 80 yards from creek bedding",
       "geometry": {
         "type": "Polygon",
         "coordinates": [[[lng, lat], [lng, lat], [lng, lat], [lng, lat], [lng, lat]]]
@@ -219,7 +242,7 @@ CRITICAL: Respond ONLY with raw valid JSON — no markdown, no code fences, no e
 
 Feature types: "food_plot", "bedding", "trail", "stand", "water"
 All coordinates MUST be within: lng ${bounds.west.toFixed(5)} to ${bounds.east.toFixed(5)}, lat ${bounds.south.toFixed(5)} to ${bounds.north.toFixed(5)}
-Return 2-5 features ranked by seasonal priority. Only place features where terrain clearly supports them. Polygon rings must close (first = last coordinate).`
+Return 3-5 features ranked by seasonal priority. Polygon rings must close (first = last coordinate). Place features on terrain that visually matches the feature type.`
 }
 
 function extractJsonFromText(text: string): string {
@@ -246,8 +269,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests', reply: 'Slow down — Tony can only handle so many questions per minute. Try again shortly.' }, { status: 429 })
     }
 
-    const apiKey = process.env.GOOGLE_AI_KEY
-    if (!apiKey) {
+    const nvidiaKey = process.env.NVIDIA_API_KEY
+    const googleKey = process.env.GOOGLE_AI_KEY
+    if (!nvidiaKey && !googleKey) {
       return NextResponse.json({ error: 'Server configuration error', reply: 'Tony needs a fresh API key — contact support to get Tony back online.' }, { status: 500 })
     }
 
@@ -284,34 +308,80 @@ export async function POST(req: NextRequest) {
     try {
       const safeSpatialContext = spatialContext && typeof spatialContext === 'object' ? spatialContext as SpatialContext : undefined
       const tonyPrompt = buildTonyPrompt(trimmedMsg, bounds, zoom ?? 14, safeFeatures, typeof season === 'string' ? season : '', typeof propertyName === 'string' ? propertyName : '', safeSpatialContext)
-      const geminiPromise = fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                { inline_data: { mime_type: 'image/png', data: imgBase64 } },
-                { text: tonyPrompt }
-              ]
-            }],
-            generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } },
-          })
-        }
-      )
-      const result = await Promise.race([
-        geminiPromise,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)
+
+      if (nvidiaKey) {
+        // Primary: NVIDIA Llama 3.2 90B Vision
+        const nvidiaPromise = fetch(
+          'https://integrate.api.nvidia.com/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${nvidiaKey}`,
+            },
+            body: JSON.stringify({
+              model: 'meta/llama-3.2-90b-vision-instruct',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are a JSON API. You MUST respond with raw valid JSON only — no markdown, no code fences, no prose before or after. The JSON must have "reply" (string) and "features" (array) keys.'
+                },
+                {
+                  role: 'user',
+                  content: [
+                    { type: 'text', text: tonyPrompt },
+                    { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } }
+                  ]
+                }
+              ],
+              max_tokens: 4096,
+              temperature: 0.3,
+            })
+          }
         )
-      ])
-      if (!result.ok) {
-        const errBody = await result.text()
-        throw new Error(`Gemini ${result.status}: ${errBody}`)
+        const result = await Promise.race([
+          nvidiaPromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('TonyTimeout')), NVIDIA_TIMEOUT_MS)
+          )
+        ])
+        if (!result.ok) {
+          const errBody = await result.text()
+          throw new Error(`NVIDIA ${result.status}: ${errBody}`)
+        }
+        const nvidiaJson = await result.json()
+        rawText = nvidiaJson.choices?.[0]?.message?.content?.trim() ?? ''
+      } else {
+        // Fallback: Gemini 2.5 Flash
+        const geminiPromise = fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${googleKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { inline_data: { mime_type: 'image/png', data: imgBase64 } },
+                  { text: tonyPrompt }
+                ]
+              }],
+              generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } },
+            })
+          }
+        )
+        const result = await Promise.race([
+          geminiPromise,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)
+          )
+        ])
+        if (!result.ok) {
+          const errBody = await result.text()
+          throw new Error(`Gemini ${result.status}: ${errBody}`)
+        }
+        const geminiJson = await result.json()
+        rawText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
       }
-      const geminiJson = await result.json()
-      rawText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
     } catch (err: unknown) {
       const isTimeout = err instanceof Error && err.message === 'TonyTimeout'
       return NextResponse.json({
