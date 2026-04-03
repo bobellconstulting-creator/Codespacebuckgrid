@@ -1,7 +1,6 @@
 'use client'
 
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, useCallback } from 'react'
-import BuckLogo from '../ui/BuckLogo'
 
 export type TonyChatHandle = {
   addTonyMessage: (text: string) => void
@@ -24,7 +23,7 @@ type TonyChatProps = {
   panelWidth?: number
 }
 
-type AnnotationSummary = { type: string; label: string; why: string }
+type AnnotationSummary = { type: string; label: string; why: string; conflictWarning?: string }
 
 type ChatMessage = {
   role: 'tony' | 'user'
@@ -49,7 +48,7 @@ function renderMarkdown(text: string): React.ReactNode {
     const parts = content.split(/(\*\*[^*]+\*\*)/)
     const rendered = parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="font-semibold" style={{ color: '#C8963C' }}>{part.slice(2, -2)}</strong>
+        return <strong key={i} className="font-semibold" style={{ color: '#6B7A57' }}>{part.slice(2, -2)}</strong>
       }
       return <span key={i}>{part}</span>
     })
@@ -57,7 +56,7 @@ function renderMarkdown(text: string): React.ReactNode {
       <React.Fragment key={lineIdx}>
         {isBullet ? (
           <span className="flex gap-1.5 items-start">
-            <span className="mt-0.5 shrink-0" style={{ color: '#C8963C' }}>•</span>
+            <span className="mt-0.5 shrink-0" style={{ color: '#6B7A57' }}>•</span>
             <span>{rendered}</span>
           </span>
         ) : rendered}
@@ -103,15 +102,45 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         setChat(p => [...p, { role: 'tony', text: 'Map not ready yet.' }])
         return
       }
+
+      // Fetch spatial context (OSM + elevation) in parallel with the chat request.
+      // Use a tight timeout — Tony fires regardless of whether this completes.
+      // Bounds area guard: skip if area > 0.25 deg^2 (matches server-side limit).
+      const boundsAreaDegSq = (mapData.bounds.north - mapData.bounds.south) * Math.abs(mapData.bounds.east - mapData.bounds.west)
+      let spatialContext: unknown = undefined
+      if (boundsAreaDegSq <= 0.25) {
+        try {
+          const spatialRes = await Promise.race([
+            fetch('/api/spatial', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bounds: mapData.bounds }),
+            }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('SpatialTimeout')), 18_000)),
+          ])
+          if (spatialRes.ok) spatialContext = await spatialRes.json()
+        } catch {
+          // Spatial data unavailable — Tony proceeds without it
+        }
+      }
+
       try {
-        const res = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message, ...mapData, propertyName: propertyName || '', season: seasonBanner?.label ?? '' })
-        })
+        const chatAbort = new AbortController()
+        const chatTimeout = setTimeout(() => chatAbort.abort(), 65_000)
+        let res: Response
+        try {
+          res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, ...mapData, propertyName: propertyName || '', season: seasonBanner?.label ?? '', spatialContext }),
+            signal: chatAbort.signal,
+          })
+        } finally {
+          clearTimeout(chatTimeout)
+        }
         const data = await res.json()
         const annotationSummaries: AnnotationSummary[] = Array.isArray(data.annotations)
-          ? data.annotations.filter((a: any) => a.label || a.why).map((a: any) => ({ type: a.type ?? 'feature', label: a.label ?? '', why: a.why ?? '' }))
+          ? data.annotations.filter((a: any) => a.label || a.why).map((a: any) => ({ type: a.type ?? 'feature', label: a.label ?? '', why: a.why ?? '', conflictWarning: a.conflictWarning }))
           : []
         setChat(p => {
           const updated = p.filter(m => m.text !== '__thinking__')
@@ -173,17 +202,17 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             gap: '8px',
             padding: '12px',
             minHeight: 0,
-            background: '#0A0F09',
+            background: '#3A4042',
           }}
         >
           {chat.map((m, i) => {
             if (m.text === '__thinking__') {
               return (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: '#0D110B', border: '1px solid rgba(200,150,60,0.12)', borderRadius: '3px', alignSelf: 'flex-start' }}>
-                  <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#C8963C', letterSpacing: '0.08em' }}>SCANNING TERRAIN</span>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: '#1E2122', border: '1px solid rgba(107,122,87,0.12)', borderRadius: '3px', alignSelf: 'flex-start' }}>
+                  <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#6B7A57', letterSpacing: '0.08em' }}>SCANNING TERRAIN</span>
                   <span style={{ display: 'flex', gap: '3px' }}>
                     {[0, 150, 300].map(d => (
-                      <span key={d} style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#C8963C', animation: 'bounce 1s infinite', animationDelay: `${d}ms`, display: 'inline-block' }} />
+                      <span key={d} style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#6B7A57', animation: 'bounce 1s infinite', animationDelay: `${d}ms`, display: 'inline-block' }} />
                     ))}
                   </span>
                 </div>
@@ -196,13 +225,13 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                   style={{
                     padding: '8px 12px',
                     borderRadius: '3px',
-                    fontSize: '13px',
+                    fontSize: '15px',
                     lineHeight: '1.55',
                     maxWidth: '92%',
-                    background: isUser ? '#1e2a18' : '#0D110B',
+                    background: isUser ? '#1e2a18' : '#1E2122',
                     color: isUser ? '#D8D3C5' : '#D8D3C5',
                     fontWeight: isUser ? 600 : 400,
-                    fontFamily: isUser ? "'Barlow Condensed', sans-serif" : 'inherit',
+                    fontFamily: isUser ? "'Teko', 'Oswald', sans-serif" : 'inherit',
                     letterSpacing: isUser ? '0.02em' : 'normal',
                     border: isUser ? 'none' : '1px solid rgba(90,138,95,0.4)',
                     boxShadow: isUser ? 'none' : '0 0 16px rgba(90,138,95,0.25), inset 0 0 12px rgba(90,138,95,0.12)',
@@ -214,10 +243,15 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                 {m.annotations && m.annotations.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', width: '100%', maxWidth: '92%' }}>
                     {m.annotations.map((ann, ai) => (
-                      <div key={ai} style={{ background: '#0D110B', border: '1px solid rgba(200,150,60,0.12)', borderLeft: '2px solid #C8963C', borderRadius: '2px', padding: '5px 9px', fontSize: '11px' }}>
-                        <span style={{ fontFamily: "'Barlow Condensed', sans-serif", color: '#C8963C', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', fontSize: '10px' }}>{ann.type.replace('_', ' ')}</span>
+                      <div key={ai} style={{ background: '#1E2122', border: `1px solid ${ann.conflictWarning ? 'rgba(239,68,68,0.35)' : 'rgba(107,122,87,0.12)'}`, borderLeft: `2px solid ${ann.conflictWarning ? '#ef4444' : '#6B7A57'}`, borderRadius: '2px', padding: '5px 9px', fontSize: '11px' }}>
+                        <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", color: ann.conflictWarning ? '#ef4444' : '#6B7A57', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', fontSize: '10px' }}>{ann.type.replace('_', ' ')}</span>
                         {ann.label && <span style={{ color: '#D8D3C5', opacity: 0.75 }}> — {ann.label}</span>}
                         {ann.why && <div style={{ color: '#6E6A5C', marginTop: '2px', lineHeight: '1.3', fontSize: '10.5px' }}>{ann.why}</div>}
+                        {ann.conflictWarning && (
+                          <div style={{ color: '#ef4444', marginTop: '4px', lineHeight: '1.3', fontSize: '10px', fontFamily: "'Share Tech Mono', monospace", letterSpacing: '0.04em' }}>
+                            TERRAIN CONFLICT: {ann.conflictWarning}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -228,56 +262,57 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         </div>
 
         {/* Map Legend */}
-        <div style={{ padding: '6px 12px', background: '#0A0F09', borderTop: '1px solid rgba(200,150,60,0.12)' }}>
+        <div style={{ padding: '6px 12px', background: '#3A4042', borderTop: '1px solid rgba(107,122,87,0.12)' }}>
           <button
             onClick={() => setLegendOpen(v => !v)}
-            style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '9px', letterSpacing: '0.12em', color: '#5A8A5F', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' as const, padding: 0, textTransform: 'uppercase' as const }}
+            style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', letterSpacing: '0.14em', color: '#5A8A5F', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' as const, padding: 0, textTransform: 'uppercase' as const }}
           >
             {legendOpen ? '▲ HIDE LEGEND' : '▼ MAP LEGEND'}
           </button>
           {legendOpen && (
-            <div style={{ marginTop: '6px', marginBottom: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px', background: 'rgba(10,15,9,0.7)', border: '1px solid rgba(90,138,95,0.2)', borderRadius: '2px', padding: '8px', fontFamily: "'Barlow Condensed', sans-serif", fontSize: '10px', letterSpacing: '0.06em', color: '#6E6A5C' }}>
+            <div style={{ marginTop: '6px', marginBottom: '6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 12px', background: 'rgba(10,15,9,0.7)', border: '1px solid rgba(90,138,95,0.2)', borderRadius: '2px', padding: '8px', fontFamily: "'Teko', 'Oswald', sans-serif", fontSize: '10px', letterSpacing: '0.06em', color: '#6E6A5C' }}>
               <span><span style={{ color: '#FF6B00' }}>■</span> Boundary</span>
-              <span><span style={{ color: '#8B4513' }}>■</span> Bedding</span>
+              <span><span style={{ color: '#9B7A2A' }}>■</span> Bedding</span>
               <span><span style={{ color: '#C8650A' }}>■</span> Clover</span>
               <span><span style={{ color: '#facc15' }}>■</span> Corn</span>
               <span><span style={{ color: '#c084fc' }}>■</span> Brassicas</span>
               <span><span style={{ color: '#86efac' }}>■</span> Soybeans</span>
               <span><span style={{ color: '#ef4444' }}>●</span> Stand</span>
-              <span><span style={{ color: '#C8963C' }}>▲</span> Tony rec</span>
+              <span><span style={{ color: '#6B7A57' }}>▲</span> Tony rec</span>
             </div>
           )}
         </div>
 
         {/* Input */}
-        <div style={{ padding: '8px 12px', paddingBottom: 'env(safe-area-inset-bottom, 16px)', borderTop: '1px solid rgba(200,150,60,0.15)', background: '#0A0F09', display: 'flex', gap: '8px', flexShrink: 0 }}>
+        <div style={{ padding: '8px 12px', paddingBottom: 'env(safe-area-inset-bottom, 16px)', borderTop: '1px solid rgba(107,122,87,0.15)', background: '#3A4042', display: 'flex', gap: '8px', flexShrink: 0 }}>
           <input
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && send()}
-            onFocus={e => { e.currentTarget.style.borderColor = '#C8963C' }}
-            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(200,150,60,0.2)' }}
-            placeholder="Intel request..."
+            onFocus={e => { e.currentTarget.style.borderColor = '#6B7A57' }}
+            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(107,122,87,0.2)' }}
+            placeholder="Ask Tony..."
             disabled={loading}
             style={{
               flex: 1,
-              background: '#090C08',
-              border: '1px solid rgba(200,150,60,0.2)',
+              background: '#1E2122',
+              border: '1px solid rgba(107,122,87,0.2)',
               color: '#D8D3C5',
               padding: '7px 10px',
               borderRadius: '2px',
-              fontSize: '13px',
-              fontFamily: "'Barlow Condensed', sans-serif",
+              fontSize: '16px',
+              fontFamily: "'Teko', 'Oswald', sans-serif",
               outline: 'none',
               opacity: loading ? 0.5 : 1,
+              minHeight: '44px',
             }}
           />
           <button
             onClick={send}
             disabled={loading || !input.trim()}
             style={{
-              background: loading || !input.trim() ? '#1A2018' : '#C8963C',
+              background: loading || !input.trim() ? '#1A2018' : '#6B7A57',
               color: '#fff',
               fontWeight: 700,
               padding: '0 12px',
@@ -286,6 +321,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
               fontSize: '14px',
               flexShrink: 0,
+              minHeight: '44px',
             }}
           >
             ➤
@@ -293,7 +329,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           <button
             onClick={clearChat}
             title="Clear chat"
-            style={{ color: '#333', background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '0 4px', flexShrink: 0 }}
+            style={{ color: '#333', background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', padding: '10px 8px', flexShrink: 0 }}
           >
             ✕
           </button>
@@ -326,11 +362,11 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               right: 0,
               bottom: 0,
               zIndex: 2000,
-              height: '85vh',
+              height: '85dvh',
               display: 'flex',
               flexDirection: 'column',
-              background: '#0D110B',
-              border: '1px solid rgba(200,150,60,0.12)',
+              background: '#1E2122',
+              border: '1px solid rgba(107,122,87,0.12)',
               borderBottom: 'none',
               borderRadius: '12px 12px 0 0',
               boxShadow: '0 -8px 40px rgba(0,0,0,0.8)',
@@ -349,7 +385,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             <div
               style={{
                 padding: '8px 12px 12px',
-                background: 'linear-gradient(135deg, #0A0F09 0%, #0F1A14 100%)',
+                background: 'linear-gradient(135deg, #3A4042 0%, #0F1A14 100%)',
                 borderBottom: '1px solid rgba(90,138,95,0.2)',
                 display: 'flex',
                 alignItems: 'center',
@@ -359,13 +395,13 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <BuckLogo size={22} color="#C8963C" />
+                <img src="/buckgrid-logo.png" width="22" height="22" alt="" style={{ display: 'block' }} />
                 <div>
-                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#C8963C', lineHeight: 1 }}>
+                  <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontSize: '12px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.1em', color: '#6B7A57', lineHeight: 1 }}>
                     Tony — Field AI
                   </div>
                   {loading && (
-                    <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#C8963C', marginTop: '2px', letterSpacing: '0.08em' }}>ANALYZING TERRAIN...</div>
+                    <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#6B7A57', marginTop: '2px', letterSpacing: '0.08em' }}>ANALYZING TERRAIN...</div>
                   )}
                 </div>
               </div>
@@ -392,16 +428,16 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                 width: '50px',
                 height: '50px',
                 borderRadius: '50%',
-                background: '#C8963C',
+                background: '#6B7A57',
                 border: 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 20px rgba(200,150,60,0.4)',
+                boxShadow: '0 4px 20px rgba(107,122,87,0.4)',
               }}
             >
-              <BuckLogo size={26} color="#fff" />
+              <img src="/buckgrid-logo.png" width="26" height="26" alt="" style={{ display: 'block' }} />
               {hasUnread && (
                 <span
                   style={{
@@ -412,7 +448,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                     height: '10px',
                     borderRadius: '50%',
                     background: '#fff',
-                    border: '2px solid #C8963C',
+                    border: '2px solid #6B7A57',
                     animation: 'pulse 1.5s infinite',
                   }}
                 />
@@ -437,8 +473,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           flexDirection: 'column',
           overflow: 'hidden',
           borderRadius: 0,
-          background: '#0A0F09',
-          borderLeft: '1px solid rgba(200,150,60,0.15)',
+          background: '#3A4042',
+          borderLeft: '1px solid rgba(107,122,87,0.15)',
           boxShadow: 'inset 0 0 20px rgba(90,138,95,0.05)',
           transition: 'width 0.22s cubic-bezier(0.4,0,0.2,1)',
           fontFamily: "'Barlow Condensed', 'Inter', sans-serif",
@@ -450,7 +486,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           style={{
             padding: '0 14px',
             height: '56px',
-            background: 'linear-gradient(135deg, #0A0F09 0%, #0F1A14 50%, #0A0F09 100%)',
+            background: 'linear-gradient(135deg, #3A4042 0%, #0F1A14 50%, #3A4042 100%)',
             borderBottom: '1px solid rgba(90,138,95,0.2)',
             cursor: 'pointer',
             display: 'flex',
@@ -462,13 +498,13 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <BuckLogo size={20} color="#C8963C" />
+            <img src="/buckgrid-logo.png" width="20" height="20" alt="" style={{ display: 'block' }} />
             {isOpen && (
               <div>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: '13px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: '#D8D3C5', lineHeight: 1 }}>
-                  Tony <span style={{ color: '#C8963C' }}>AI</span>
+                <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontSize: '14px', fontWeight: 900, textTransform: 'uppercase' as const, letterSpacing: '0.14em', color: '#D8D3C5', lineHeight: 1 }}>
+                  TONY<span style={{ color: '#6B7A57', marginLeft: '5px' }}>·</span><span style={{ color: '#6B7A57' }}>AI</span>
                 </div>
-                <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: loading ? '#C8963C' : '#6E6A5C', marginTop: '3px', letterSpacing: '0.1em', transition: 'color 0.2s' }}>
+                <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', color: loading ? '#6B7A57' : '#5A8A5F', marginTop: '3px', letterSpacing: '0.12em', transition: 'color 0.2s' }}>
                   {loading ? 'ANALYZING TERRAIN...' : 'FIELD CONSULTANT'}
                 </div>
               </div>

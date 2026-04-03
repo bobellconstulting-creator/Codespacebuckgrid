@@ -98,7 +98,16 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
 
     mapRef.current = map
 
-    return () => { map.remove(); mapRef.current = null }
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize()
+    })
+    resizeObserver.observe(containerRef.current)
+
+    return () => {
+      resizeObserver.disconnect()
+      map.remove()
+      mapRef.current = null
+    }
   }, [containerRef])
 
   // 2. DRAW HANDLERS
@@ -207,7 +216,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       clearPreview()
       vertexMarkers.forEach(m => map.removeLayer(m))
       vertexMarkers.length = 0
-      const polygon = L.polygon([...points], { color, fillColor: color, fillOpacity: 0.25, weight: 3 })
+      const polygon = L.polygon([...points], { color, fillColor: color, fillOpacity: 0.07, weight: 3 })
       ;(polygon as any).options.layerType = 'boundary'
       drawnItemsRef.current?.addLayer(polygon)
       points.length = 0
@@ -218,7 +227,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       if (points.length >= 3) {
         const screenDist = map.latLngToContainerPoint(e.latlng)
           .distanceTo(map.latLngToContainerPoint(points[0]))
-        if (screenDist < 18) { closePolygon(); return }
+        if (screenDist < 28) { closePolygon(); return }
       }
       points.push(e.latlng)
       const m = L.circleMarker(e.latlng, { radius: 5, color, fillColor: '#fff', fillOpacity: 1, weight: 2 }).addTo(map)
@@ -348,7 +357,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       const metersPerLat = 111320
       const metersPerLng = 111320 * Math.cos((Math.min(...lats) + dLat / 2) * Math.PI / 180)
       const sqMeters = dLat * metersPerLat * dLng * metersPerLng * 0.75
-      acres = parseFloat((sqMeters / 4047).toFixed(1))
+      acres = parseFloat((sqMeters / 4047).toFixed(2))
       hexCount = Math.max(1, Math.round(acres / 3.718))
     }
 
