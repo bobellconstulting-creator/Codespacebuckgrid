@@ -18,5 +18,9 @@ export const TOOLS: Tool[] = [
   { id: 'switchgrass', name: 'Switchgrass', color: '#fdba74', icon: '◇' },
   { id: 'bedding', name: 'Bedding Area', color: '#9B7A2A', icon: '◼' },
   { id: 'stand', name: 'Stand', color: '#ef4444', icon: '▲' },
+  { id: 'water', name: 'Water Source', color: '#3B82F6', icon: '◉' },
   { id: 'focus', name: 'Pinch Point', color: '#FF4040', icon: '◎' },
+  { id: 'mineral', name: 'Mineral Lick', color: '#CD853F', icon: '✦' },
+  { id: 'scrape_line', name: 'Scrape Line', color: '#8B0000', icon: '⟿' },
+  { id: 'travel_corridor', name: 'Travel Corridor', color: '#B8860B', icon: '⇌' },
 ]

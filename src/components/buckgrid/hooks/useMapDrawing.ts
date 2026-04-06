@@ -1,6 +1,9 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 import L from 'leaflet'
 import { polygonToCells } from 'h3-js'
+import buffer from '@turf/buffer'
+import simplify from '@turf/simplify'
+import { lineString } from '@turf/helpers'
 import 'leaflet/dist/leaflet.css'
 
 export type LayerType = 'boundary' | 'bedding' | 'food' | 'water' | 'path' | 'structure'
@@ -55,15 +58,23 @@ const TOOL_COLORS: Record<string, string> = {
   switchgrass: '#fdba74',
   stand: '#ef4444',
   focus: '#FF0000',
+  mineral: '#CD853F',
+  scrape_line: '#8B0000',
+  travel_corridor: '#B8860B',
 }
 
 const ANNOTATION_COLORS: Record<string, string> = {
   food: '#32CD32',
+  food_plot: '#32CD32',
   bedding: '#8B4513',
   stand: '#ef4444',
   water: '#00BFFF',
   path: '#FFD700',
+  trail: '#FFD700',
   structure: '#FF6B00',
+  mineral: '#CD853F',
+  scrape_line: '#8B0000',
+  travel_corridor: '#B8860B',
 }
 
 function colorForTool(tool: string): string {
@@ -115,14 +126,21 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
     const map = mapRef.current
     if (!map) return
 
-    // Lock/unlock map drag based on tool mode
+    // Lock/unlock map drag and zoom based on tool mode
     if (activeTool === 'nav') {
       map.dragging.enable()
+      if (map.touchZoom) map.touchZoom.enable()
+      if (map.scrollWheelZoom) map.scrollWheelZoom.enable()
       map.getContainer().style.cursor = 'grab'
     } else {
       map.dragging.disable()
+      if (map.touchZoom) map.touchZoom.disable()
+      if (map.scrollWheelZoom) map.scrollWheelZoom.disable()
       map.getContainer().style.cursor = 'crosshair'
     }
+
+    let lastMoveTime = 0
+    const MOVE_THROTTLE_MS = 33 // ~30Hz
 
     const onMouseDown = (e: L.LeafletMouseEvent) => {
       if (activeTool === 'nav' || activeTool === 'boundary') return
@@ -136,6 +154,9 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
 
     const onMouseMove = (e: L.LeafletMouseEvent) => {
       if (!currentDrawRef.current) return
+      const now = Date.now()
+      if (now - lastMoveTime < MOVE_THROTTLE_MS) return
+      lastMoveTime = now
       currentDrawRef.current.addLatLng(e.latlng)
     }
 
@@ -144,27 +165,77 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       const shape = currentDrawRef.current
       const coords = shape.getLatLngs() as L.LatLng[]
       const layerType = (shape as any).options.layerType
+      const color = shape.options.color as string
 
-      if (layerType !== 'path' && layerType !== 'nav' && coords.length > 2) {
-        const start = coords[0]
-        const end = coords[coords.length - 1]
-        if (start.distanceTo(end) > 0.5) shape.addLatLng(start)
-        const polygon = L.polygon(shape.getLatLngs() as L.LatLng[], {
-          color: shape.options.color,
-          fillColor: shape.options.color,
-          fillOpacity: 0.3,
-          weight: 2
-        })
-        ;(polygon as any).options.layerType = layerType
-        drawnItemsRef.current?.removeLayer(shape)
-        drawnItemsRef.current?.addLayer(polygon)
-      }
       currentDrawRef.current = null
+
+      if (layerType === 'path' || layerType === 'nav' || coords.length < 3) return
+
+      // Try turf buffer to create a fat filled polygon (paint brush effect)
+      try {
+        const mapBounds = map.getBounds()
+        const metersPerPixel = (mapBounds.getNorth() - mapBounds.getSouth()) * 111000 / map.getSize().y
+        const radiusKm = Math.max(0.005, (brushSize / 2) * metersPerPixel / 1000)
+
+        // turf uses [lng, lat]; Leaflet LatLng is {lat, lng}
+        const turfCoords = coords.map(ll => [ll.lng, ll.lat] as [number, number])
+        const line = lineString(turfCoords)
+        const simplified = simplify(line, { tolerance: 0.00005, highQuality: false })
+        const buffered = buffer(simplified, radiusKm, { units: 'kilometers' })
+
+        if (buffered && buffered.geometry) {
+          let ringCoords: number[][] | null = null
+          if (buffered.geometry.type === 'Polygon') {
+            ringCoords = buffered.geometry.coordinates[0]
+          } else if (buffered.geometry.type === 'MultiPolygon') {
+            ringCoords = buffered.geometry.coordinates[0][0]
+          }
+
+          if (ringCoords && ringCoords.length >= 3) {
+            // Convert back to Leaflet [lat, lng]
+            const latlngs = ringCoords.map(([lng, lat]) => [lat, lng] as [number, number])
+            const polygon = L.polygon(latlngs, {
+              color,
+              fillColor: color,
+              fillOpacity: 0.3,
+              weight: 2,
+            })
+            ;(polygon as any).options.layerType = layerType
+            drawnItemsRef.current?.removeLayer(shape)
+            drawnItemsRef.current?.addLayer(polygon)
+            return
+          }
+        }
+      } catch {
+        // fall through to simple close-and-polygon
+      }
+
+      // Fallback: close the polyline and convert to a plain polygon
+      const start = coords[0]
+      const end = coords[coords.length - 1]
+      if (start.distanceTo(end) > 0.5) shape.addLatLng(start)
+      const polygon = L.polygon(shape.getLatLngs() as L.LatLng[], {
+        color,
+        fillColor: color,
+        fillOpacity: 0.3,
+        weight: 2,
+      })
+      ;(polygon as any).options.layerType = layerType
+      drawnItemsRef.current?.removeLayer(shape)
+      drawnItemsRef.current?.addLayer(polygon)
     }
 
     const onTouchDown = (e: any) => onMouseDown(e)
     const onTouchMove = (e: any) => onMouseMove(e)
     const onTouchUp = () => onMouseUp()
+
+    // Native touchmove with passive:false so preventDefault() works during drawing
+    const container = map.getContainer()
+    const nativeTouchMove = (e: TouchEvent) => {
+      if (activeTool === 'nav') return
+      e.preventDefault()
+    }
+    container.addEventListener('touchmove', nativeTouchMove, { passive: false })
 
     map.on('mousedown', onMouseDown)
     map.on('mousemove', onMouseMove)
@@ -180,6 +251,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       map.off('touchstart', onTouchDown)
       map.off('touchmove', onTouchMove)
       map.off('touchend', onTouchUp)
+      container.removeEventListener('touchmove', nativeTouchMove)
     }
   }, [activeTool, brushSize])
 
@@ -282,6 +354,21 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
   }, [activeTool])
 
   // 3. SPATIAL RECOGNITION
+  function polygonAreaAcres(coords: [number, number][]): number {
+    // Shoelace formula with WGS84 correction — coords are [lng, lat] (GeoJSON order)
+    let area = 0
+    const n = coords.length
+    for (let i = 0; i < n; i++) {
+      const [lng1, lat1] = coords[i]
+      const [lng2, lat2] = coords[(i + 1) % n]
+      const latRad = ((lat1 + lat2) / 2) * Math.PI / 180
+      const metersPerLng = 111320 * Math.cos(latRad)
+      const metersPerLat = 111320
+      area += (lng2 - lng1) * metersPerLng * (lat1 + lat2) / 2 * metersPerLat
+    }
+    return Math.abs(area) / 2 / 4047
+  }
+
   const lockAndBake = useCallback(() => {
     const empty = { count: 0, acres: 0, pathYards: 0, layers: [], summary: { boundary: 0, food: 0, bedding: 0, water: 0, stand: 0, other: 0 } }
     if (!drawnItemsRef.current) return empty
@@ -337,7 +424,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       const hexIds = polygonToCells([ring], 10)
       hexCount = hexIds.length
       if (hexCount > 0) {
-        acres = parseFloat((hexCount * 3.718).toFixed(1))
+        acres = parseFloat((hexCount * 0.0344).toFixed(1))
         if (mapRef.current) {
           // @ts-ignore
           mapRef.current.options.hexGrid = hexIds
@@ -348,17 +435,10 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
     }
 
     if (acres === 0) {
-      // Fallback: estimate acres from bounding box
+      // Fallback: Shoelace formula for polygon area
       const coords = boundaryGeo.geometry.coordinates[0] as [number, number][]
-      const lats = coords.map(([, lat]) => lat)
-      const lngs = coords.map(([lng]) => lng)
-      const dLat = Math.max(...lats) - Math.min(...lats)
-      const dLng = Math.max(...lngs) - Math.min(...lngs)
-      const metersPerLat = 111320
-      const metersPerLng = 111320 * Math.cos((Math.min(...lats) + dLat / 2) * Math.PI / 180)
-      const sqMeters = dLat * metersPerLat * dLng * metersPerLng * 0.75
-      acres = parseFloat((sqMeters / 4047).toFixed(2))
-      hexCount = Math.max(1, Math.round(acres / 3.718))
+      acres = parseFloat(polygonAreaAcres(coords).toFixed(2))
+      hexCount = Math.max(1, Math.round(acres / 0.0344))
     }
 
     if (mapRef.current) {

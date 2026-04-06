@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import MapContainer, { type MapContainerHandle } from './map/MapContainer'
+import type { TonyAnnotation } from './hooks/useMapDrawing'
 import ToolGrid from './ui/ToolGrid'
 import PropertySearch from './ui/PropertySearch'
 import TonyChat, { type TonyChatHandle } from './chat/TonyChat'
@@ -37,9 +38,13 @@ export default function BuckGridProPage() {
     typeof window !== 'undefined' ? window.innerWidth < 768 : false
   )
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
 
-  const { save, restore, savedIndicator, hasRestorable } = usePropertyMemory()
-  const season = getSeason(new Date())
+  const { save, restore, savedIndicator, hasRestorable, updateFeatures } = usePropertyMemory()
+  const currentSeason = getSeason(new Date())
+  const [seasonOverride, setSeasonOverride] = useState<string | null>(null)
+  const effectiveSeason = seasonOverride ?? currentSeason.label
+  const season = { ...currentSeason, label: effectiveSeason }
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -58,6 +63,7 @@ export default function BuckGridProPage() {
   }, [])
 
   const onLockBorder = useCallback(() => {
+    if (isAnalyzing) return
     setActiveTool(TOOLS[0])
     const result = mapRef.current?.lockBoundary()
     if (!result) return
@@ -79,10 +85,14 @@ export default function BuckGridProPage() {
       (propertyName ? ` Property name: ${propertyName}.` : '') +
       ` Give me a quick habitat audit.`
 
+    const data = mapRef.current?.getBoundsAndFeatures()
+    if (data?.features) updateFeatures(data.features)
+
+    setIsAnalyzing(true)
     chatRef.current?.triggerScan(contextPrompt)
-    save({ name: propertyName || 'Unnamed Property', acres: result.acres, lastAnalysis: contextPrompt, date: new Date().toLocaleDateString() })
+    save({ name: propertyName || 'Unnamed Property', acres: result.acres, lastAnalysis: contextPrompt, date: new Date().toLocaleDateString(), uiPropertyName: propertyName || undefined })
     if (isMobile) setIsMenuOpen(false)
-  }, [propertyName, save, isMobile])
+  }, [propertyName, save, updateFeatures, isMobile, isAnalyzing])
 
   const handleRestoreSession = useCallback(() => {
     const restored = restore()
@@ -108,14 +118,21 @@ export default function BuckGridProPage() {
   }, [])
 
   const handleAnalyze = useCallback(() => {
+    if (isAnalyzing) return
     const data = mapRef.current?.getBoundsAndFeatures()
     const featureInfo = data && data.features.length > 0
       ? ` I've drawn ${data.features.length} feature(s) on the map.`
       : ''
     const prompt = `Full property analysis.${featureInfo} Read the terrain, identify all key habitat features, and give me your top 3 stand placements for ${season.label}.`
+    setIsAnalyzing(true)
     chatRef.current?.triggerScan(prompt)
     if (isMobile) setIsMenuOpen(false)
-  }, [season.label, isMobile])
+  }, [season.label, isMobile, isAnalyzing])
+
+  // Stable refs for TonyChat props — prevents React.memo bailout on every render
+  const getBoundsAndFeatures = useCallback(() => mapRef.current?.getBoundsAndFeatures() ?? null, [])
+  const drawAnnotations = useCallback((annotations: TonyAnnotation[]) => mapRef.current?.drawTonyAnnotations(annotations), [])
+  const handleScanComplete = useCallback(() => setIsAnalyzing(false), [])
 
   const isDrawing = activeTool.id !== 'nav'
 
@@ -149,10 +166,11 @@ export default function BuckGridProPage() {
             </div>
             <button
               onClick={handleAnalyze}
-              style={{ minHeight: '44px', padding: '0 14px', background: 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.4)', borderRadius: '3px', cursor: 'pointer', color: '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px' }}
+              disabled={isAnalyzing}
+              style={{ minHeight: '44px', padding: '0 14px', background: 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.4)', borderRadius: '3px', cursor: isAnalyzing ? 'not-allowed' : 'pointer', color: '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px', opacity: isAnalyzing ? 0.5 : 1 }}
               aria-label="Analyze property"
             >
-              Analyze
+              {isAnalyzing ? '◌' : 'Analyze'}
             </button>
             <button
               onClick={() => setIsMenuOpen(v => !v)}
@@ -247,12 +265,13 @@ export default function BuckGridProPage() {
             {/* Analyze button */}
             <button
               onClick={handleAnalyze}
-              style={{ padding: '7px 18px', background: 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.45)', borderRadius: '3px', cursor: 'pointer', color: '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px', transition: 'all 0.15s ease', whiteSpace: 'nowrap' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(107,122,87,0.22)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(107,122,87,0.25)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(107,122,87,0.12)'; e.currentTarget.style.boxShadow = 'none' }}
+              disabled={isAnalyzing}
+              style={{ padding: '7px 18px', background: isAnalyzing ? 'rgba(107,122,87,0.06)' : 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.45)', borderRadius: '3px', cursor: isAnalyzing ? 'not-allowed' : 'pointer', color: isAnalyzing ? 'rgba(107,122,87,0.4)' : '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px', transition: 'all 0.15s ease', whiteSpace: 'nowrap', opacity: isAnalyzing ? 0.6 : 1 }}
+              onMouseEnter={e => { if (!isAnalyzing) { e.currentTarget.style.background = 'rgba(107,122,87,0.22)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(107,122,87,0.25)' } }}
+              onMouseLeave={e => { e.currentTarget.style.background = isAnalyzing ? 'rgba(107,122,87,0.06)' : 'rgba(107,122,87,0.12)'; e.currentTarget.style.boxShadow = 'none' }}
               aria-label="Analyze property with Tony"
             >
-              ▲ Analyze
+              {isAnalyzing ? '◌ Analyzing...' : '▲ Analyze'}
             </button>
 
             {/* Season chip */}
@@ -316,12 +335,46 @@ export default function BuckGridProPage() {
         }}>
           {/* Season advisory */}
           <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(107,122,87,0.12)' }}>
-            <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', color: '#6DB87F', textTransform: 'uppercase', marginBottom: '6px' }}>
-              {season.label.toUpperCase()} // ADVISORY
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '9px', letterSpacing: '0.2em', color: '#6DB87F', textTransform: 'uppercase' }}>
+                {season.label.toUpperCase()} // ADVISORY
+              </div>
+              {seasonOverride && (
+                <button
+                  onClick={() => setSeasonOverride(null)}
+                  title="Reset to current season"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5A8A5F', fontSize: '10px', padding: '0 2px', lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              )}
             </div>
-            <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#8A8A7A', lineHeight: 1.6 }}>
+            <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', color: '#8A8A7A', lineHeight: 1.6, marginBottom: '8px' }}>
               {season.tip}
             </div>
+            <select
+              value={seasonOverride ?? ''}
+              onChange={e => setSeasonOverride(e.target.value || null)}
+              style={{
+                width: '100%',
+                background: '#1E2122',
+                border: '1px solid rgba(107,122,87,0.25)',
+                borderRadius: '2px',
+                color: seasonOverride ? '#6B7A57' : '#5A5A50',
+                fontFamily: "'Share Tech Mono', monospace",
+                fontSize: '9px',
+                letterSpacing: '0.1em',
+                padding: '4px 6px',
+                outline: 'none',
+                cursor: 'pointer',
+                textTransform: 'uppercase' as const,
+              }}
+            >
+              <option value="">AUTO-DETECT</option>
+              {['Spring', 'Summer', 'Early Fall', 'Rut Chase', 'Rut Peak', 'Late Rut', 'Late Season'].map(s => (
+                <option key={s} value={s}>{s.toUpperCase()}</option>
+              ))}
+            </select>
           </div>
 
           {/* Tools — fill the rest */}
@@ -381,13 +434,14 @@ export default function BuckGridProPage() {
       ═══════════════════════════════════════════════ */}
       <TonyChat
         ref={chatRef}
-        getBoundsAndFeatures={() => mapRef.current?.getBoundsAndFeatures() ?? null}
-        drawAnnotations={(annotations) => mapRef.current?.drawTonyAnnotations(annotations)}
+        getBoundsAndFeatures={getBoundsAndFeatures}
+        drawAnnotations={drawAnnotations}
         propertyName={propertyName}
         seasonBanner={season}
         isMobile={isMobile}
         topOffset={HEADER_H}
         panelWidth={TONY_W}
+        onScanComplete={handleScanComplete}
       />
 
       {/* ═══════════════════════════════════════════════

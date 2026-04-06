@@ -19,7 +19,7 @@ type Props = {
 const NAV_IDS = ['nav']
 const BOUNDARY_IDS = ['boundary']
 const FOOD_PLOT_IDS = ['clover', 'brassicas', 'corn', 'soybeans', 'milo', 'egyptian', 'switchgrass']
-const STRUCTURE_IDS = ['bedding', 'stand', 'focus']
+const STRUCTURE_IDS = ['bedding', 'stand', 'water', 'focus']
 
 function SectionHeader({ label }: { label: string }) {
   return (

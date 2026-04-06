@@ -2,11 +2,25 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
+export interface MapBounds {
+  north: number
+  south: number
+  east: number
+  west: number
+  centerLat: number
+  centerLng: number
+  zoom: number
+}
+
 export interface PropertyMemory {
   name: string
   acres: number
   lastAnalysis: string
   date: string
+  drawnFeatures?: any[]
+  mapBounds?: MapBounds
+  chatHistory?: Array<{ role: 'tony' | 'user'; text: string }>
+  uiPropertyName?: string
 }
 
 const STORAGE_KEY = 'buckgrid_property_memory'
@@ -66,5 +80,13 @@ export function usePropertyMemory() {
     setHasRestorable(false)
   }, [])
 
-  return { memory, save, restore, clear, savedIndicator, hasRestorable }
+  const updateFeatures = useCallback((features: any[]) => {
+    const current = loadFromStorage()
+    if (!current) return
+    const updated = { ...current, drawnFeatures: features }
+    saveToStorage(updated)
+    setMemory(updated)
+  }, [])
+
+  return { memory, save, restore, clear, savedIndicator, hasRestorable, updateFeatures }
 }

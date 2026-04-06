@@ -24,6 +24,18 @@ export default function PropertySearch({ onResult }: Props) {
     const trimmed = q.trim()
     if (!trimmed) return
 
+    const coordPattern = /^\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*$/
+    const coordMatch = trimmed.match(coordPattern)
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1])
+      const lng = parseFloat(coordMatch[2])
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        onResult(lat, lng, `${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+        setQuery('')
+        return
+      }
+    }
+
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -88,7 +100,7 @@ export default function PropertySearch({ onResult }: Props) {
           value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Address or coordinates..."
+          placeholder="Address or coordinates (lat, lng)..."
           disabled={loading}
           style={{
             flex: 1,

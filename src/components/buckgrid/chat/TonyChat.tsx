@@ -5,6 +5,7 @@ import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, us
 export type TonyChatHandle = {
   addTonyMessage: (text: string) => void
   triggerScan: (prompt: string) => void
+  isLoading: () => boolean
 }
 
 type MapData = {
@@ -21,9 +22,10 @@ type TonyChatProps = {
   isMobile?: boolean
   topOffset?: number
   panelWidth?: number
+  onScanComplete?: () => void
 }
 
-type AnnotationSummary = { type: string; label: string; why: string; conflictWarning?: string }
+type AnnotationSummary = { type: string; label: string; why: string; confidence?: number; priority?: number; conflictWarning?: string }
 
 type ChatMessage = {
   role: 'tony' | 'user'
@@ -66,17 +68,22 @@ function renderMarkdown(text: string): React.ReactNode {
   })
 }
 
+function isErrorMessage(text: string): boolean {
+  return text.includes('unavailable') || text.includes("Couldn't reach")
+}
+
 // Panel dimensions
 const PANEL_W = 310
 
 const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
-  ({ getBoundsAndFeatures, drawAnnotations, propertyName, seasonBanner, isMobile, topOffset = 12, panelWidth = 310 }, ref) => {
+  ({ getBoundsAndFeatures, drawAnnotations, propertyName, seasonBanner, isMobile, topOffset = 12, panelWidth = 310, onScanComplete }, ref) => {
     const [chat, setChat] = useState<ChatMessage[]>([{ role: 'tony', text: ONBOARDING_MESSAGE }])
     const [input, setInput] = useState('')
     const [isOpen, setIsOpen] = useState(true)
     const [loading, setLoading] = useState(false)
     const [legendOpen, setLegendOpen] = useState(false)
     const [hasUnread, setHasUnread] = useState(false)
+    const [lastUserMessage, setLastUserMessage] = useState<string | null>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
 
@@ -103,36 +110,22 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         return
       }
 
-      // Fetch spatial context (OSM + elevation) in parallel with the chat request.
-      // Use a tight timeout — Tony fires regardless of whether this completes.
-      // Bounds area guard: skip if area > 0.25 deg^2 (matches server-side limit).
-      const boundsAreaDegSq = (mapData.bounds.north - mapData.bounds.south) * Math.abs(mapData.bounds.east - mapData.bounds.west)
-      let spatialContext: unknown = undefined
-      if (boundsAreaDegSq <= 0.25) {
-        try {
-          const spatialRes = await Promise.race([
-            fetch('/api/spatial', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ bounds: mapData.bounds }),
-            }),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('SpatialTimeout')), 18_000)),
-          ])
-          if (spatialRes.ok) spatialContext = await spatialRes.json()
-        } catch {
-          // Spatial data unavailable — Tony proceeds without it
-        }
-      }
-
+      // Spatial context is now fetched server-side in /api/chat (parallel with satellite image).
+      // Client sends bounds + features only — no pre-flight /api/spatial call needed.
       try {
         const chatAbort = new AbortController()
-        const chatTimeout = setTimeout(() => chatAbort.abort(), 65_000)
+        const chatTimeout = setTimeout(() => chatAbort.abort(), 75_000)
         let res: Response
+        // Send last 6 messages (excluding __thinking__) as history context
+        const historyToSend = chat
+          .filter(m => m.text !== '__thinking__' && m.text !== ONBOARDING_MESSAGE)
+          .slice(-6)
+          .map(m => ({ role: m.role, text: m.text.slice(0, 400) }))
         try {
           res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, ...mapData, propertyName: propertyName || '', season: seasonBanner?.label ?? '', spatialContext }),
+            body: JSON.stringify({ message, ...mapData, propertyName: propertyName || '', season: seasonBanner?.label ?? '', chatHistory: historyToSend }),
             signal: chatAbort.signal,
           })
         } finally {
@@ -140,11 +133,24 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         }
         const data = await res.json()
         const annotationSummaries: AnnotationSummary[] = Array.isArray(data.annotations)
-          ? data.annotations.filter((a: any) => a.label || a.why).map((a: any) => ({ type: a.type ?? 'feature', label: a.label ?? '', why: a.why ?? '', conflictWarning: a.conflictWarning }))
+          ? data.annotations.filter((a: unknown) => {
+              const ann = a as Record<string, unknown>
+              return ann.label || ann.why
+            }).map((a: unknown) => {
+              const ann = a as Record<string, unknown>
+              return {
+                type: typeof ann.type === 'string' ? ann.type : 'feature',
+                label: typeof ann.label === 'string' ? ann.label : '',
+                why: typeof ann.why === 'string' ? ann.why : '',
+                confidence: typeof ann.confidence === 'number' ? ann.confidence : undefined,
+                priority: typeof ann.priority === 'number' ? ann.priority : undefined,
+                conflictWarning: typeof ann.conflictWarning === 'string' ? ann.conflictWarning : undefined,
+              }
+            })
           : []
         setChat(p => {
           const updated = p.filter(m => m.text !== '__thinking__')
-          return [...updated, { role: 'tony', text: data.reply || 'No response.', annotations: annotationSummaries.length > 0 ? annotationSummaries : undefined }]
+          return [...updated, { role: 'tony', text: typeof data.reply === 'string' ? data.reply : 'No response.', annotations: annotationSummaries.length > 0 ? annotationSummaries : undefined }]
         })
         if (drawAnnotations && Array.isArray(data.annotations)) {
           drawAnnotations(data.annotations)
@@ -166,13 +172,16 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         setChat(p => [...p, { role: 'tony', text: '__thinking__' }])
         await askTony(contextPrompt)
         setLoading(false)
-      }
-    }), [loading, askTony])
+        onScanComplete?.()
+      },
+      isLoading: () => loading,
+    }), [loading, askTony, onScanComplete])
 
     const send = useCallback(async () => {
       if (!input.trim() || loading) return
       const msg = input
       setLoading(true)
+      setLastUserMessage(msg)
       setChat(p => [...p, { role: 'user', text: msg }])
       setInput('')
       setChat(p => [...p, { role: 'tony', text: '__thinking__' }])
@@ -183,6 +192,44 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
     const clearChat = useCallback(() => {
       setChat([{ role: 'tony', text: ONBOARDING_MESSAGE }])
     }, [])
+
+    const exportReport = useCallback(() => {
+      const lines: string[] = [
+        `BUCKGRID PRO — TONY AI FIELD REPORT`,
+        `Property: ${propertyName || 'Unnamed'}`,
+        `Date: ${new Date().toLocaleDateString()}`,
+        `Season: ${seasonBanner?.label ?? 'Unknown'}`,
+        '',
+        '─────────────────────────────────────',
+        '',
+      ]
+      const tonyMessages = chat.filter(m => m.role === 'tony' && m.text !== '__thinking__' && m.text !== ONBOARDING_MESSAGE)
+      tonyMessages.forEach((m, i) => {
+        lines.push(`[ANALYSIS ${i + 1}]`)
+        lines.push(m.text)
+        if (m.annotations && m.annotations.length > 0) {
+          lines.push('')
+          lines.push('RECOMMENDATIONS:')
+          m.annotations.forEach(a => {
+            const conf = a.confidence !== undefined ? ` (${a.confidence}% confidence)` : ''
+            const pri = a.priority !== undefined ? ` — Priority ${a.priority}` : ''
+            lines.push(`  • [${a.type.replace(/_/g, ' ').toUpperCase()}]${pri}${conf}: ${a.label}`)
+            if (a.why) lines.push(`    ${a.why}`)
+            if (a.conflictWarning) lines.push(`    ⚠ CONFLICT: ${a.conflictWarning}`)
+          })
+        }
+        lines.push('')
+        lines.push('─────────────────────────────────────')
+        lines.push('')
+      })
+      const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `tony-report-${(propertyName || 'property').replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    }, [chat, propertyName, seasonBanner])
 
     const openSheet = useCallback(() => {
       setIsOpen(true)
@@ -240,12 +287,55 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                 >
                   {renderMarkdown(m.text)}
                 </div>
+                {!isUser && isErrorMessage(m.text) && lastUserMessage && (
+                  <button
+                    onClick={() => {
+                      if (loading) return
+                      const msg = lastUserMessage
+                      setLoading(true)
+                      setChat(p => [...p, { role: 'tony', text: '__thinking__' }])
+                      askTony(msg).finally(() => setLoading(false))
+                    }}
+                    disabled={loading}
+                    style={{
+                      fontFamily: "'Share Tech Mono', monospace",
+                      fontSize: '9px',
+                      letterSpacing: '0.12em',
+                      color: '#5A8A5F',
+                      background: 'rgba(90,138,95,0.08)',
+                      border: '1px solid rgba(90,138,95,0.25)',
+                      borderRadius: '2px',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      padding: '3px 8px',
+                      marginTop: '2px',
+                      textTransform: 'uppercase' as const,
+                      opacity: loading ? 0.4 : 1,
+                    }}
+                  >
+                    ↺ Retry
+                  </button>
+                )}
                 {m.annotations && m.annotations.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', width: '100%', maxWidth: '92%' }}>
                     {m.annotations.map((ann, ai) => (
                       <div key={ai} style={{ background: '#1E2122', border: `1px solid ${ann.conflictWarning ? 'rgba(239,68,68,0.35)' : 'rgba(107,122,87,0.12)'}`, borderLeft: `2px solid ${ann.conflictWarning ? '#ef4444' : '#6B7A57'}`, borderRadius: '2px', padding: '5px 9px', fontSize: '11px' }}>
-                        <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", color: ann.conflictWarning ? '#ef4444' : '#6B7A57', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', fontSize: '10px' }}>{ann.type.replace('_', ' ')}</span>
-                        {ann.label && <span style={{ color: '#D8D3C5', opacity: 0.75 }}> — {ann.label}</span>}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' as const }}>
+                          <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", color: ann.conflictWarning ? '#ef4444' : '#6B7A57', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', fontSize: '10px' }}>{ann.type.replace(/_/g, ' ')}</span>
+                          {ann.priority !== undefined && (
+                            <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.06em', background: 'rgba(107,122,87,0.15)', color: '#6B7A57', border: '1px solid rgba(107,122,87,0.3)', borderRadius: '2px', padding: '1px 4px' }}>P{ann.priority}</span>
+                          )}
+                          {ann.confidence !== undefined && (
+                            <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.04em', color: ann.confidence >= 75 ? '#4ade80' : ann.confidence >= 50 ? '#facc15' : '#ef4444', marginLeft: 'auto' }}>
+                              {ann.confidence}% conf
+                            </span>
+                          )}
+                        </div>
+                        {ann.confidence !== undefined && (
+                          <div style={{ height: '2px', background: 'rgba(107,122,87,0.15)', borderRadius: '1px', margin: '3px 0', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${ann.confidence}%`, background: ann.confidence >= 75 ? '#4ade80' : ann.confidence >= 50 ? '#facc15' : '#ef4444', borderRadius: '1px', transition: 'width 0.4s ease' }} />
+                          </div>
+                        )}
+                        {ann.label && <span style={{ color: '#D8D3C5', opacity: 0.75 }}>{ann.label}</span>}
                         {ann.why && <div style={{ color: '#6E6A5C', marginTop: '2px', lineHeight: '1.3', fontSize: '10.5px' }}>{ann.why}</div>}
                         {ann.conflictWarning && (
                           <div style={{ color: '#ef4444', marginTop: '4px', lineHeight: '1.3', fontSize: '10px', fontFamily: "'Share Tech Mono', monospace", letterSpacing: '0.04em' }}>
@@ -278,6 +368,10 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               <span><span style={{ color: '#c084fc' }}>■</span> Brassicas</span>
               <span><span style={{ color: '#86efac' }}>■</span> Soybeans</span>
               <span><span style={{ color: '#ef4444' }}>●</span> Stand</span>
+              <span><span style={{ color: '#3B82F6' }}>●</span> Water</span>
+              <span><span style={{ color: '#CD853F' }}>✦</span> Mineral</span>
+              <span><span style={{ color: '#8B0000' }}>⟿</span> Scrape Line</span>
+              <span><span style={{ color: '#B8860B' }}>⇌</span> Travel Corridor</span>
               <span><span style={{ color: '#6B7A57' }}>▲</span> Tony rec</span>
             </div>
           )}
@@ -325,6 +419,13 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             }}
           >
             ➤
+          </button>
+          <button
+            onClick={exportReport}
+            title="Download report"
+            style={{ color: '#5A8A5F', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: '10px 6px', flexShrink: 0 }}
+          >
+            ↓
           </button>
           <button
             onClick={clearChat}
