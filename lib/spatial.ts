@@ -1,6 +1,8 @@
 // Shared spatial logic — used by /api/spatial and /api/chat server-side
 import { fetchSoilData, summarizeSoilForTony, type SoilMapUnit } from './soil-sda'
 import { fetchNlcdGrid, summarizeNlcdForTony, type NlcdSample } from './nlcd'
+import { fetchWindRose, type WindRoseSummary } from './wind-rose'
+import { fetchDeerPressure, type DeerPressureSummary } from './deer-pressure'
 
 export type Bounds = { north: number; south: number; east: number; west: number }
 
@@ -48,7 +50,13 @@ export interface SpatialContext {
   nwiWetlands?: NwiWetlandSummary
   neighboringCrops?: string[]
   terrainDerivatives?: TerrainDerivatives
+  // Phase 5 enrichments
+  windRose?: WindRoseSummary
+  deerPressure?: DeerPressureSummary
 }
+
+// Re-export new types so route.ts can use them without direct imports
+export type { WindRoseSummary, DeerPressureSummary }
 
 export function isValidBounds(b: unknown): b is Bounds {
   if (!b || typeof b !== 'object') return false
@@ -415,8 +423,11 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
   const cached = cache.get(key)
   if (cached && Date.now() < cached.expiresAt) return cached.data
 
+  const centerLat = (bounds.north + bounds.south) / 2
+  const centerLng = (bounds.east + bounds.west) / 2
+
   // Fetch all data in parallel — all enrichments are optional, fail gracefully
-  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops] = await Promise.all([
+  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure] = await Promise.all([
     fetchOsmFeatures(bounds).catch((): OsmFeature[] => []),
     fetchElevationGrid(bounds).catch((): ElevationSample[] => []),
     fetchPrevailingWind(bounds).catch((): undefined => undefined),
@@ -424,6 +435,8 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
     fetchNlcdGrid(bounds).catch((): NlcdSample[] => []),
     fetchNwiWetlands(bounds).catch((): undefined => undefined),
     fetchNeighboringCrops(bounds).catch((): string[] => []),
+    fetchWindRose(centerLat, centerLng).catch((): WindRoseSummary | null => null),
+    fetchDeerPressure(centerLat, centerLng).catch((): DeerPressureSummary | null => null),
   ])
 
   const { summary: elevationSummary, highGroundPoints, lowGroundPoints } = summarizeElevation(elevationSamples)
@@ -441,6 +454,8 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
     nwiWetlands: nwiWetlands ?? undefined,
     neighboringCrops: neighboringCrops.length > 0 ? neighboringCrops : undefined,
     terrainDerivatives,
+    windRose: windRose ?? undefined,
+    deerPressure: deerPressure ?? undefined,
   }
   pruneCache()
   cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS })

@@ -400,6 +400,45 @@ function buildSpatialContextBlock(ctx: SpatialContext, bounds: Bounds): string {
     }
   }
 
+  // Wind Rose — Open-Meteo historical hourly wind analysis
+  if (ctx.windRose) {
+    const wr = ctx.windRose
+    lines.push(`\nWIND ROSE (Open-Meteo historical — actual measured data, not an estimate):`)
+    lines.push(`- Hunting season prevailing (Oct-Nov): ${wr.huntingSeasonPrevailing}`)
+    lines.push(`- Thermal pattern: ${wr.morningThermalDirection}`)
+    const monthKeys = ['Sep', 'Oct', 'Nov', 'Dec']
+    const monthData = monthKeys.flatMap(m => {
+      const d = wr.prevailingByMonth[m]
+      return d ? [`${m}: ${d.label}`] : []
+    })
+    if (monthData.length > 0) lines.push(`- Monthly breakdown: ${monthData.join(' | ')}`)
+    for (const rule of wr.standRules) {
+      lines.push(`- ${rule}`)
+    }
+    lines.push(`- Data source: ${wr.dataSource}`)
+  }
+
+  // Deer Pressure — county harvest tier and season dates
+  if (ctx.deerPressure) {
+    const dp = ctx.deerPressure
+    lines.push(`\nDEER PRESSURE & HARVEST DATA (${dp.state} — ${dp.county}):`)
+    lines.push(`- Harvest tier: ${dp.harvestTier.toUpperCase()} — ${dp.annualHarvestPer1000Acres} deer/1000 acres/year`)
+    lines.push(`- ${dp.pressureNotes}`)
+    const seasonParts: string[] = []
+    if (dp.archeryDates) seasonParts.push(`Archery: ${dp.archeryDates}`)
+    if (dp.rifleDates) seasonParts.push(`Rifle/Firearm: ${dp.rifleDates}`)
+    if (dp.muzzleloaderDates) seasonParts.push(`Muzzleloader: ${dp.muzzleloaderDates}`)
+    if (seasonParts.length > 0) lines.push(`- Season dates: ${seasonParts.join(' | ')}`)
+    lines.push(`- Management: ${dp.managementNotes}`)
+    if (dp.harvestTier === 'high') {
+      lines.push(`PRESSURE RULES: HIGH-PRESSURE COUNTY — educated deer, mature bucks (3.5+ yrs) are predominantly nocturnal by Oct 20. Stand placement must be deeper in timber (not field-edge). Entry/exit routes more critical than stand location itself. Minimize intrusion — hunt stands less frequently, not more.`)
+    } else if (dp.harvestTier === 'moderate') {
+      lines.push(`PRESSURE RULES: MODERATE PRESSURE — food source stands productive into November with careful scent management. Bucks respond to calling/decoys during rut window. Designating a sanctuary block (never hunt) increases daylight activity on surrounding huntable ground.`)
+    } else if (dp.harvestTier === 'low') {
+      lines.push(`PRESSURE RULES: LOW PRESSURE — food source stands produce consistent daylight deer activity. Standard hunting techniques effective. Habitat improvement (food plots, TSI, water) will directly increase buck quality and density over 3-5 year timeframe.`)
+    }
+  }
+
   lines.push('=== END SPATIAL INTELLIGENCE ===')
   return lines.join('\n')
 }
