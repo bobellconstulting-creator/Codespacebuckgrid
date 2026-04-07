@@ -5,12 +5,14 @@ import { fetchSpatialData } from '../../../lib/spatial'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 120
 
 const MAX_MESSAGE_LENGTH = 2000
 const MAX_FEATURES = 50
-const ESRI_TIMEOUT_MS = 20000
-const NVIDIA_TIMEOUT_MS = 60000
-const GEMINI_TIMEOUT_MS = 55000
+const ESRI_TIMEOUT_MS = 15000
+const ANTHROPIC_TIMEOUT_MS = 110000
+const GEMINI_TIMEOUT_MS = 40000
+const OPENAI_TIMEOUT_MS = 60000
 
 // ─── Tony's persistent identity — goes in system: field of every Anthropic call ──
 const TONY_SYSTEM_PROMPT = `You are Tony — a direct, systematic whitetail habitat analyst. You analyze satellite imagery step by step and deliver specific, evidence-based placement advice. Every recommendation cites visible terrain. No generic tips. No padding.
@@ -837,57 +839,12 @@ export async function POST(req: NextRequest) {
         safeChatHistory,
       )
 
-      let usedAnthropic = false
       let usedGemini = false
+      let usedAnthropic = false
       let usedOpenAI = false
 
-      // 1. Anthropic — primary: tool_use schema + system prompt + extended thinking
-      if (anthropicKey) {
-        try {
-          const anthropicPromise = fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': anthropicKey,
-              'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-6',
-              max_tokens: 5000,
-              system: TONY_SYSTEM_PROMPT,
-              tools: [HABITAT_TOOL],
-              tool_choice: { type: 'tool', name: 'place_habitat_features' },
-              messages: [{
-                role: 'user',
-                content: [
-                  { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imgBase64 } },
-                  { type: 'text', text: tonyPrompt },
-                ],
-              }],
-            }),
-          })
-          const result = await Promise.race([
-            anthropicPromise,
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), NVIDIA_TIMEOUT_MS)),
-          ])
-          if (!result.ok) throw new Error(`Anthropic ${result.status}`)
-          const anthropicJson = await result.json()
-          // Extract tool_use input block
-          const toolBlock = anthropicJson.content?.find((c: any) => c.type === 'tool_use')
-          if (toolBlock?.input) {
-            rawText = JSON.stringify(toolBlock.input)
-          } else {
-            // Fallback: look for text block if tool_use wasn't used
-            rawText = anthropicJson.content?.find((c: any) => c.type === 'text')?.text?.trim() ?? ''
-          }
-          usedAnthropic = true
-        } catch (anthropicErr: unknown) {
-          console.warn('[chat] Anthropic failed, falling back to Gemini:', anthropicErr instanceof Error ? anthropicErr.message : anthropicErr)
-        }
-      }
-
-      // 2. Gemini — second (free, confirmed key set)
-      if (!usedAnthropic && googleKey) {
+      // 1. Gemini 2.5 Flash — PRIMARY (fast vision, thinkingBudget:0, confirmed working)
+      if (googleKey) {
         try {
           const geminiPromise = fetch(
             'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
@@ -910,14 +867,59 @@ export async function POST(req: NextRequest) {
           if (!result.ok) throw new Error(`Gemini ${result.status}`)
           const geminiJson = await result.json()
           rawText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
-          usedGemini = true
+          if (rawText) usedGemini = true
+          else throw new Error('Gemini empty response')
         } catch (geminiErr: unknown) {
-          console.warn('[chat] Gemini failed, falling back to OpenAI:', geminiErr instanceof Error ? geminiErr.message : geminiErr)
+          console.warn('[chat] Gemini failed, falling back to Anthropic:', geminiErr instanceof Error ? geminiErr.message : geminiErr)
         }
       }
 
-      // 3. OpenAI — third fallback
-      if (!usedAnthropic && !usedGemini && openaiKey) {
+      // 2. Anthropic Sonnet 4.6 — fallback: tool_use schema for strict JSON
+      if (!usedGemini && anthropicKey) {
+        try {
+          const anthropicPromise = fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': anthropicKey,
+              'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 5000,
+              system: TONY_SYSTEM_PROMPT,
+              tools: [HABITAT_TOOL],
+              tool_choice: { type: 'tool', name: 'place_habitat_features' },
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imgBase64 } },
+                  { type: 'text', text: tonyPrompt },
+                ],
+              }],
+            }),
+          })
+          const result = await Promise.race([
+            anthropicPromise,
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), ANTHROPIC_TIMEOUT_MS)),
+          ])
+          if (!result.ok) throw new Error(`Anthropic ${result.status}`)
+          const anthropicJson = await result.json()
+          const toolBlock = anthropicJson.content?.find((c: any) => c.type === 'tool_use')
+          if (toolBlock?.input) {
+            rawText = JSON.stringify(toolBlock.input)
+          } else {
+            rawText = anthropicJson.content?.find((c: any) => c.type === 'text')?.text?.trim() ?? ''
+          }
+          if (rawText) usedAnthropic = true
+          else throw new Error('Anthropic empty response')
+        } catch (anthropicErr: unknown) {
+          console.warn('[chat] Anthropic failed, falling back to OpenAI:', anthropicErr instanceof Error ? anthropicErr.message : anthropicErr)
+        }
+      }
+
+      // 3. OpenAI — final fallback
+      if (!usedGemini && !usedAnthropic && openaiKey) {
         try {
           const openaiPromise = fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -937,18 +939,18 @@ export async function POST(req: NextRequest) {
           })
           const result = await Promise.race([
             openaiPromise,
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), NVIDIA_TIMEOUT_MS)),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), OPENAI_TIMEOUT_MS)),
           ])
           if (!result.ok) throw new Error(`OpenAI ${result.status}`)
           const openaiJson = await result.json()
           rawText = openaiJson.choices?.[0]?.message?.content?.trim() ?? ''
-          usedOpenAI = true
+          if (rawText) usedOpenAI = true
         } catch (openaiErr: unknown) {
           console.warn('[chat] OpenAI failed:', openaiErr instanceof Error ? openaiErr.message : openaiErr)
         }
       }
 
-      if (!usedAnthropic && !usedGemini && !usedOpenAI) {
+      if (!usedGemini && !usedAnthropic && !usedOpenAI) {
         throw new Error('TonyTimeout') // all providers failed
       }
     } catch (err: unknown) {
@@ -1081,48 +1083,8 @@ export async function POST(req: NextRequest) {
       conflictWarning: f.conflictWarning ?? f.spacingWarning,
     }))
 
-    // Phase 4: Haiku validation pass — independent model critique (no image, text only)
-    let validatedAnnotations = spacedAnnotations
-    if (anthropicKey && spacedAnnotations.length > 0 && osmFeatures.length > 0) {
-      try {
-        const osmSummary = osmFeatures.slice(0, 20).map(f => `${f.kind} at lat ${f.point[1].toFixed(4)}, lng ${f.point[0].toFixed(4)}`).join('; ')
-        const featureSummary = spacedAnnotations.map((f, i) =>
-          `${i + 1}. ${f.type} "${f.label}" at ${f.geojson?.geometry?.type === 'Point' ? `lat ${(f.geojson.geometry.coordinates as number[])[1]?.toFixed(4)}, lng ${(f.geojson.geometry.coordinates as number[])[0]?.toFixed(4)}` : 'polygon'}`
-        ).join('\n')
-
-        const haikuRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 800,
-            system: 'You are a habitat placement validator. Check each feature against OSM data and respond with raw JSON only.',
-            messages: [{
-              role: 'user', content: `OSM verified features: ${osmSummary}\n\nProposed placements:\n${featureSummary}\n\nFor each placement (1-${spacedAnnotations.length}), check: is this feature type appropriate for the terrain at that location? Any OSM conflict?\nRespond with JSON: {"validations": [{"index": 1, "valid": true, "issue": null}, ...]}`
-            }],
-          }),
-          signal: AbortSignal.timeout(15_000),
-        }).catch(() => null)
-
-        if (haikuRes?.ok) {
-          const haikuJson = await haikuRes.json().catch(() => null)
-          const haikuText = haikuJson?.content?.[0]?.text ?? ''
-          try {
-            const haikuParsed = JSON.parse(extractJsonFromText(haikuText))
-            const validations: Array<{ index: number; valid: boolean; issue: string | null }> = haikuParsed.validations ?? []
-            validatedAnnotations = spacedAnnotations.map((ann, i) => {
-              const v = validations.find(val => val.index === i + 1)
-              if (v && !v.valid && v.issue) {
-                return { ...ann, conflictWarning: ann.conflictWarning ?? `Validation: ${v.issue}` }
-              }
-              return ann
-            })
-          } catch { /* haiku parse failed — use unvalidated */ }
-        }
-      } catch { /* haiku failed entirely — use unvalidated */ }
-    }
-
-    return NextResponse.json({ reply, annotations: validatedAnnotations })
+    // Post-validation removed — Tony's primary call + OSM bbox checks already enforce placement rules.
+    return NextResponse.json({ reply, annotations: spacedAnnotations })
   } catch (err) {
     console.error('[chat] error:', err)
     return NextResponse.json({ error: 'Server error', reply: 'Tony is unavailable right now. Try again.' }, { status: 500 })
