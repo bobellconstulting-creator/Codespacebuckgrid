@@ -17,6 +17,7 @@ type MapData = {
 type TonyChatProps = {
   getBoundsAndFeatures: () => MapData | null
   drawAnnotations?: (annotations: any[]) => void
+  flyTo?: (lat: number, lng: number, zoom?: number) => void
   propertyName?: string
   seasonBanner?: { label: string; tip: string; color: string }
   isMobile?: boolean
@@ -25,7 +26,30 @@ type TonyChatProps = {
   onScanComplete?: () => void
 }
 
-type AnnotationSummary = { type: string; label: string; why: string; confidence?: number; priority?: number; conflictWarning?: string }
+type AnnotationSummary = { type: string; label: string; why: string; confidence?: number; priority?: number; conflictWarning?: string; centroid?: [number, number] }
+
+function computeCentroid(geojson: any): [number, number] | undefined {
+  const geom = geojson?.geometry
+  if (!geom) return undefined
+  if (geom.type === 'Point') {
+    const [lng, lat] = geom.coordinates
+    return [lat, lng]
+  }
+  if (geom.type === 'Polygon') {
+    const ring: [number, number][] = geom.coordinates[0]
+    if (!ring || ring.length === 0) return undefined
+    const lngAvg = ring.reduce((s, c) => s + c[0], 0) / ring.length
+    const latAvg = ring.reduce((s, c) => s + c[1], 0) / ring.length
+    return [latAvg, lngAvg]
+  }
+  if (geom.type === 'LineString') {
+    const coords: [number, number][] = geom.coordinates
+    if (!coords || coords.length === 0) return undefined
+    const mid = coords[Math.floor(coords.length / 2)]
+    return [mid[1], mid[0]]
+  }
+  return undefined
+}
 
 type ChatMessage = {
   role: 'tony' | 'user'
@@ -76,7 +100,7 @@ function isErrorMessage(text: string): boolean {
 const PANEL_W = 310
 
 const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
-  ({ getBoundsAndFeatures, drawAnnotations, propertyName, seasonBanner, isMobile, topOffset = 12, panelWidth = 310, onScanComplete }, ref) => {
+  ({ getBoundsAndFeatures, drawAnnotations, flyTo, propertyName, seasonBanner, isMobile, topOffset = 12, panelWidth = 310, onScanComplete }, ref) => {
     const [chat, setChat] = useState<ChatMessage[]>([{ role: 'tony', text: ONBOARDING_MESSAGE }])
     const [input, setInput] = useState('')
     const [isOpen, setIsOpen] = useState(true)
@@ -145,6 +169,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                 confidence: typeof ann.confidence === 'number' ? ann.confidence : undefined,
                 priority: typeof ann.priority === 'number' ? ann.priority : undefined,
                 conflictWarning: typeof ann.conflictWarning === 'string' ? ann.conflictWarning : undefined,
+                centroid: computeCentroid(ann.geojson),
               }
             })
           : []
@@ -161,7 +186,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           return [...updated, { role: 'tony', text: "Couldn't reach Tony. Check your connection and try again." }]
         })
       }
-    }, [getBoundsAndFeatures, drawAnnotations, propertyName, seasonBanner])
+    }, [getBoundsAndFeatures, drawAnnotations, flyTo, propertyName, seasonBanner])
 
     useImperativeHandle(ref, () => ({
       addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]),
@@ -318,9 +343,24 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                 {m.annotations && m.annotations.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', width: '100%', maxWidth: '92%' }}>
                     {m.annotations.map((ann, ai) => (
-                      <div key={ai} style={{ background: '#1E2122', border: `1px solid ${ann.conflictWarning ? 'rgba(239,68,68,0.35)' : 'rgba(107,122,87,0.12)'}`, borderLeft: `2px solid ${ann.conflictWarning ? '#ef4444' : '#6B7A57'}`, borderRadius: '2px', padding: '5px 9px', fontSize: '11px' }}>
+                      <div
+                        key={ai}
+                        onClick={() => { if (ann.centroid && flyTo) flyTo(ann.centroid[0], ann.centroid[1], 17) }}
+                        style={{
+                          background: '#1E2122',
+                          border: `1px solid ${ann.conflictWarning ? 'rgba(239,68,68,0.35)' : 'rgba(107,122,87,0.12)'}`,
+                          borderLeft: `2px solid ${ann.conflictWarning ? '#ef4444' : '#6B7A57'}`,
+                          borderRadius: '2px',
+                          padding: '5px 9px',
+                          fontSize: '11px',
+                          cursor: ann.centroid && flyTo ? 'pointer' : 'default',
+                        }}
+                      >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' as const }}>
                           <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", color: ann.conflictWarning ? '#ef4444' : '#6B7A57', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', fontSize: '10px' }}>{ann.type.replace(/_/g, ' ')}</span>
+                          {ann.centroid && flyTo && (
+                            <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#4A7A50', letterSpacing: '0.06em' }}>↗ MAP</span>
+                          )}
                           {ann.priority !== undefined && (
                             <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.06em', background: 'rgba(107,122,87,0.15)', color: '#6B7A57', border: '1px solid rgba(107,122,87,0.3)', borderRadius: '2px', padding: '1px 4px' }}>P{ann.priority}</span>
                           )}

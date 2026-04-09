@@ -436,6 +436,7 @@ export default function BuckGridProPage() {
         ref={chatRef}
         getBoundsAndFeatures={getBoundsAndFeatures}
         drawAnnotations={drawAnnotations}
+        flyTo={(lat, lng, zoom) => mapRef.current?.flyTo(lat, lng, zoom ?? 17)}
         propertyName={propertyName}
         seasonBanner={season}
         isMobile={isMobile}

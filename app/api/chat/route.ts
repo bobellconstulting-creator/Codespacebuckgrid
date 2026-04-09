@@ -746,8 +746,9 @@ function isFeatureInBoundary(f: any, ring: [number, number][]): boolean {
   const { type, coordinates } = f.geometry
   const checkPoint = (c: number[]) => isPointInPolygon(c[0], c[1], ring)
   if (type === 'Point') return checkPoint(coordinates)
-  if (type === 'LineString') return coordinates.some(checkPoint)
-  if (type === 'Polygon') return (coordinates[0] as number[][])?.some(checkPoint)
+  // Require ALL vertices inside boundary — partial containment is not acceptable
+  if (type === 'LineString') return (coordinates as number[][]).every(checkPoint)
+  if (type === 'Polygon') return (coordinates[0] as number[][])?.every(checkPoint)
   return true
 }
 
