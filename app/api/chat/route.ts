@@ -9,7 +9,7 @@ export const maxDuration = 120
 
 const MAX_MESSAGE_LENGTH = 2000
 const MAX_FEATURES = 50
-const ESRI_TIMEOUT_MS = 15000
+const ESRI_TIMEOUT_MS = 30000
 const ANTHROPIC_TIMEOUT_MS = 110000
 const GEMINI_TIMEOUT_MS = 40000
 const OPENAI_TIMEOUT_MS = 60000
@@ -826,7 +826,8 @@ export async function POST(req: NextRequest) {
       const safeChatHistory = Array.isArray(chatHistory)
         ? chatHistory.slice(-6).map((m: unknown) => {
             const msg = m as Record<string, unknown>
-            return { role: typeof msg.role === 'string' ? msg.role : 'user', text: typeof msg.text === 'string' ? msg.text.slice(0, 400) : '' }
+            const role = typeof msg.role === 'string' ? msg.role : 'user'
+            return { role: (role === 'tony' || role === 'user') ? role : 'user', text: typeof msg.text === 'string' ? msg.text.slice(0, 400) : '' }
           }).filter(m => m.text)
         : undefined
 
@@ -886,7 +887,7 @@ export async function POST(req: NextRequest) {
               'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
-              model: 'claude-haiku-4-5-20251001',
+              model: 'claude-sonnet-4-6',
               max_tokens: 5000,
               system: TONY_SYSTEM_PROMPT,
               tools: [HABITAT_TOOL],
