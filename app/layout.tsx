@@ -3,7 +3,7 @@ import 'leaflet/dist/leaflet.css'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://buckgridpro.com'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://codespacebuckgrid.vercel.app'),
   title: 'BuckGrid Pro — AI Habitat Intelligence for Serious Hunters',
   description: 'Tony AI analyzes your satellite map and tells you exactly where to place food plots, stands, and habitat features. Expert land management advice 24/7 — less than a tank of gas per month.',
   keywords: ['deer habitat management', 'food plot planning', 'hunting land management', 'AI hunting app', 'satellite map hunting', 'whitetail habitat', 'deer stand placement'],

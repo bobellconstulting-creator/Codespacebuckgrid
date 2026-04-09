@@ -9,10 +9,12 @@ export const maxDuration = 120
 
 const MAX_MESSAGE_LENGTH = 2000
 const MAX_FEATURES = 50
-const ESRI_TIMEOUT_MS = 30000
-const ANTHROPIC_TIMEOUT_MS = 110000
-const GEMINI_TIMEOUT_MS = 40000
-const OPENAI_TIMEOUT_MS = 60000
+const ESRI_TIMEOUT_MS = 12000
+const ANTHROPIC_TIMEOUT_MS = 50000
+const GEMINI_TIMEOUT_MS = 22000
+const OPENAI_TIMEOUT_MS = 25000
+// Global deadline — ensures we always respond before Vercel's 120s hard kill
+const GLOBAL_DEADLINE_MS = 108_000
 
 // ─── Tony's persistent identity — goes in system: field of every Anthropic call ──
 const TONY_SYSTEM_PROMPT = `You are Tony — a direct, systematic whitetail habitat analyst. You analyze satellite imagery step by step and deliver specific, evidence-based placement advice. Every recommendation cites visible terrain. No generic tips. No padding.
@@ -753,6 +755,10 @@ function isFeatureInBoundary(f: any, ring: [number, number][]): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  // Global deadline — race everything against this so we always respond before Vercel's hard kill
+  const globalAbort = new AbortController()
+  const globalTimer = setTimeout(() => globalAbort.abort(), GLOBAL_DEADLINE_MS)
+
   try {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
     if (!checkRateLimit(ip)) {
@@ -792,7 +798,7 @@ export async function POST(req: NextRequest) {
     const SPATIAL_TIMEOUT_MS = 7_000 // Spatial must resolve within 7s or Tony fires without it
 
     const [imgResult, spatialResult] = await Promise.allSettled([
-      fetch(esriUrl, { signal: AbortSignal.timeout(ESRI_TIMEOUT_MS) }),
+      fetch(esriUrl, { signal: AbortSignal.any([AbortSignal.timeout(ESRI_TIMEOUT_MS), globalAbort.signal]) }),
       Promise.race([
         fetchSpatialData(bounds),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('SpatialTimeout')), SPATIAL_TIMEOUT_MS)),
@@ -1086,9 +1092,17 @@ export async function POST(req: NextRequest) {
     }))
 
     // Post-validation removed — Tony's primary call + OSM bbox checks already enforce placement rules.
+    clearTimeout(globalTimer)
     return NextResponse.json({ reply, annotations: spacedAnnotations })
   } catch (err) {
+    clearTimeout(globalTimer)
     console.error('[chat] error:', err)
-    return NextResponse.json({ error: 'Server error', reply: 'Tony is unavailable right now. Try again.' }, { status: 500 })
+    const isGlobalTimeout = globalAbort.signal.aborted
+    return NextResponse.json({
+      error: isGlobalTimeout ? 'AI timeout' : 'Server error',
+      reply: isGlobalTimeout
+        ? "Tony's thinking hard — took too long this time. Move the map slightly and try again."
+        : 'Tony is unavailable right now. Try again.'
+    }, { status: isGlobalTimeout ? 503 : 500 })
   }
 }
