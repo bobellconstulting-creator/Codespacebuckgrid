@@ -438,10 +438,10 @@ function Hero() {
 // ─── Trust bar ────────────────────────────────────────────────────────────────
 
 const STATS = [
-  { val: '847', label: 'Properties Analyzed' },
-  { val: '14,200+', label: 'Acres Mapped' },
-  { val: '<60s', label: 'Time to First Plan' },
-  { val: '5-Star', label: 'Hunter Rating' },
+  { val: 'Day 1',    label: 'Founder Build' },
+  { val: '6 Layers', label: 'Terrain Analysis' },
+  { val: '<60s',     label: 'Time to First Plan' },
+  { val: 'Free',     label: 'Your First Map' },
 ]
 
 function TrustBar() {
@@ -556,54 +556,30 @@ function HowItWorks() {
   )
 }
 
-// ─── Social Proof ─────────────────────────────────────────────────────────────
-
-const TESTIMONIALS = [
-  {
-    quote: 'Tagged a 148-inch 8-point this November — my best buck ever. Tony put my stand exactly where that deer wanted to be. I was done hunting by 7:45 AM.',
-    name: 'Derek M.',
-    location: 'Southeast Kansas',
-    score: '148" 8-point',
-    initials: 'DM',
-  },
-  {
-    quote: 'I have 340 acres and had no idea what I was doing with habitat. Tony mapped out 6 improvements in one session. I planted the food plots exactly where he said.',
-    name: 'Ryan T.',
-    location: 'Southern Iowa',
-    score: '340 acres managed',
-    initials: 'RT',
-  },
-  {
-    quote: 'Way better than paying a consultant $250/hr to walk my land once. Tony knows my property now and gives me different advice every season.',
-    name: 'Chad B.',
-    location: 'Central Missouri',
-    score: 'Saved $1,200/yr',
-    initials: 'CB',
-  },
-]
+// ─── Founder's Note (replaces fake testimonials) ──────────────────────────────
 
 function Testimonials() {
   return (
     <section id="testimonials" className="py-28 px-6" style={{ background: '#1E2122' }}>
-      <div className="max-w-6xl mx-auto">
-        <FadeIn className="text-center mb-16">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Early Results</div>
-          <h2 className="font-display text-6xl md:text-7xl text-white uppercase tracking-tight">
-            Hunters who stopped guessing
+      <div className="max-w-4xl mx-auto">
+        <FadeIn className="text-center mb-12">
+          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Founder's Note</div>
+          <h2 className="font-display text-5xl md:text-6xl text-white uppercase tracking-tight">
+            Built by one guy.
+            <br />
+            <span style={{ color: C.muted }}>No paid reviews yet.</span>
           </h2>
         </FadeIn>
 
-        {/* Hero testimonial */}
         <FadeIn>
           <div
-            className="relative p-10 rounded-2xl mb-6"
+            className="relative p-10 rounded-2xl"
             style={{
               background: `linear-gradient(135deg, ${C.card} 0%, rgba(30,34,50,1) 100%)`,
               border: `1px solid rgba(107,122,87,0.2)`,
               boxShadow: `0 0 60px -20px rgba(107,122,87,0.15)`,
             }}
           >
-            {/* Quote mark */}
             <div
               className="font-display text-8xl leading-none mb-4 select-none"
               style={{ color: `${C.accent}20` }}
@@ -611,65 +587,51 @@ function Testimonials() {
               &quot;
             </div>
             <p
-              className="text-2xl md:text-3xl font-bold italic leading-snug mb-8 max-w-3xl"
+              className="text-xl md:text-2xl leading-relaxed mb-6 max-w-3xl"
               style={{ color: '#fff' }}
             >
-              {TESTIMONIALS[0].quote}
+              I'm Bo. I hunt Kansas. I got tired of guessing where to put stands and
+              food plots, so I built BuckGrid Pro to do what a $300/hr wildlife biologist
+              does — except on demand, on your land, from a satellite.
             </p>
-            <div className="flex items-center gap-4">
+            <p
+              className="text-base md:text-lg leading-relaxed mb-8 max-w-3xl"
+              style={{ color: C.text }}
+            >
+              It's day one. I haven't paid anyone to say nice things. I'd rather earn it.
+              Your first analysis is free — no account, no card. If Tony gets your land
+              wrong, tell me. I'll fix it. If he nails it, tell a buddy.
+            </p>
+
+            <div className="flex items-center gap-4 pt-6" style={{ borderTop: `1px solid ${C.border}` }}>
               <div
-                className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white text-sm"
-                style={{ background: 'linear-gradient(135deg, #1e2a18, #2a3820)', border: '1px solid rgba(107,122,87,0.4)', color: C.accent }}
+                className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #1e2a18, #2a3820)',
+                  border: '1px solid rgba(107,122,87,0.4)',
+                  color: C.accent,
+                }}
               >
-                {TESTIMONIALS[0].initials}
+                BB
               </div>
               <div>
-                <div className="font-bold text-white">{TESTIMONIALS[0].name}</div>
-                <div className="text-xs" style={{ color: C.muted }}>{TESTIMONIALS[0].location}</div>
+                <div className="font-bold text-white">Bo Bell</div>
+                <div className="text-xs" style={{ color: C.muted }}>Founder · Neuradex AI · Council Grove, KS</div>
               </div>
-              <div
-                className="ml-auto px-4 py-2 rounded-xl font-bold text-sm"
-                style={{ background: 'rgba(107,122,87,0.1)', color: C.accent, border: `1px solid rgba(107,122,87,0.2)` }}
+              <Link
+                href="/buckgrid"
+                className="ml-auto px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
+                style={{
+                  background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
+                  color: '#0C0F0A',
+                  boxShadow: `0 8px 30px -8px rgba(107,122,87,0.5)`,
+                }}
               >
-                {TESTIMONIALS[0].score}
-              </div>
+                Try Tony →
+              </Link>
             </div>
           </div>
         </FadeIn>
-
-        {/* Secondary testimonials */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {TESTIMONIALS.slice(1).map((t, i) => (
-            <FadeIn key={t.name} delay={i * 0.1}>
-              <div
-                className="p-8 rounded-2xl h-full"
-                style={{ background: C.card, border: `1px solid ${C.border}` }}
-              >
-                <p className="text-base leading-relaxed mb-6 italic" style={{ color: C.text }}>
-                  &quot;{t.quote}&quot;
-                </p>
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-xs"
-                    style={{ background: C.card, border: `1px solid ${C.border}` }}
-                  >
-                    {t.initials}
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-white">{t.name}</div>
-                    <div className="text-xs" style={{ color: C.muted }}>{t.location}</div>
-                  </div>
-                  <div
-                    className="ml-auto text-xs font-semibold px-3 py-1 rounded-full"
-                    style={{ background: C.greenDim, color: C.green, border: `1px solid rgba(34,197,94,0.15)` }}
-                  >
-                    {t.score}
-                  </div>
-                </div>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
       </div>
     </section>
   )
