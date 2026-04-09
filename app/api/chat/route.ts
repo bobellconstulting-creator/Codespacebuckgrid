@@ -851,11 +851,11 @@ export async function POST(req: NextRequest) {
       let usedAnthropic = false
       let usedOpenAI = false
 
-      // 1. Gemini 2.5 Flash — PRIMARY (fast vision, thinkingBudget:0, confirmed working)
+      // 1. Gemini 2.0 Flash — PRIMARY (fast vision, no thinking overhead)
       if (googleKey) {
         try {
           const geminiPromise = fetch(
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'x-goog-api-key': googleKey },
@@ -864,7 +864,7 @@ export async function POST(req: NextRequest) {
                   { inline_data: { mime_type: 'image/png', data: imgBase64 } },
                   { text: tonyPrompt }
                 ]}],
-                generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } },
+                generationConfig: { maxOutputTokens: 8192 },
               }),
             }
           )
@@ -926,7 +926,40 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3. OpenAI — final fallback
+      // 3. NVIDIA Llama 3.2 90B Vision — fallback (key confirmed in env)
+      if (!usedGemini && !usedAnthropic && nvidiaKey) {
+        try {
+          const nvidiaPromise = fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${nvidiaKey}` },
+            body: JSON.stringify({
+              model: 'meta/llama-3.2-90b-vision-instruct',
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'text', text: tonyPrompt },
+                  { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
+                ],
+              }],
+              max_tokens: 4096,
+              temperature: 0.3,
+            }),
+          })
+          const result = await Promise.race([
+            nvidiaPromise,
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), 25_000)),
+          ])
+          if (!result.ok) throw new Error(`NVIDIA ${result.status}`)
+          const nvidiaJson = await result.json()
+          rawText = nvidiaJson.choices?.[0]?.message?.content?.trim() ?? ''
+          if (rawText) { usedGemini = true } // reuse flag to skip further fallbacks
+          else throw new Error('NVIDIA empty response')
+        } catch (nvidiaErr: unknown) {
+          console.warn('[chat] NVIDIA failed, falling back to OpenAI:', nvidiaErr instanceof Error ? nvidiaErr.message : nvidiaErr)
+        }
+      }
+
+      // 4. OpenAI — final fallback
       if (!usedGemini && !usedAnthropic && openaiKey) {
         try {
           const openaiPromise = fetch('https://api.openai.com/v1/chat/completions', {
