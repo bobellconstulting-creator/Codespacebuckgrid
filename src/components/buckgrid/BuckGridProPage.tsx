@@ -88,8 +88,9 @@ export default function BuckGridProPage() {
     const data = mapRef.current?.getBoundsAndFeatures()
     if (data?.features) updateFeatures(data.features)
 
+    if (!chatRef.current) { setIsAnalyzing(false); return }
     setIsAnalyzing(true)
-    chatRef.current?.triggerScan(contextPrompt)
+    chatRef.current.triggerScan(contextPrompt)
     save({ name: propertyName || 'Unnamed Property', acres: result.acres, lastAnalysis: contextPrompt, date: new Date().toLocaleDateString(), uiPropertyName: propertyName || undefined })
     if (isMobile) setIsMenuOpen(false)
   }, [propertyName, save, updateFeatures, isMobile, isAnalyzing])
@@ -118,14 +119,14 @@ export default function BuckGridProPage() {
   }, [])
 
   const handleAnalyze = useCallback(() => {
-    if (isAnalyzing) return
+    if (isAnalyzing || !chatRef.current) return
     const data = mapRef.current?.getBoundsAndFeatures()
     const featureInfo = data && data.features.length > 0
       ? ` I've drawn ${data.features.length} feature(s) on the map.`
       : ''
     const prompt = `Full property analysis.${featureInfo} Read the terrain, identify all key habitat features, and give me your top 3 stand placements for ${season.label}.`
     setIsAnalyzing(true)
-    chatRef.current?.triggerScan(prompt)
+    chatRef.current.triggerScan(prompt)
     if (isMobile) setIsMenuOpen(false)
   }, [season.label, isMobile, isAnalyzing])
 
@@ -371,7 +372,7 @@ export default function BuckGridProPage() {
               }}
             >
               <option value="">AUTO-DETECT</option>
-              {['Spring', 'Summer', 'Early Fall', 'Rut Chase', 'Rut Peak', 'Late Rut', 'Late Season'].map(s => (
+              {['Spring', 'Summer', 'Early Fall', 'Rut', 'Late Season'].map(s => (
                 <option key={s} value={s}>{s.toUpperCase()}</option>
               ))}
             </select>

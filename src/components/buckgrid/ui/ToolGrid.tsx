@@ -20,6 +20,7 @@ const NAV_IDS = ['nav']
 const BOUNDARY_IDS = ['boundary']
 const FOOD_PLOT_IDS = ['clover', 'brassicas', 'corn', 'soybeans', 'milo', 'egyptian', 'switchgrass']
 const STRUCTURE_IDS = ['bedding', 'stand', 'water', 'focus']
+const HABITAT_IDS = ['mineral', 'scrape_line', 'travel_corridor']
 
 function SectionHeader({ label }: { label: string }) {
   return (
@@ -108,6 +109,7 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
   const boundaryTools = byId(BOUNDARY_IDS)
   const foodPlotTools = byId(FOOD_PLOT_IDS)
   const structureTools = byId(STRUCTURE_IDS)
+  const habitatTools = byId(HABITAT_IDS)
 
   return (
     <div className={styles.panel} style={{ background: '#3A4042' }}>
@@ -115,6 +117,7 @@ function ToolGrid({ tools, activeToolId, brushSize, onSelectTool, onBrushSize, o
       <ToolSection label="Boundary" tools={boundaryTools} activeToolId={activeToolId} onSelectTool={onSelectTool} fullWidth />
       <ToolSection label="Food Plots" tools={foodPlotTools} activeToolId={activeToolId} onSelectTool={onSelectTool} />
       <ToolSection label="Structure" tools={structureTools} activeToolId={activeToolId} onSelectTool={onSelectTool} />
+      <ToolSection label="Habitat" tools={habitatTools} activeToolId={activeToolId} onSelectTool={onSelectTool} />
 
       <div className={styles.brushControl}>
         <div className={styles.brushLabel}>

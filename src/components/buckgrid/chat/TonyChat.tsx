@@ -178,7 +178,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           return [...updated, { role: 'tony', text: typeof data.reply === 'string' ? data.reply : 'No response.', annotations: annotationSummaries.length > 0 ? annotationSummaries : undefined }]
         })
         if (drawAnnotations && Array.isArray(data.annotations)) {
-          drawAnnotations(data.annotations)
+          const drawable = data.annotations.filter((a: any) => a?.geojson?.geometry && a.label !== undefined)
+          if (drawable.length > 0) drawAnnotations(drawable)
         }
       } catch {
         setChat(p => {
