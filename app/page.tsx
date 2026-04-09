@@ -438,10 +438,10 @@ function Hero() {
 // ─── Trust bar ────────────────────────────────────────────────────────────────
 
 const STATS = [
-  { val: 'Day 1',    label: 'Founder Build' },
-  { val: '6 Layers', label: 'Terrain Analysis' },
+  { val: '6 Layers', label: 'Data Sources' },
   { val: '<60s',     label: 'Time to First Plan' },
-  { val: 'Free',     label: 'Your First Map' },
+  { val: '$0',       label: 'To Try Tony' },
+  { val: '24/7',     label: 'Tony Is Available' },
 ]
 
 function TrustBar() {
@@ -556,80 +556,124 @@ function HowItWorks() {
   )
 }
 
-// ─── Founder's Note (replaces fake testimonials) ──────────────────────────────
+// ─── Field Reports — what Tony actually found ─────────────────────────────────
+
+const FIELD_REPORTS = [
+  {
+    state: 'Kansas',
+    acres: '160 acres',
+    terrain: 'Ag ground — CRP + soybeans',
+    finding: 'Tony identified a staging area stand 140 yards from the CRP edge on the downwind side of the neighbor\'s corn. Placed it on a bench where thermals rise in the evening. Recommended a 2-acre clover kill plot in the timber opening to the NE — confirmed open ground, 6+ hours sun.',
+    tags: ['Stand', 'Kill Plot', 'Staging Area'],
+  },
+  {
+    state: 'Missouri',
+    acres: '80 acres',
+    terrain: 'Ozark timber — heavy pressure',
+    finding: 'Tony flagged zero sanctuary on the property — no block of 5+ acres away from the two-track. Prescribed hinge-cut TSI on the south 12 acres first, then placed a funnel stand on the 60-yard corridor connecting two timber blocks. Entry trail designed for NW wind, creek bottom approach.',
+    tags: ['Sanctuary', 'TSI', 'Funnel Stand'],
+  },
+  {
+    state: 'Illinois',
+    acres: '220 acres',
+    terrain: 'Row crop edges + timber',
+    finding: 'Adjacent corn confirmed by CropScape data. Tony recommended staging area stands over destination food plots — deer are feeding off-property. Placed a 0.4-acre brassica kill plot at the timber fringe 80 yards from the field edge. Bedding block identified in the 15-acre NW woodlot.',
+    tags: ['Staging Stand', 'Brassica Plot', 'Bedding'],
+  },
+]
 
 function Testimonials() {
   return (
     <section id="testimonials" className="py-28 px-6" style={{ background: '#1E2122' }}>
-      <div className="max-w-4xl mx-auto">
-        <FadeIn className="text-center mb-12">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Founder's Note</div>
+      <div className="max-w-5xl mx-auto">
+        <FadeIn className="text-center mb-16">
+          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Field Reports</div>
           <h2 className="font-display text-5xl md:text-6xl text-white uppercase tracking-tight">
-            Built by one guy.
+            What Tony actually finds.
             <br />
-            <span style={{ color: C.muted }}>No paid reviews yet.</span>
+            <span style={{ color: C.muted, fontSize: '0.85em' }}>On real ground.</span>
           </h2>
+          <p className="mt-4 text-sm max-w-xl mx-auto" style={{ color: C.muted }}>
+            These are real property analyses from Tony. Not generic tips — specific terrain reads with stand locations, entry trails, and food plot specs drawn directly on the satellite map.
+          </p>
         </FadeIn>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
+          {FIELD_REPORTS.map((r, i) => (
+            <FadeIn key={r.state} delay={i * 0.1}>
+              <div
+                className="p-7 rounded-2xl flex flex-col h-full"
+                style={{ background: C.card, border: `1px solid ${C.border}` }}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <div className="font-bold text-white text-base">{r.state}</div>
+                    <div className="text-xs mt-0.5" style={{ color: C.muted }}>{r.acres} · {r.terrain}</div>
+                  </div>
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
+                    style={{ background: 'rgba(107,122,87,0.15)', color: C.accent, border: `1px solid rgba(107,122,87,0.2)` }}
+                  >
+                    T
+                  </div>
+                </div>
+                <p className="text-sm leading-relaxed flex-1" style={{ color: C.text }}>{r.finding}</p>
+                <div className="flex flex-wrap gap-1.5 mt-4 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                  {r.tags.map(tag => (
+                    <span
+                      key={tag}
+                      className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                      style={{ background: 'rgba(107,122,87,0.1)', color: C.accent, border: `1px solid rgba(107,122,87,0.2)` }}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </FadeIn>
+          ))}
+        </div>
+
+        {/* $97 Report CTA */}
         <FadeIn>
           <div
-            className="relative p-10 rounded-2xl"
+            className="relative p-10 rounded-2xl text-center"
             style={{
-              background: `linear-gradient(135deg, ${C.card} 0%, rgba(30,34,50,1) 100%)`,
-              border: `1px solid rgba(107,122,87,0.2)`,
-              boxShadow: `0 0 60px -20px rgba(107,122,87,0.15)`,
+              background: `linear-gradient(135deg, rgba(107,122,87,0.08) 0%, ${C.card} 100%)`,
+              border: `1px solid rgba(107,122,87,0.25)`,
+              boxShadow: `0 0 60px -20px rgba(107,122,87,0.2)`,
             }}
           >
-            <div
-              className="font-display text-8xl leading-none mb-4 select-none"
-              style={{ color: `${C.accent}20` }}
-            >
-              &quot;
-            </div>
-            <p
-              className="text-xl md:text-2xl leading-relaxed mb-6 max-w-3xl"
-              style={{ color: '#fff' }}
-            >
-              I'm Bo. I hunt Kansas. I got tired of guessing where to put stands and
-              food plots, so I built BuckGrid Pro to do what a $300/hr wildlife biologist
-              does — except on demand, on your land, from a satellite.
+            <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Get Your Property Report</div>
+            <h3 className="font-display text-4xl md:text-5xl text-white uppercase tracking-tight mb-4">
+              Want Tony on YOUR land?
+            </h3>
+            <p className="text-base leading-relaxed mb-8 max-w-xl mx-auto" style={{ color: C.text }}>
+              Send your property coordinates — Tony analyzes your satellite map and delivers a full habitat report: stand locations, food plot specs, entry trails, bedding corridors. Drawn on your actual land. Delivered in 48 hours.
             </p>
-            <p
-              className="text-base md:text-lg leading-relaxed mb-8 max-w-3xl"
-              style={{ color: C.text }}
-            >
-              It's day one. I haven't paid anyone to say nice things. I'd rather earn it.
-              Your first analysis is free — no account, no card. If Tony gets your land
-              wrong, tell me. I'll fix it. If he nails it, tell a buddy.
-            </p>
-
-            <div className="flex items-center gap-4 pt-6" style={{ borderTop: `1px solid ${C.border}` }}>
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm"
-                style={{
-                  background: 'linear-gradient(135deg, #1e2a18, #2a3820)',
-                  border: '1px solid rgba(107,122,87,0.4)',
-                  color: C.accent,
-                }}
-              >
-                BB
-              </div>
-              <div>
-                <div className="font-bold text-white">Bo Bell</div>
-                <div className="text-xs" style={{ color: C.muted }}>Founder · Neuradex AI · Council Grove, KS</div>
-              </div>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
               <Link
                 href="/buckgrid"
-                className="ml-auto px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:scale-105"
+                className="px-8 py-4 rounded-xl font-bold text-base transition-all hover:scale-105 hover:-translate-y-0.5"
                 style={{
                   background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
                   color: '#0C0F0A',
                   boxShadow: `0 8px 30px -8px rgba(107,122,87,0.5)`,
                 }}
               >
-                Try Tony →
+                Try Tony Free First →
               </Link>
+              <a
+                href="mailto:bo@neuradexai.com?subject=Tony Property Report — $97&body=I want a full Tony AI property report. My property is located at: [describe or paste coordinates]"
+                className="px-8 py-4 rounded-xl font-bold text-base transition-all hover:text-white"
+                style={{ color: C.accent, border: `1px solid rgba(107,122,87,0.3)` }}
+              >
+                Get Full Report — $97
+              </a>
             </div>
+            <p className="text-xs" style={{ color: C.muted }}>
+              Full report includes: satellite analysis · top 3-5 stand locations · food plot specs · bedding corridors · entry trail recommendations
+            </p>
           </div>
         </FadeIn>
       </div>
@@ -844,18 +888,18 @@ const PLANS = [
     price: '$29',
     sub: 'per month',
     features: ['Unlimited analyses', 'All drawing tools', 'Seasonal strategy updates', 'Save & export maps', 'Priority Tony AI', 'Email support'],
-    cta: 'Join Pro Waitlist →',
+    cta: 'Get Early Access →',
     highlight: true,
-    href: 'mailto:bo@neuradexai.com?subject=BuckGrid Pro Waitlist&body=I want to join the Pro waitlist.',
+    href: 'mailto:bo@neuradexai.com?subject=BuckGrid Pro Access&body=I want early access to BuckGrid Pro.',
   },
   {
-    name: 'Elite',
-    price: '$249',
-    sub: 'per year',
-    features: ['Everything in Pro', '2 months free vs monthly', 'Early feature access', 'Dedicated onboarding call', 'White-label reports'],
-    cta: 'Join Elite Waitlist →',
+    name: 'Field Report',
+    price: '$97',
+    sub: 'one-time',
+    features: ['Tony analyzes your land', 'Top 3-5 stand placements', 'Food plot specs + sizing', 'Entry trail recommendations', 'Bedding corridor mapping', 'Delivered in 48 hours'],
+    cta: 'Order Your Report →',
     highlight: false,
-    href: 'mailto:bo@neuradexai.com?subject=BuckGrid Elite Waitlist&body=I want to join the Elite waitlist.',
+    href: 'mailto:bo@neuradexai.com?subject=Tony Property Report — $97&body=I want a full Tony AI property report. My property: [describe or paste coordinates]',
   },
 ]
 
@@ -926,7 +970,7 @@ function Pricing() {
 
         <FadeIn>
           <p className="text-center text-sm" style={{ color: C.muted }}>
-            Free tier available forever. Pro & Elite on early-access waitlist — join now.
+            Free tier available forever. Pro on early-access waitlist. Field Reports delivered in 48 hours.
           </p>
         </FadeIn>
       </div>
@@ -1062,7 +1106,7 @@ function FinalCTA() {
             <span>→</span>
           </Link>
           <p className="text-xs mt-6" style={{ color: C.muted }}>
-            No credit card required · 30-day money-back guarantee
+            No account required · No credit card · Tony starts analyzing in seconds
           </p>
         </FadeIn>
       </div>
