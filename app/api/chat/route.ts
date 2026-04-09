@@ -766,7 +766,7 @@ export async function POST(req: NextRequest) {
     }
 
     const nvidiaKey = process.env.NVIDIA_API_KEY
-    const googleKey = process.env.GOOGLE_AI_KEY
+    const googleKey = process.env.GOOGLE_AI_KEY || process.env.GOOGLE_API_KEY
     const openaiKey = process.env.OPENAI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     if (!nvidiaKey && !googleKey && !openaiKey && !anthropicKey) {
