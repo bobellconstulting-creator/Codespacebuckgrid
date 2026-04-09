@@ -1,0 +1,6 @@
+{
+  "functions": {
+    "app/api/chat/route.ts": { "maxDuration": 90 },
+    "app/api/spatial/route.ts": { "maxDuration": 30 }
+  }
+}

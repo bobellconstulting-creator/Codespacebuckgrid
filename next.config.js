@@ -22,6 +22,15 @@ const nextConfig = {
   images: {
     unoptimized: true
   },
+  webpack(config) {
+    // @turf/buffer uses d3-geo's ESM index which references ./src/* not present in the npm build.
+    // Alias to the CJS bundle so webpack resolves cleanly.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'd3-geo': require.resolve('d3-geo/build/d3-geo.js'),
+    }
+    return config
+  },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }]
   }
