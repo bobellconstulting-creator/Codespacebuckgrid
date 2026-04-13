@@ -1,36 +1,156 @@
 @import "tailwindcss";
 
+/* ─── BuckGrid Pro — Tactical Heritage ─────────────────────────────────────
+   Sitka materiality. Linear-grade grid. Apparel-grade marks.
+   Palette is restrained on purpose. One accent: brass.
+   ──────────────────────────────────────────────────────────────────────── */
+
 @theme {
-  /* BuckGrid Pro Brand System */
-  --color-bg-deep:    #1E2122;
-  --color-bg-base:    #3A4042;
-  --color-olive:      #6B7A57;
-  --color-olive-dark: #4A543D;
-  --color-orange:     #C86633;
-  --color-text:       #E2E2E2;
-  --color-text-dim:   #9AA090;
-  --color-border:     rgba(107,122,87,0.35);
-  --color-border-strong: rgba(107,122,87,0.65);
-  --font-display: 'Teko', 'Oswald', 'Impact', sans-serif;
-  --font-mono: 'Roboto Mono', 'Inter', monospace;
+  /* Earth */
+  --color-ink:    #0E1410;   /* near-black, green undertone */
+  --color-ink-2:  #161C17;   /* raised surface */
+  --color-ink-3:  #1F2620;   /* card */
+  --color-bone:   #F5F1E8;   /* warm parchment */
+  --color-bone-2: #E8E2D2;   /* secondary parchment */
+
+  /* Field */
+  --color-moss:   #3D5141;   /* deep forest, brand primary */
+  --color-olive:  #6B7A4F;   /* utility olive */
+  --color-stone:  #8B8678;   /* neutral grey-brown, secondary text */
+
+  /* Metals — signature, used sparingly */
+  --color-brass:  #B8923A;   /* antique brass, the one accent */
+  --color-copper: #B86B3A;   /* warm copper, secondary accent */
+
+  /* Alerts only */
+  --color-blood:  #7A1F1F;
+
+  /* Type */
+  --font-display: 'Stardos Stencil', 'Black Ops One', 'Impact', sans-serif;
+  --font-sans:    'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
 }
+
+/* Google fonts — stencil display + Inter body + JetBrains data */
+@import url('https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 html, body {
-  height: 100%;
   margin: 0;
   padding: 0;
-  background: #1E2122;
-  color: #E2E2E2;
-  box-sizing: border-box;
+  background: #0E1410;
+  color: #F5F1E8;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.chatArea {
-  flex: 1;
-  overflow-y: auto;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  scrollbar-width: none;
+::selection {
+  background: #B8923A;
+  color: #0E1410;
 }
-.chatArea::-webkit-scrollbar { display: none; }
+
+/* Stencil display headlines */
+.font-stencil {
+  font-family: 'Stardos Stencil', 'Black Ops One', Impact, sans-serif;
+  letter-spacing: 0.02em;
+}
+
+/* Mono data readouts */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
+}
+
+/* Topographic contour background — pure SVG, no images */
+.bg-topo {
+  background-color: #0E1410;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600'><g fill='none' stroke='%236B7A4F' stroke-width='1' opacity='0.18'><path d='M -50 120 Q 150 60 320 130 T 700 110'/><path d='M -50 160 Q 180 100 350 170 T 700 150'/><path d='M -50 200 Q 150 140 320 210 T 700 190'/><path d='M -50 240 Q 180 180 350 250 T 700 230'/><path d='M -50 280 Q 150 220 320 290 T 700 270'/><path d='M -50 320 Q 180 260 350 330 T 700 310'/><path d='M -50 360 Q 150 300 320 370 T 700 350'/><path d='M -50 400 Q 180 340 350 410 T 700 390'/><path d='M -50 440 Q 150 380 320 450 T 700 430'/><path d='M -50 480 Q 180 420 350 490 T 700 470'/></g></svg>");
+  background-size: 720px 720px;
+}
+
+/* Canvas paper noise — apply over surfaces for materiality */
+.bg-canvas {
+  background-color: #161C17;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.42  0 0 0 0 0.48  0 0 0 0 0.31  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Bone parchment surface */
+.bg-bone {
+  background-color: #F5F1E8;
+  color: #0E1410;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55  0 0 0 0 0.50  0 0 0 0 0.40  0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>");
+}
+
+/* Stencil divider rule */
+.rule-stencil {
+  height: 2px;
+  background-image: linear-gradient(90deg, #B8923A 0 12px, transparent 12px 20px);
+  background-size: 20px 2px;
+}
+
+/* Brass CTA — the only loud thing on the page */
+.btn-brass {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.95rem 1.6rem;
+  background: #B8923A;
+  color: #0E1410;
+  font-family: 'Stardos Stencil', Impact, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  border: 2px solid #0E1410;
+  box-shadow: 4px 4px 0 0 #0E1410;
+  transition: transform 180ms cubic-bezier(.16,1,.3,1), box-shadow 180ms;
+}
+.btn-brass:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 0 #0E1410;
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.95rem 1.6rem;
+  background: transparent;
+  color: #F5F1E8;
+  font-family: 'Stardos Stencil', Impact, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  border: 2px solid rgba(245,241,232,0.35);
+  transition: border-color 180ms, color 180ms;
+}
+.btn-ghost:hover {
+  border-color: #B8923A;
+  color: #B8923A;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Mobile / PWA polish — safe-area and iOS chrome */
+html, body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  -webkit-text-size-adjust: 100%;
+}
+/* Safe-area insets exposed as CSS vars so fixed/absolute layers can consume them.
+   Applying directly to body is a no-op for position:fixed roots. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+/* Prevent iOS auto-zoom on input focus — keep inputs >= 16px */
+@media (max-width: 768px) {
+  input, select, textarea { font-size: 16px; }
+}

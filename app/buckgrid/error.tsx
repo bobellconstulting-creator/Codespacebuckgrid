@@ -8,7 +8,7 @@ export default function BuckGridError({ error, reset }: { error: Error & { diges
   }, [error])
 
   return (
-    <div style={{ background: '#1E2122', height: '100vh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Teko', 'Oswald', sans-serif" }}>
+    <div style={{ background: '#1E2122', height: '100dvh', width: '100vw', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Teko', 'Oswald', sans-serif" }}>
       <div style={{ textAlign: 'center', maxWidth: '420px', padding: '0 24px' }}>
         <svg width="48" height="48" viewBox="0 0 100 100" fill="none" stroke="#6B7A57" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '20px', opacity: 0.6 }}>
           <path d="M 44 94 C 30 65, 8 45, 12 10" strokeWidth="9" />

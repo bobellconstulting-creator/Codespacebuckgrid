@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 const BuckGridProPage = dynamic(
   () => import('@/components/buckgrid/BuckGridProPage'),
   { ssr: false, loading: () => (
-    <div className="h-screen w-screen flex items-center justify-center" style={{ background: '#1E2122' }}>
+    <div className="w-screen flex items-center justify-center" style={{ background: '#1E2122', height: '100dvh', minHeight: '100vh' }}>
       <div className="flex flex-col items-center gap-4">
         {/* Rack mark — matches BuckLogo stroke paths */}
         <svg width="44" height="44" viewBox="0 0 100 100" fill="none" stroke="#6B7A57" strokeLinecap="round" strokeLinejoin="round">

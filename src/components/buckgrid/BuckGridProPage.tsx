@@ -34,9 +34,7 @@ export default function BuckGridProPage() {
   const [propertyName, setPropertyName] = useState('')
   const [hasDrawn, setHasDrawn] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth < 768 : false
-  )
+  const [isMobile, setIsMobile] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
 
@@ -48,6 +46,7 @@ export default function BuckGridProPage() {
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
+    check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
@@ -410,7 +409,7 @@ export default function BuckGridProPage() {
           left: 0,
           right: 0,
           zIndex: 2000,
-          maxHeight: '80vh',
+          maxHeight: '80dvh',
           overflowY: 'auto',
           background: '#3A4042',
           borderBottom: '1px solid rgba(107,122,87,0.12)',
