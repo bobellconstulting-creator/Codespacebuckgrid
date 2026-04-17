@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { NextResponse } from 'next/server'
 import type { OsmFeature, SpatialContext } from '../../../lib/spatial'
 import { fetchSpatialData } from '../../../lib/spatial'
+import { fetchNlcdPoint } from '../../../lib/nlcd'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -1128,9 +1129,44 @@ export async function POST(req: NextRequest) {
       conflictWarning: f.conflictWarning ?? f.spacingWarning,
     }))
 
-    // Post-validation removed — Tony's primary call + OSM bbox checks already enforce placement rules.
+    // NLCD post-validation: verify food_plot and stand centroids against actual land cover.
+    // Drop food_plots placed on forest/woody-wetland — the #1 reported accuracy bug.
+    const FOREST_CLASSES = new Set([41, 42, 43, 90])
+    const WATER_CLASSES = new Set([11])
+
+    const nlcdChecked = await Promise.all(
+      spacedAnnotations.map(async ann => {
+        if (ann.type !== 'food_plot' && ann.type !== 'stand') return ann
+        const geom = ann.geojson?.geometry
+        if (!geom) return ann
+        let centLat: number | null = null
+        let centLng: number | null = null
+        if (geom.type === 'Point') {
+          centLng = geom.coordinates[0]
+          centLat = geom.coordinates[1]
+        } else if (geom.type === 'Polygon') {
+          const ring = geom.coordinates[0] as [number, number][]
+          if (ring?.length) {
+            centLng = ring.reduce((s, c) => s + c[0], 0) / ring.length
+            centLat = ring.reduce((s, c) => s + c[1], 0) / ring.length
+          }
+        }
+        if (centLat === null || centLng === null) return ann
+        const sample = await fetchNlcdPoint(centLat, centLng).catch(() => null)
+        if (!sample) return ann
+        if (ann.type === 'food_plot' && FOREST_CLASSES.has(sample.landCoverCode)) {
+          return null // drop — food plot centroid is in forest/woody wetland
+        }
+        if (WATER_CLASSES.has(sample.landCoverCode)) {
+          return { ...ann, conflictWarning: `NLCD confirms open water at placement — invalid location` }
+        }
+        return ann
+      })
+    )
+    const validatedAnnotations = nlcdChecked.filter((a): a is NonNullable<typeof a> => a !== null)
+
     clearTimeout(globalTimer)
-    return NextResponse.json({ reply, annotations: spacedAnnotations })
+    return NextResponse.json({ reply, annotations: validatedAnnotations })
   } catch (err) {
     clearTimeout(globalTimer)
     console.error('[chat] error:', err)

@@ -45,7 +45,7 @@ export interface NlcdSample {
   tonyLabel: string
 }
 
-async function fetchNlcdPoint(lat: number, lng: number): Promise<NlcdSample | null> {
+export async function fetchNlcdPoint(lat: number, lng: number): Promise<NlcdSample | null> {
   const BUFFER = 0.001
   const bbox = `${lat - BUFFER},${lng - BUFFER},${lat + BUFFER},${lng + BUFFER}`
   const params = new URLSearchParams({
