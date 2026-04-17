@@ -777,8 +777,12 @@ export async function POST(req: NextRequest) {
     const { message, bounds, zoom, features = [], season = '', propertyName = '', spatialContext, chatHistory } = body
 
     // Validate and sanitize inputs
-    const trimmedMsg = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE_LENGTH).replace(/["""]/g, "'") : ''
-    if (!trimmedMsg) return NextResponse.json({ error: 'Message required' }, { status: 400 })
+    const rawMsg = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE_LENGTH).replace(/["""]/g, "'") : ''
+    if (!rawMsg) return NextResponse.json({ error: 'Message required' }, { status: 400 })
+    // Augment very short messages so LLMs don't refuse or hallucinate without context
+    const trimmedMsg = rawMsg.length < 20
+      ? `Analyze this hunting property and ${rawMsg}. Recommend stand locations, food plots, and bedding areas based on what you see.`
+      : rawMsg
     if (!isValidBounds(bounds)) return NextResponse.json({ error: 'Valid map bounds required' }, { status: 400 })
     const safeFeatures = Array.isArray(features) ? features.slice(0, MAX_FEATURES) : []
     const safePropertyName = typeof propertyName === 'string' ? propertyName.replace(/[^a-zA-Z0-9 '\-_.]/g, '').slice(0, 100) : ''
@@ -882,7 +886,40 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 2. Anthropic Sonnet 4.6 — fallback: tool_use schema for strict JSON
+      // 2. NVIDIA Llama 3.2 90B Vision — free fallback (moved before paid tiers)
+      if (!usedGemini && nvidiaKey) {
+        try {
+          const nvidiaPromise = fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${nvidiaKey}` },
+            body: JSON.stringify({
+              model: 'meta/llama-3.2-90b-vision-instruct',
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'text', text: tonyPrompt },
+                  { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
+                ],
+              }],
+              max_tokens: 4096,
+              temperature: 0.3,
+            }),
+          })
+          const result = await Promise.race([
+            nvidiaPromise,
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), 25_000)),
+          ])
+          if (!result.ok) throw new Error(`NVIDIA ${result.status}`)
+          const nvidiaJson = await result.json()
+          rawText = nvidiaJson.choices?.[0]?.message?.content?.trim() ?? ''
+          if (rawText) { usedGemini = true } // reuse flag to skip further fallbacks
+          else throw new Error('NVIDIA empty response')
+        } catch (nvidiaErr: unknown) {
+          console.warn('[chat] NVIDIA failed, falling back to Anthropic:', nvidiaErr instanceof Error ? nvidiaErr.message : nvidiaErr)
+        }
+      }
+
+      // 3. Anthropic Sonnet 4.6 — paid fallback: tool_use schema for strict JSON
       if (!usedGemini && anthropicKey) {
         try {
           const anthropicPromise = fetch('https://api.anthropic.com/v1/messages', {
@@ -923,39 +960,6 @@ export async function POST(req: NextRequest) {
           else throw new Error('Anthropic empty response')
         } catch (anthropicErr: unknown) {
           console.warn('[chat] Anthropic failed, falling back to OpenAI:', anthropicErr instanceof Error ? anthropicErr.message : anthropicErr)
-        }
-      }
-
-      // 3. NVIDIA Llama 3.2 90B Vision — fallback (key confirmed in env)
-      if (!usedGemini && !usedAnthropic && nvidiaKey) {
-        try {
-          const nvidiaPromise = fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${nvidiaKey}` },
-            body: JSON.stringify({
-              model: 'meta/llama-3.2-90b-vision-instruct',
-              messages: [{
-                role: 'user',
-                content: [
-                  { type: 'text', text: tonyPrompt },
-                  { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
-                ],
-              }],
-              max_tokens: 4096,
-              temperature: 0.3,
-            }),
-          })
-          const result = await Promise.race([
-            nvidiaPromise,
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), 25_000)),
-          ])
-          if (!result.ok) throw new Error(`NVIDIA ${result.status}`)
-          const nvidiaJson = await result.json()
-          rawText = nvidiaJson.choices?.[0]?.message?.content?.trim() ?? ''
-          if (rawText) { usedGemini = true } // reuse flag to skip further fallbacks
-          else throw new Error('NVIDIA empty response')
-        } catch (nvidiaErr: unknown) {
-          console.warn('[chat] NVIDIA failed, falling back to OpenAI:', nvidiaErr instanceof Error ? nvidiaErr.message : nvidiaErr)
         }
       }
 

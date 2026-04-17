@@ -138,7 +138,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
       // Client sends bounds + features only — no pre-flight /api/spatial call needed.
       try {
         const chatAbort = new AbortController()
-        const chatTimeout = setTimeout(() => chatAbort.abort(), 75_000)
+        const chatTimeout = setTimeout(() => chatAbort.abort(), 110_000)
         let res: Response
         // Send last 6 messages (excluding __thinking__) as history context
         const historyToSend = chat
