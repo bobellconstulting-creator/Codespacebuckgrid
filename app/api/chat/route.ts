@@ -768,9 +768,10 @@ export async function POST(req: NextRequest) {
 
     const nvidiaKey = process.env.NVIDIA_API_KEY
     const googleKey = process.env.GOOGLE_AI_KEY || process.env.GOOGLE_API_KEY
+    const groqKey = process.env.GROQ_API_KEY
     const openaiKey = process.env.OPENAI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
-    if (!nvidiaKey && !googleKey && !openaiKey && !anthropicKey) {
+    if (!nvidiaKey && !googleKey && !groqKey && !openaiKey && !anthropicKey) {
       return NextResponse.json({ error: 'Server configuration error', reply: 'Tony needs a fresh API key — contact support to get Tony back online.' }, { status: 500 })
     }
 
@@ -887,7 +888,40 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 2. NVIDIA Llama 3.2 90B Vision — free fallback (moved before paid tiers)
+      // 2. Groq Llama 3.2 90B Vision — free, fast fallback (OpenAI-compatible)
+      if (!usedGemini && groqKey) {
+        try {
+          const groqPromise = fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+            body: JSON.stringify({
+              model: 'llama-3.2-90b-vision-preview',
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
+                  { type: 'text', text: tonyPrompt },
+                ],
+              }],
+              max_tokens: 4096,
+              temperature: 0.3,
+            }),
+          })
+          const result = await Promise.race([
+            groqPromise,
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), 20_000)),
+          ])
+          if (!result.ok) throw new Error(`Groq ${result.status}`)
+          const groqJson = await result.json()
+          rawText = groqJson.choices?.[0]?.message?.content?.trim() ?? ''
+          if (rawText) { usedGemini = true }
+          else throw new Error('Groq empty response')
+        } catch (groqErr: unknown) {
+          console.warn('[chat] Groq failed, falling back to NVIDIA:', groqErr instanceof Error ? groqErr.message : groqErr)
+        }
+      }
+
+      // 3. NVIDIA Llama 3.2 90B Vision — free fallback
       if (!usedGemini && nvidiaKey) {
         try {
           const nvidiaPromise = fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
