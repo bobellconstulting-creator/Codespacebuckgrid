@@ -43,12 +43,12 @@ const HABITAT_TOOL: Record<string, unknown> = {
       reply: { type: 'string', description: 'Full habitat analysis and recommendations for display to user. Must address all 5 audit factors.' },
       features: {
         type: 'array',
-        maxItems: 5,
+        maxItems: 10,
         items: {
           type: 'object',
           required: ['type', 'label', 'why', 'confidence', 'priority', 'pixel_x', 'pixel_y', 'geometry'],
           properties: {
-            type: { type: 'string', enum: ['stand', 'food_plot', 'bedding', 'trail', 'water', 'mineral', 'scrape_line', 'travel_corridor'] },
+            type: { type: 'string', enum: ['stand', 'food_plot', 'bedding', 'trail', 'water', 'mineral', 'scrape_line', 'travel_corridor', 'sanctuary', 'staging_area', 'sneak_trail', 'access_trail', 'access_point', 'pinch_point'] },
             label: { type: 'string' },
             why: { type: 'string' },
             confidence: { type: 'integer', minimum: 0, maximum: 100 },
@@ -569,14 +569,14 @@ ${boundaryBlock}TERRAIN READING RULES — use OSM verified features as primary g
 - EDGE TYPES: A hard edge (timber directly into field) is lower value than a soft edge (timber → brushy fringe → grass strip → field). If you see a gradual "feathered" color transition in the satellite image, call it out as a soft edge — this is premium habitat.
 - INSIDE CORNERS: Where two field edges meet in an L-shape, the inside corner is almost always the highest-value stand site on the property. Flag this whenever visible.
 - Open agricultural/cleared ground: primary food plot candidate. Never place food plots inside confirmed forest polygons.
-- FOOD PLOT SIZE MANDATE: Never recommend a soybean plot under 2 acres or corn under 3 acres — undersized plots are eaten out before they provide hunting value. Clover and brassicas minimum 0.5 acres. Always state the acreage in the food_plot label.
-- SUN EXPOSURE: Food plots need 6-8 hours direct sun. Any clearing entirely surrounded by tall timber may get less than 4 hours — flag this and note that minimum clearing width for adequate sun is approximately 1.5x the height of surrounding trees.
-- SOIL TEST MANDATE: For every food plot recommendation, include in the "why": "Soil test required before seeding — target pH 6.2-6.8. Forest soils typically need 1-2 tons/acre lime."
+- SUN EXPOSURE: Food plots need 6–8 hours direct sun. Any clearing entirely surrounded by tall timber may get less than 4 hours — flag this; minimum clearing width for adequate sun is ~1.5× the height of surrounding trees.
 - WATER FEATURES — STRICT RULE: Do NOT recommend ponds, impoundments, or water features unless they are explicitly confirmed in the SPATIAL INTELLIGENCE section as OSM-verified water. Dark patches, shadows, or low depressions visible in the satellite image are NOT proof of water. If OSM shows no water feature, do not place one. Water features placed in open areas will NOT be used during daylight — they require 50+ yards of timber cover on at least two sides.
 - Structures/buildings: human pressure zone. No stands within 100m. Effective exclusion zone 200+ yards for mature bucks on pressured properties.
 - Roads/tracks: access reference only. Stands must be upwind of roads. Every road contaminates 200+ yards on both sides with human scent — factor this into stand approach routes.
-- SANCTUARY FLAG: If no area on this property appears to be 5+ contiguous acres of undisturbed dense cover away from roads and structures, call this out explicitly. No sanctuary = no mature bucks holding on the property.
-- SADDLES: Where elevation shows two adjacent high points with a lower saddle between them, this is a top-5 rut location. Flag saddles with at least 15 feet of relief between the saddle floor and adjacent ridgetops.
+- SANCTUARY FLAG: If no area on this property appears to be 5+ contiguous acres of undisturbed dense cover away from roads and structures, call this out explicitly. No sanctuary = no mature bucks holding on the property. When sanctuary ground IS identified, generate a sanctuary Polygon feature over it. Priority 1. Label "Sanctuary — [compass location]." This is never-entry ground — state that explicitly.
+- SNEAK TRAILS: Generate as sneak_trail LineString features. Route parallel to ridgelines, 50–100 yards inside timber edge, never crossing open fields. Every stand site needs two: a morning approach (downwind of bedding, following thermal descent) and an evening approach (downwind of food, following rising thermal). Label each with the wind direction it is designed for.
+- STAGING AREAS: Every mature buck has a staging area — a dense 1–5 acre thicket 60–150 yards from the primary food source where he waits for darkness. Generate staging_area Polygon features in brushy fringe between timber and field edges. A stand at the staging area outperforms a food-edge stand for mature bucks. Label with cover type and distance from field edge.
+- SADDLES: Where elevation shows two adjacent high points with a lower saddle between them, this is a top-5 rut location. Flag saddles with at least 15 feet of relief between the saddle floor and adjacent ridgetops. Generate a pinch_point Point feature at every confirmed saddle.
 - BENCHES: A flat terrace cut into a hillside (appears as a slight horizontal "step" in slope). Deer travel benches like highways. Stands on the downhill edge of a bench are consistent producers.
 - THERMAL RULES — MORNING HUNTS: stands should be on elevated terrain, benches, or mid-slope. Cold air pools scent in drainages at dawn — a morning stand in a drainage is a mistake. EVENING HUNTS: stands in lower terrain, drainage edges, or valley floors. Thermals rise uphill in the evening — scent goes upward.
 - ENTRY TRAIL RULE: Every entry trail you recommend must (1) never cross through bedding, (2) approach from downwind or crosswind of bedding, (3) use creek bottoms when available (sound and scent masking), and (4) be designed for a specific wind direction — state which wind the trail is designed for.
@@ -584,10 +584,9 @@ ${boundaryBlock}TERRAIN READING RULES — use OSM verified features as primary g
 - CORRIDOR WIDTH: Only call something a "funnel" or "pinch point" if the wooded corridor is 50-200 yards wide. Wider than 300 yards = open block — set up on an interior feature instead.
 - STAGING AREAS: Every mature buck has a staging area — a dense 1-5 acre thicket 60-150 yards from the primary food source where he waits for darkness. You CANNOT see these from summer satellite (leaves mask them) but you CAN identify WHERE they would be: look for brushy fringe or early-successional cover between the main timber block and any field edge. Staging area stands outperform food-edge stands for mature bucks. Label any stand in this 60-150 yard zone a "staging area stand" and specify how it intercepts the buck before he commits to the field.
 - KILL PLOT vs DESTINATION PLOT: A kill plot is 0.1-0.5 acres of clover or brassicas tucked inside the timber edge 60-100 yards from the main food source — designed specifically to hold mature bucks in daylight, adjacent to their staging area. A destination plot is 2-5+ acres in open ground for herd nutrition, not usually hunted. When both fit the property, put the kill plot on the timber edge nearest suspected bedding; destination plot further away.
-- FOOD PLOT COVERAGE RULE: Total food plot acreage should be 3-5% of huntable property acres. If this property has ~${approxAcres} visible acres, the target is ${targetFoodPlotAcres} acres in food plots. State this calculation in your reply when evaluating food plot needs.
-- TSI (TIMBER STAND IMPROVEMENT): When recommending bedding area improvements where canopy is too open (deer visible 100+ yards under canopy), prescribe TSI: hinge-cut 10-20 trees per acre — cut 60% through the trunk at 4 feet height so tree falls but stays alive, creating immediate horizontal screening cover and deer browse. State "hinge-cut TSI recommended" with estimated tree density when this applies.
-- SOUTH-FACING SLOPES: Identified from satellite by lighter, drier-looking ground, less dense canopy, more open appearance. These warm first in winter — deer bed on south-facing slopes in November-February. Identify these in your terrain read when slope/aspect data confirms south-facing terrain.
-- FOOD PLOT % MANDATE: In every food plot recommendation, state the acreage as a % of total visible property: "X.X acres = Y% of ~${approxAcres}-acre property (target: ${targetFoodPlotAcres} acres total for this size)."
+- FOOD PLOT COVERAGE: Target 3–5% of huntable acres in food plots (~${targetFoodPlotAcres} acres for this property). State this in your reply and in each food_plot feature's "why" as "X acres = Y% of ~${approxAcres}-acre property."
+- TSI (TIMBER STAND IMPROVEMENT): When recommending bedding area improvements where canopy is too open (deer visible 100+ yards under canopy), prescribe TSI: hinge-cut 10–20 trees per acre — cut 60% through the trunk at 4 feet height so the tree falls but stays alive, creating horizontal screening cover and browse. State "hinge-cut TSI recommended" with estimated tree density.
+- SOUTH-FACING SLOPES: Lighter, drier-looking ground, less dense canopy. These warm first in winter — deer bed on south-facing slopes November–February. Flag when slope/aspect data confirms.
 - When uncertain about terrain type, state your uncertainty and recommend the user verify on satellite before acting.
 
 PREVAILING WIND: ${prevailingWind}
@@ -688,8 +687,8 @@ Exact JSON format:
   ]
 }
 
-Feature types: "food_plot" (Polygon), "bedding" (Polygon), "trail" (LineString), "stand" (Point), "water" (Point or Polygon), "mineral" (Point), "scrape_line" (LineString), "travel_corridor" (LineString)
-Return 3-5 features ranked by seasonal priority. Place every feature on terrain that visually matches its purpose.
+Feature types: "food_plot" (Polygon), "bedding" (Polygon), "sanctuary" (Polygon), "staging_area" (Polygon), "trail" (LineString), "sneak_trail" (LineString), "access_trail" (LineString), "stand" (Point), "access_point" (Point), "pinch_point" (Point), "water" (Point or Polygon), "mineral" (Point), "scrape_line" (LineString), "travel_corridor" (LineString)
+Return 6-10 features ranked by seasonal priority. A complete plan includes: at least 1 sanctuary, 2 stand sites, 2 sneak_trail routes, 1 staging_area, and food plots on open ground only. Place every feature on terrain that visually matches its purpose.
 Each feature MUST include:
 - "confidence": integer 0-100 (how certain you are this placement is correct given satellite clarity and OSM data)
 - "priority": integer 1-5 (1 = do this first this season)
@@ -861,7 +860,7 @@ export async function POST(req: NextRequest) {
       if (googleKey) {
         try {
           const geminiPromise = fetch(
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'x-goog-api-key': googleKey },
@@ -1089,6 +1088,12 @@ export async function POST(req: NextRequest) {
           mineral: ['Point'],
           scrape_line: ['LineString'],
           travel_corridor: ['LineString'],
+          sanctuary: ['Polygon'],
+          staging_area: ['Polygon'],
+          sneak_trail: ['LineString'],
+          access_trail: ['LineString'],
+          access_point: ['Point'],
+          pinch_point: ['Point'],
         }
         const allowed = validGeomTypes[f.type]
         if (!allowed) return true // unknown type, allow through
