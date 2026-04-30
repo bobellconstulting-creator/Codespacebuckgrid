@@ -12,7 +12,7 @@ const MAX_MESSAGE_LENGTH = 2000
 const MAX_FEATURES = 50
 const ESRI_TIMEOUT_MS = 12000
 const ANTHROPIC_TIMEOUT_MS = 50000
-const GEMINI_TIMEOUT_MS = 22000
+const GEMINI_TIMEOUT_MS = 12000
 const OPENAI_TIMEOUT_MS = 25000
 // Global deadline — ensures we always respond before Vercel's 120s hard kill
 const GLOBAL_DEADLINE_MS = 108_000
@@ -856,100 +856,82 @@ export async function POST(req: NextRequest) {
       let usedAnthropic = false
       let usedOpenAI = false
 
-      // 1. Gemini 2.0 Flash — PRIMARY (fast vision, no thinking overhead)
+      const geminiBody = JSON.stringify({
+        contents: [{ parts: [
+          { inline_data: { mime_type: 'image/png', data: imgBase64 } },
+          { text: tonyPrompt }
+        ]}],
+        generationConfig: { maxOutputTokens: 8192 },
+      })
+
+      // 1. Gemini 2.5 Flash — PRIMARY (best spatial vision)
       if (googleKey) {
         try {
-          const geminiPromise = fetch(
-            'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
-            {
+          const result = await Promise.race([
+            fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'x-goog-api-key': googleKey },
-              body: JSON.stringify({
-                contents: [{ parts: [
-                  { inline_data: { mime_type: 'image/png', data: imgBase64 } },
-                  { text: tonyPrompt }
-                ]}],
-                generationConfig: { maxOutputTokens: 8192 },
-              }),
-            }
-          )
-          const result = await Promise.race([
-            geminiPromise,
+              body: geminiBody,
+            }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)),
           ])
-          if (!result.ok) throw new Error(`Gemini ${result.status}`)
-          const geminiJson = await result.json()
-          rawText = geminiJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
+          if (!result.ok) throw new Error(`Gemini2.5 ${result.status}`)
+          const j = await result.json()
+          rawText = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
           if (rawText) usedGemini = true
-          else throw new Error('Gemini empty response')
-        } catch (geminiErr: unknown) {
-          console.warn('[chat] Gemini failed, falling back to Anthropic:', geminiErr instanceof Error ? geminiErr.message : geminiErr)
+          else throw new Error('Gemini2.5 empty')
+        } catch (e: unknown) {
+          console.warn('[chat] Gemini 2.5 Flash failed:', e instanceof Error ? e.message : e)
         }
       }
 
-      // 2. Groq Llama 3.2 90B Vision — free, fast fallback (OpenAI-compatible)
-      if (!usedGemini && groqKey) {
+      // 2. Gemini 2.0 Flash — stable Google fallback
+      if (!usedGemini && googleKey) {
         try {
-          const groqPromise = fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-            body: JSON.stringify({
-              model: 'llama-3.2-90b-vision-preview',
-              messages: [{
-                role: 'user',
-                content: [
-                  { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
-                  { type: 'text', text: tonyPrompt },
-                ],
-              }],
-              max_tokens: 4096,
-              temperature: 0.3,
-            }),
-          })
           const result = await Promise.race([
-            groqPromise,
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), 20_000)),
+            fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': googleKey },
+              body: geminiBody,
+            }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)),
           ])
-          if (!result.ok) throw new Error(`Groq ${result.status}`)
-          const groqJson = await result.json()
-          rawText = groqJson.choices?.[0]?.message?.content?.trim() ?? ''
-          if (rawText) { usedGemini = true }
-          else throw new Error('Groq empty response')
-        } catch (groqErr: unknown) {
-          console.warn('[chat] Groq failed, falling back to NVIDIA:', groqErr instanceof Error ? groqErr.message : groqErr)
+          if (!result.ok) throw new Error(`Gemini2.0 ${result.status}`)
+          const j = await result.json()
+          rawText = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
+          if (rawText) usedGemini = true
+          else throw new Error('Gemini2.0 empty')
+        } catch (e: unknown) {
+          console.warn('[chat] Gemini 2.0 Flash failed:', e instanceof Error ? e.message : e)
         }
       }
 
       // 3. NVIDIA Llama 3.2 90B Vision — free fallback
       if (!usedGemini && nvidiaKey) {
         try {
-          const nvidiaPromise = fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${nvidiaKey}` },
-            body: JSON.stringify({
-              model: 'meta/llama-3.2-90b-vision-instruct',
-              messages: [{
-                role: 'user',
-                content: [
+          const result = await Promise.race([
+            fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${nvidiaKey}` },
+              body: JSON.stringify({
+                model: 'meta/llama-3.2-90b-vision-instruct',
+                messages: [{ role: 'user', content: [
                   { type: 'text', text: tonyPrompt },
                   { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
-                ],
-              }],
-              max_tokens: 4096,
-              temperature: 0.3,
+                ]}],
+                max_tokens: 4096,
+                temperature: 0.3,
+              }),
             }),
-          })
-          const result = await Promise.race([
-            nvidiaPromise,
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), 25_000)),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), 12_000)),
           ])
           if (!result.ok) throw new Error(`NVIDIA ${result.status}`)
-          const nvidiaJson = await result.json()
-          rawText = nvidiaJson.choices?.[0]?.message?.content?.trim() ?? ''
-          if (rawText) { usedGemini = true } // reuse flag to skip further fallbacks
-          else throw new Error('NVIDIA empty response')
-        } catch (nvidiaErr: unknown) {
-          console.warn('[chat] NVIDIA failed, falling back to Anthropic:', nvidiaErr instanceof Error ? nvidiaErr.message : nvidiaErr)
+          const j = await result.json()
+          rawText = j.choices?.[0]?.message?.content?.trim() ?? ''
+          if (rawText) usedGemini = true
+          else throw new Error('NVIDIA empty')
+        } catch (e: unknown) {
+          console.warn('[chat] NVIDIA failed:', e instanceof Error ? e.message : e)
         }
       }
 
