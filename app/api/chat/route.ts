@@ -12,7 +12,7 @@ const MAX_MESSAGE_LENGTH = 2000
 const MAX_FEATURES = 50
 const ESRI_TIMEOUT_MS = 12000
 const ANTHROPIC_TIMEOUT_MS = 50000
-const GEMINI_TIMEOUT_MS = 12000
+const GEMINI_TIMEOUT_MS = 8000
 const OPENAI_TIMEOUT_MS = 25000
 // Global deadline — ensures we always respond before Vercel's 120s hard kill
 const GLOBAL_DEADLINE_MS = 108_000
@@ -906,36 +906,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3. NVIDIA Llama 3.2 90B Vision — free fallback
-      if (!usedGemini && nvidiaKey) {
-        try {
-          const result = await Promise.race([
-            fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${nvidiaKey}` },
-              body: JSON.stringify({
-                model: 'meta/llama-3.2-90b-vision-instruct',
-                messages: [{ role: 'user', content: [
-                  { type: 'text', text: tonyPrompt },
-                  { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
-                ]}],
-                max_tokens: 4096,
-                temperature: 0.3,
-              }),
-            }),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), 12_000)),
-          ])
-          if (!result.ok) throw new Error(`NVIDIA ${result.status}`)
-          const j = await result.json()
-          rawText = j.choices?.[0]?.message?.content?.trim() ?? ''
-          if (rawText) usedGemini = true
-          else throw new Error('NVIDIA empty')
-        } catch (e: unknown) {
-          console.warn('[chat] NVIDIA failed:', e instanceof Error ? e.message : e)
-        }
-      }
-
-      // 3. Anthropic Sonnet 4.6 — paid fallback: tool_use schema for strict JSON
+      // 3. Anthropic Sonnet 4.6 — reliable vision fallback, fires immediately after free models
       if (!usedGemini && anthropicKey) {
         try {
           const anthropicPromise = fetch('https://api.anthropic.com/v1/messages', {
