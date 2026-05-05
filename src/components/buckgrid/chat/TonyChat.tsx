@@ -498,6 +498,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
 
           {/* Bottom sheet */}
           <div
+            aria-hidden={!isOpen}
+            inert={!isOpen || undefined}
             style={{
               position: 'fixed',
               left: 0,

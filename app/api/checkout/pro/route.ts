@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'pro_price_not_configured' }, { status: 500 })
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await stripe().checkout.sessions.create({
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
       customer_email: email,

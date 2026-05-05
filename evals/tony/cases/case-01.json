@@ -1,0 +1,14 @@
+{
+  "id": "case-01",
+  "name": "200ac mixed timber/ag, NE Kansas",
+  "image_path": "./images/case-01.png",
+  "bbox": { "north": 38.6250, "south": 38.6100, "east": -96.4400, "west": -96.4600 },
+  "user_message": "where should I put my food plot and best stand?",
+  "rubric": {
+    "must_include_features": ["food_plot", "stand"],
+    "must_cite_compass_direction": true,
+    "must_be_inside_bbox": true,
+    "min_confidence_field_present": true,
+    "no_water_unless_osm": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "case-02",
+  "name": "120ac CRP + creek bottom, Flint Hills",
+  "image_path": "./images/case-02.png",
+  "bbox": { "north": 38.6800, "south": 38.6700, "east": -96.5000, "west": -96.5150 },
+  "user_message": "I want to hold mature bucks all season. Where do I bed and stand?",
+  "rubric": {
+    "must_include_features": ["bedding", "stand"],
+    "must_cite_compass_direction": true,
+    "must_be_inside_bbox": true,
+    "min_confidence_field_present": true,
+    "no_water_unless_osm": true
+  }
+}

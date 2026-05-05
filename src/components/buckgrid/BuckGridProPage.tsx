@@ -56,6 +56,15 @@ export default function BuckGridProPage() {
     if (!seen) setShowOnboarding(true)
   }, [])
 
+  useEffect(() => {
+    if (!showOnboarding) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { localStorage.setItem('buckgrid_onboarded', '1'); setShowOnboarding(false) }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [showOnboarding])
+
   const handleSelectTool = useCallback((t: Tool) => {
     setActiveTool(t)
     if (t.id !== 'nav') setHasDrawn(true)
@@ -403,7 +412,10 @@ export default function BuckGridProPage() {
         />
       )}
       {isMobile && (
-        <div style={{
+        <div
+          aria-hidden={!isMenuOpen}
+          inert={!isMenuOpen || undefined}
+          style={{
           position: 'fixed',
           top: `${HEADER_H}px`,
           left: 0,
@@ -449,8 +461,8 @@ export default function BuckGridProPage() {
           ONBOARDING MODAL
       ═══════════════════════════════════════════════ */}
       {showOnboarding && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)' }}>
-          <div style={{
+        <div onClick={() => { localStorage.setItem('buckgrid_onboarded', '1'); setShowOnboarding(false) }} style={{ position: 'absolute', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
             width: '440px', maxWidth: 'calc(100vw - 32px)',
             background: '#2E3335',
             border: '1px solid rgba(107,122,87,0.2)',

@@ -1,0 +1,14 @@
+{
+  "id": "case-template",
+  "name": "TEMPLATE — copy this file, do not edit in place",
+  "image_path": "./images/case-template.png",
+  "bbox": { "north": 0, "south": 0, "east": 0, "west": 0 },
+  "user_message": "where should I put my food plot and best stand?",
+  "rubric": {
+    "must_include_features": ["food_plot", "stand"],
+    "must_cite_compass_direction": true,
+    "must_be_inside_bbox": true,
+    "min_confidence_field_present": true,
+    "no_water_unless_osm": true
+  }
+}

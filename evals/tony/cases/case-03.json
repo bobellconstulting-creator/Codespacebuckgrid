@@ -1,0 +1,14 @@
+{
+  "id": "case-03",
+  "name": "350ac timber block with interior food, Chase County",
+  "image_path": "./images/case-03.png",
+  "bbox": { "north": 38.5500, "south": 38.5300, "east": -96.3800, "west": -96.4050 },
+  "user_message": "Plan a full habitat layout: bedding, food, travel, and rut stand.",
+  "rubric": {
+    "must_include_features": ["bedding", "food_plot", "stand", "travel_corridor"],
+    "must_cite_compass_direction": true,
+    "must_be_inside_bbox": true,
+    "min_confidence_field_present": true,
+    "no_water_unless_osm": true
+  }
+}

@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
+    event = stripe().webhooks.constructEvent(rawBody, sig, webhookSecret)
   } catch (e) {
     console.error('[webhook] signature verification failed:', e)
     return NextResponse.json({ error: 'invalid_signature' }, { status: 400 })
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
         if (!email && 'customer' in obj) {
           const custId = typeof obj.customer === 'string' ? obj.customer : (obj.customer as Stripe.Customer)?.id ?? ''
           if (custId) {
-            const customer = await stripe.customers.retrieve(custId)
+            const customer = await stripe().customers.retrieve(custId)
             if (!customer.deleted) email = (customer as Stripe.Customer).email ?? ''
           }
         }

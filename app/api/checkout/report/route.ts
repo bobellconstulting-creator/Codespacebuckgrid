@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : undefined
     const property = typeof body.property === 'string' ? body.property.trim().slice(0, 200) : ''
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await stripe().checkout.sessions.create({
       mode: 'payment',
       line_items: [{
         price_data: {
