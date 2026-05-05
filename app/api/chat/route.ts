@@ -12,7 +12,7 @@ const MAX_MESSAGE_LENGTH = 2000
 const MAX_FEATURES = 50
 const ESRI_TIMEOUT_MS = 12000
 const ANTHROPIC_TIMEOUT_MS = 50000
-const GEMINI_TIMEOUT_MS = 8000
+const GEMINI_TIMEOUT_MS = 55000
 const OPENAI_TIMEOUT_MS = 25000
 // Global deadline — ensures we always respond before Vercel's 120s hard kill
 const GLOBAL_DEADLINE_MS = 108_000
