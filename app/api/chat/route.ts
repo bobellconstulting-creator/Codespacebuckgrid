@@ -714,10 +714,21 @@ function extractJsonFromText(text: string): string {
   if (objMatch) {
     const candidate = objMatch[0]
     try { JSON.parse(candidate); return candidate } catch {
-      // Try to recover partial JSON by finding last complete closing brace
       const lastBrace = candidate.lastIndexOf('}')
       if (lastBrace > 0) {
         const truncated = candidate.slice(0, lastBrace + 1)
+        try { JSON.parse(truncated); return truncated } catch {}
+      }
+    }
+  }
+  // Try raw JSON array — Gemini often returns [{...}] without a wrapper object
+  const arrMatch = text.match(/\[[\s\S]*\]/)
+  if (arrMatch) {
+    const candidate = arrMatch[0]
+    try { JSON.parse(candidate); return candidate } catch {
+      const lastBracket = candidate.lastIndexOf(']')
+      if (lastBracket > 0) {
+        const truncated = candidate.slice(0, lastBracket + 1)
         try { JSON.parse(truncated); return truncated } catch {}
       }
     }
@@ -1001,13 +1012,27 @@ export async function POST(req: NextRequest) {
     try {
       const jsonStr = extractJsonFromText(rawText)
       const parsed = JSON.parse(jsonStr)
-      tonyFeatures = Array.isArray(parsed.features) ? parsed.features : []
-      if (parsed.reply) {
-        reply = parsed.reply
-      } else if (tonyFeatures.length > 0) {
-        reply = `Identified ${tonyFeatures.length} feature recommendation(s). Check the map.`
+
+      if (Array.isArray(parsed)) {
+        // Gemini returned a raw feature array — extract analysis text before the JSON as reply
+        tonyFeatures = parsed
+        const jsonStart = rawText.search(/\[/)
+        const textBefore = jsonStart > 20 ? rawText.slice(0, jsonStart).trim() : ''
+        // Strip any trailing backtick fence markers from the text portion
+        reply = textBefore.replace(/```[\s\S]*$/, '').trim()
+          || `Identified ${tonyFeatures.length} feature${tonyFeatures.length !== 1 ? 's' : ''} on the map.`
       } else {
-        reply = rawText || 'No response from Tony.'
+        tonyFeatures = Array.isArray(parsed.features) ? parsed.features : []
+        if (parsed.reply) {
+          reply = parsed.reply
+        } else if (tonyFeatures.length > 0) {
+          // Extract text before JSON block as reply
+          const jsonStart = rawText.search(/[{\[]/)
+          const textBefore = jsonStart > 20 ? rawText.slice(0, jsonStart).replace(/```[\s\S]*$/, '').trim() : ''
+          reply = textBefore || `Identified ${tonyFeatures.length} feature${tonyFeatures.length !== 1 ? 's' : ''} on the map.`
+        } else {
+          reply = rawText || 'No response from Tony.'
+        }
       }
     } catch {
       reply = rawText || 'No response from Tony.'
