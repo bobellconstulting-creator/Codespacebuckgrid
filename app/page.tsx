@@ -873,35 +873,16 @@ function ComparisonTable() {
 
 // ─── Pricing ──────────────────────────────────────────────────────────────────
 
-const PLANS = [
-  {
-    name: 'Free',
-    price: '$0',
-    sub: 'forever',
-    features: ['1 property analysis', 'Satellite map view', 'Basic drawing tools', 'Tony AI response'],
-    cta: 'Start Free',
-    highlight: false,
-    href: '/buckgrid',
-  },
-  {
-    name: 'Pro',
-    price: '$29',
-    sub: 'per month',
-    features: ['Unlimited analyses', 'All drawing tools', 'Seasonal strategy updates', 'Save & export maps', 'Priority Tony AI', 'Email support'],
-    cta: 'Get Early Access →',
-    highlight: true,
-    href: 'mailto:bo@neuradexai.com?subject=BuckGrid Pro Access&body=I want early access to BuckGrid Pro.',
-  },
-  {
-    name: 'Field Report',
-    price: '$97',
-    sub: 'one-time',
-    features: ['Tony analyzes your land', 'Top 3-5 stand placements', 'Food plot specs + sizing', 'Entry trail recommendations', 'Bedding corridor mapping', 'Delivered in 48 hours'],
-    cta: 'Order Your Report →',
-    highlight: false,
-    href: 'mailto:bo@neuradexai.com?subject=Tony Property Report — $97&body=I want a full Tony AI property report. My property: [describe or paste coordinates]',
-  },
-]
+async function startCheckout(endpoint: string) {
+  try {
+    const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+    const data = await res.json()
+    if (data.url) window.location.href = data.url
+    else alert('Checkout unavailable — try again or email bo@neuradexai.com')
+  } catch {
+    alert('Checkout unavailable — try again or email bo@neuradexai.com')
+  }
+}
 
 function Pricing() {
   return (
@@ -917,60 +898,92 @@ function Pricing() {
         </FadeIn>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {PLANS.map((plan, i) => (
-            <FadeIn key={plan.name} delay={i * 0.1}>
-              <div
-                className="relative p-8 rounded-2xl flex flex-col h-full transition-all"
-                style={{
-                  background: plan.highlight ? `linear-gradient(160deg, rgba(107,122,87,0.08) 0%, ${C.card} 100%)` : C.card,
-                  border: plan.highlight ? `1px solid ${C.accent}` : `1px solid ${C.border}`,
-                  boxShadow: plan.highlight ? `0 0 50px -15px rgba(107,122,87,0.25)` : 'none',
-                }}
-              >
-                {plan.highlight && (
-                  <div
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold text-white"
-                    style={{ background: C.accent }}
-                  >
-                    Most Popular
-                  </div>
-                )}
-                <div className="mb-6">
-                  <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: plan.highlight ? C.accent : C.muted }}>
-                    {plan.name}
-                  </div>
-                  <div className="flex items-end gap-1">
-                    <span className="font-display text-5xl text-white">{plan.price}</span>
-                    <span className="text-sm mb-2" style={{ color: C.muted }}>/{plan.sub}</span>
-                  </div>
+          {/* Free */}
+          <FadeIn delay={0}>
+            <div className="relative p-8 rounded-2xl flex flex-col h-full" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+              <div className="mb-6">
+                <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Free</div>
+                <div className="flex items-end gap-1">
+                  <span className="font-display text-5xl text-white">$0</span>
+                  <span className="text-sm mb-2" style={{ color: C.muted }}>/forever</span>
                 </div>
-                <ul className="flex-1 space-y-3 mb-8">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-3 text-sm" style={{ color: C.text }}>
-                      <span className="mt-0.5 flex-shrink-0" style={{ color: C.green }}><IconCheck /></span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href={plan.href}
-                  className="block text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90 hover:scale-105 active:scale-100"
-                  style={{
-                    background: plan.highlight ? 'linear-gradient(135deg, #6B7A57, #4A543D)' : 'transparent',
-                    color: plan.highlight ? '#0C0F0A' : C.text,
-                    border: plan.highlight ? 'none' : `1px solid ${C.border}`,
-                  }}
-                >
-                  {plan.cta}
-                </Link>
               </div>
-            </FadeIn>
-          ))}
+              <ul className="flex-1 space-y-3 mb-8">
+                {['1 property analysis', 'Satellite map view', 'Basic drawing tools', 'Tony AI response'].map(f => (
+                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: C.text }}>
+                    <span className="mt-0.5 flex-shrink-0" style={{ color: C.green }}><IconCheck /></span>{f}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/buckgrid" className="block text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90" style={{ background: 'transparent', color: C.text, border: `1px solid ${C.border}` }}>
+                Start Free
+              </Link>
+            </div>
+          </FadeIn>
+
+          {/* Pro Annual */}
+          <FadeIn delay={0.1}>
+            <div className="relative p-8 rounded-2xl flex flex-col h-full" style={{ background: `linear-gradient(160deg, rgba(107,122,87,0.08) 0%, ${C.card} 100%)`, border: `1px solid ${C.accent}`, boxShadow: `0 0 50px -15px rgba(107,122,87,0.25)` }}>
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold text-white" style={{ background: C.accent }}>
+                Best Value
+              </div>
+              <div className="mb-6">
+                <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.accent }}>Pro Annual</div>
+                <div className="flex items-end gap-1">
+                  <span className="font-display text-5xl text-white">$79</span>
+                  <span className="text-sm mb-2" style={{ color: C.muted }}>/year</span>
+                </div>
+                <div className="text-xs mt-1" style={{ color: C.muted }}>Flat rate — no acreage limits</div>
+              </div>
+              <ul className="flex-1 space-y-3 mb-8">
+                {['Unlimited analyses', 'All drawing tools', 'Seasonal strategy updates', 'Save & export maps', 'Priority Tony AI', 'Email support'].map(f => (
+                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: C.text }}>
+                    <span className="mt-0.5 flex-shrink-0" style={{ color: C.green }}><IconCheck /></span>{f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => startCheckout('/api/checkout/pro')}
+                className="block w-full text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90 hover:scale-105 active:scale-100 cursor-pointer"
+                style={{ background: 'linear-gradient(135deg, #6B7A57, #4A543D)', color: '#0C0F0A', border: 'none' }}
+              >
+                Get Pro — $79/yr →
+              </button>
+            </div>
+          </FadeIn>
+
+          {/* Field Report */}
+          <FadeIn delay={0.2}>
+            <div className="relative p-8 rounded-2xl flex flex-col h-full" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+              <div className="mb-6">
+                <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Field Report</div>
+                <div className="flex items-end gap-1">
+                  <span className="font-display text-5xl text-white">$97</span>
+                  <span className="text-sm mb-2" style={{ color: C.muted }}>/one-time</span>
+                </div>
+                <div className="text-xs mt-1" style={{ color: C.muted }}>No subscription required</div>
+              </div>
+              <ul className="flex-1 space-y-3 mb-8">
+                {['Tony analyzes your land', 'Top 3-5 stand placements', 'Food plot specs + sizing', 'Entry trail recommendations', 'Bedding corridor mapping', 'Delivered in 48 hours'].map(f => (
+                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: C.text }}>
+                    <span className="mt-0.5 flex-shrink-0" style={{ color: C.green }}><IconCheck /></span>{f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => startCheckout('/api/checkout/report')}
+                className="block w-full text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90 hover:scale-105 active:scale-100 cursor-pointer"
+                style={{ background: 'transparent', color: C.text, border: `1px solid ${C.border}` }}
+              >
+                Order Your Report →
+              </button>
+            </div>
+          </FadeIn>
         </div>
 
         <FadeIn>
           <p className="text-center text-sm" style={{ color: C.muted }}>
-            Free tier available forever. Pro on early-access waitlist. Field Reports delivered in 48 hours.
+            Free tier available forever. Pro annual plan — flat rate, no acreage limits. Field Reports delivered in 48 hours.
           </p>
         </FadeIn>
       </div>
