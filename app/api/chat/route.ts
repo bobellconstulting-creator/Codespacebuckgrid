@@ -872,7 +872,7 @@ export async function POST(req: NextRequest) {
           { inline_data: { mime_type: 'image/png', data: imgBase64 } },
           { text: tonyPrompt }
         ]}],
-        generationConfig: { maxOutputTokens: 8192 },
+        generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json' },
       })
 
       // 1. Gemini 2.5 Flash — PRIMARY (best spatial vision)
