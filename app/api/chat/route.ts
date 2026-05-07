@@ -11,6 +11,7 @@ export const maxDuration = 120
 const MAX_MESSAGE_LENGTH = 2000
 const MAX_FEATURES = 50
 const ESRI_TIMEOUT_MS = 12000
+const HAIKU_TIMEOUT_MS = 25000
 const ANTHROPIC_TIMEOUT_MS = 50000
 const GEMINI_TIMEOUT_MS = 55000
 const OPENAI_TIMEOUT_MS = 25000
@@ -917,8 +918,52 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3. Anthropic Sonnet 4.6 — reliable vision fallback, fires immediately after free models
+      // 3. Anthropic Haiku 4.5 — fast vision fallback (8-15s, fires after Gemini rate limits)
       if (!usedGemini && anthropicKey) {
+        try {
+          const haikuPromise = fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': anthropicKey,
+              'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 4096,
+              system: TONY_SYSTEM_PROMPT,
+              tools: [HABITAT_TOOL],
+              tool_choice: { type: 'tool', name: 'place_habitat_features' },
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imgBase64 } },
+                  { type: 'text', text: tonyPrompt },
+                ],
+              }],
+            }),
+          })
+          const haikuResult = await Promise.race([
+            haikuPromise,
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), HAIKU_TIMEOUT_MS)),
+          ])
+          if (!haikuResult.ok) throw new Error(`Haiku ${haikuResult.status}`)
+          const haikuJson = await haikuResult.json()
+          const haikuToolBlock = haikuJson.content?.find((c: any) => c.type === 'tool_use')
+          if (haikuToolBlock?.input) {
+            rawText = JSON.stringify(haikuToolBlock.input)
+          } else {
+            rawText = haikuJson.content?.find((c: any) => c.type === 'text')?.text?.trim() ?? ''
+          }
+          if (rawText) usedAnthropic = true
+          else throw new Error('Haiku empty response')
+        } catch (e: unknown) {
+          console.warn('[chat] Haiku 4.5 failed, trying Sonnet:', e instanceof Error ? e.message : e)
+        }
+      }
+
+      // 4. Anthropic Sonnet 4.6 — deeper paid fallback
+      if (!usedGemini && !usedAnthropic && anthropicKey) {
         try {
           const anthropicPromise = fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
@@ -961,7 +1006,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 4. OpenAI — final fallback
+      // 5. OpenAI — final fallback
       if (!usedGemini && !usedAnthropic && openaiKey) {
         try {
           const openaiPromise = fetch('https://api.openai.com/v1/chat/completions', {
