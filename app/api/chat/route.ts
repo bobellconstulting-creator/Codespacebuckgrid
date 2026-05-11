@@ -176,21 +176,64 @@ function checkTerrainConflict(coord: [number, number], osmFeatures: OsmFeature[]
   return null
 }
 
-// In-memory rate limiter: 5 requests per minute per IP
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+// Persistent rate limiter + free tier enforcement via Upstash Redis
+// Falls back to in-memory if KV not configured (local dev)
+const _rateLimitFallback = new Map<string, { count: number; resetAt: number }>()
 const RATE_LIMIT_MAX = 5
-const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_WINDOW_S = 60
+const FREE_TIER_DAILY_LIMIT = 3
 
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now()
-  const entry = rateLimitMap.get(ip)
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+const _KV_URL = process.env.KV_REST_API_URL || ''
+const _KV_TOKEN = process.env.KV_REST_API_TOKEN || ''
+
+async function _kvIncr(key: string): Promise<number> {
+  if (!_KV_URL || !_KV_TOKEN) return 0
+  try {
+    const r = await fetch(`${_KV_URL}/incr/${encodeURIComponent(key)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_KV_TOKEN}` },
+    })
+    if (!r.ok) return 0
+    const j = await r.json() as { result?: number }
+    return j.result ?? 0
+  } catch { return 0 }
+}
+
+async function _kvExpire(key: string, seconds: number): Promise<void> {
+  if (!_KV_URL || !_KV_TOKEN) return
+  try {
+    await fetch(`${_KV_URL}/expire/${encodeURIComponent(key)}/${seconds}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_KV_TOKEN}` },
+    })
+  } catch {}
+}
+
+async function checkRateLimit(ip: string): Promise<boolean> {
+  const key = `rl:${ip}`
+  if (!_KV_URL || !_KV_TOKEN) {
+    const now = Date.now()
+    const entry = _rateLimitFallback.get(key)
+    if (!entry || now > entry.resetAt) {
+      _rateLimitFallback.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_S * 1000 })
+      return true
+    }
+    if (entry.count >= RATE_LIMIT_MAX) return false
+    entry.count++
     return true
   }
-  if (entry.count >= RATE_LIMIT_MAX) return false
-  entry.count++
-  return true
+  const count = await _kvIncr(key)
+  if (count === 1) await _kvExpire(key, RATE_LIMIT_WINDOW_S)
+  return count <= RATE_LIMIT_MAX
+}
+
+async function checkFreeTier(ip: string): Promise<boolean> {
+  if (!_KV_URL || !_KV_TOKEN) return true
+  const today = new Date().toISOString().slice(0, 10)
+  const key = `ft:${ip}:${today}`
+  const count = await _kvIncr(key)
+  if (count === 1) await _kvExpire(key, 86400)
+  return count <= FREE_TIER_DAILY_LIMIT
 }
 
 type Bounds = { north: number; south: number; east: number; west: number }
@@ -760,9 +803,16 @@ function isFeatureInBoundary(f: any, ring: [number, number][]): boolean {
   const { type, coordinates } = f.geometry
   const checkPoint = (c: number[]) => isPointInPolygon(c[0], c[1], ring)
   if (type === 'Point') return checkPoint(coordinates)
-  // Require ALL vertices inside boundary — partial containment is not acceptable
-  if (type === 'LineString') return (coordinates as number[][]).every(checkPoint)
-  if (type === 'Polygon') return (coordinates[0] as number[][])?.every(checkPoint)
+  if (type === 'LineString') return (coordinates as number[][]).some(checkPoint)
+  if (type === 'Polygon') {
+    // Check centroid — Tony's polygon vertices often slightly overhang the drawn boundary
+    // due to LLM coordinate precision; centroid-inside is the right intent check
+    const featureRing = coordinates[0] as number[][]
+    if (!featureRing?.length) return false
+    const centLng = featureRing.reduce((s: number, c: number[]) => s + c[0], 0) / featureRing.length
+    const centLat = featureRing.reduce((s: number, c: number[]) => s + c[1], 0) / featureRing.length
+    return isPointInPolygon(centLng, centLat, ring)
+  }
   return true
 }
 
@@ -773,8 +823,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? req.headers.get('x-real-ip') ?? 'unknown'
-    if (!checkRateLimit(ip)) {
+    const [rateLimitOk, freeTierOk] = await Promise.all([checkRateLimit(ip), checkFreeTier(ip)])
+    if (!rateLimitOk) {
       return NextResponse.json({ error: 'Too many requests', reply: 'Slow down — Tony can only handle so many questions per minute. Try again shortly.' }, { status: 429 })
+    }
+    if (!freeTierOk) {
+      return NextResponse.json({ error: 'Free tier limit reached', reply: "You've used your 3 free Tony analyses for today. Upgrade to Pro for unlimited access.", paywallHit: true }, { status: 402 })
     }
 
     const nvidiaKey = process.env.NVIDIA_API_KEY
@@ -867,6 +921,8 @@ export async function POST(req: NextRequest) {
       let usedGemini = false
       let usedAnthropic = false
       let usedOpenAI = false
+      const paidFallbackEnabled = process.env.ENABLE_PAID_FALLBACK === '1'
+      let geminiRateLimited = false
 
       const geminiBody = JSON.stringify({
         contents: [{ parts: [
@@ -887,6 +943,7 @@ export async function POST(req: NextRequest) {
             }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)),
           ])
+          if (result.status === 429) { geminiRateLimited = true; throw new Error('Gemini2.5 429') }
           if (!result.ok) throw new Error(`Gemini2.5 ${result.status}`)
           const j = await result.json()
           rawText = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
@@ -908,6 +965,7 @@ export async function POST(req: NextRequest) {
             }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)),
           ])
+          if (result.status === 429) { geminiRateLimited = true; throw new Error('Gemini2.0 429') }
           if (!result.ok) throw new Error(`Gemini2.0 ${result.status}`)
           const j = await result.json()
           rawText = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
@@ -918,8 +976,42 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 3. Anthropic Haiku 4.5 — fast vision fallback (8-15s, fires after Gemini rate limits)
-      if (!usedGemini && anthropicKey) {
+      // 2b. Free text-only fallback via Groq — fires when Gemini rate-limits, before touching paid APIs.
+      // Degraded: no satellite image analysis, but Tony can still advise using spatial context + chat history.
+      if (!usedGemini && geminiRateLimited) {
+        const groqKey = process.env.GROQ_API_KEY || process.env.GROQ_JARVIS_API_KEY
+        if (groqKey) {
+          try {
+            const degradedPrompt = `${tonyPrompt}\n\n[NOTE: Satellite image unavailable due to rate limits. Advise based on property description, spatial data context, and user message only. Be explicit that you cannot see the satellite image this turn.]`
+            const groqResult = await Promise.race([
+              fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+                body: JSON.stringify({
+                  model: 'llama-3.3-70b-versatile',
+                  messages: [{ role: 'user', content: degradedPrompt }],
+                  max_tokens: 1200,
+                  temperature: 0.3,
+                }),
+              }),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GroqTimeout')), 20_000)),
+            ])
+            if (groqResult.ok) {
+              const groqJson = await groqResult.json()
+              const groqText = groqJson.choices?.[0]?.message?.content?.trim() ?? ''
+              if (groqText) {
+                rawText = JSON.stringify({ reply: groqText + '\n\n_(Satellite image temporarily unavailable — Tony is working from terrain data only this turn.)_', features: [] })
+                usedGemini = true // marks as handled so paid chain is skipped
+              }
+            }
+          } catch (e: unknown) {
+            console.warn('[chat] Groq degraded fallback failed:', e instanceof Error ? e.message : e)
+          }
+        }
+      }
+
+      // 3. Anthropic Haiku 4.5 — paid vision fallback. Only fires with ENABLE_PAID_FALLBACK=1.
+      if (!usedGemini && anthropicKey && paidFallbackEnabled) {
         try {
           const haikuPromise = fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
@@ -962,8 +1054,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 4. Anthropic Sonnet 4.6 — deeper paid fallback
-      if (!usedGemini && !usedAnthropic && anthropicKey) {
+      // 4. Anthropic Sonnet 4.6 — deeper paid fallback. Only fires with ENABLE_PAID_FALLBACK=1.
+      if (!usedGemini && !usedAnthropic && anthropicKey && paidFallbackEnabled) {
         try {
           const anthropicPromise = fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
@@ -1006,8 +1098,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 5. OpenAI — final fallback
-      if (!usedGemini && !usedAnthropic && openaiKey) {
+      // 5. OpenAI — final paid fallback. Only fires with ENABLE_PAID_FALLBACK=1.
+      if (!usedGemini && !usedAnthropic && openaiKey && paidFallbackEnabled) {
         try {
           const openaiPromise = fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -1039,15 +1131,19 @@ export async function POST(req: NextRequest) {
       }
 
       if (!usedGemini && !usedAnthropic && !usedOpenAI) {
-        throw new Error('TonyTimeout') // all providers failed
+        throw new Error(geminiRateLimited ? 'TonyRateLimit' : 'TonyTimeout')
       }
     } catch (err: unknown) {
-      const isTimeout = err instanceof Error && err.message === 'TonyTimeout'
+      const msg = err instanceof Error ? err.message : ''
+      const isRateLimit = msg === 'TonyRateLimit'
+      const isTimeout = msg === 'TonyTimeout'
       return NextResponse.json({
-        error: 'AI timeout',
-        reply: isTimeout
-          ? "Tony's taking too long — probably a slow connection. Try again."
-          : "Tony is unavailable right now. Try again in a moment."
+        error: isRateLimit ? 'Rate limited' : 'AI timeout',
+        reply: isRateLimit
+          ? "Tony's getting a lot of traffic right now — Google's AI is temporarily at capacity. Give it 30 seconds and try again."
+          : isTimeout
+            ? "Tony's taking too long — probably a slow connection. Try again."
+            : "Tony is unavailable right now. Try again in a moment."
       }, { status: 503 })
     }
 

@@ -577,6 +577,11 @@ export default function BuckGridProPage() {
               <div style={{ marginTop: '12px', textAlign: 'center', fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#5A8A5F', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                 Start mapping your habitat now
               </div>
+              <div style={{ marginTop: '14px', padding: '8px 12px', background: 'rgba(255,180,0,0.06)', border: '1px solid rgba(255,180,0,0.2)', borderRadius: '4px', textAlign: 'center' }}>
+                <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', color: '#A89060', letterSpacing: '0.08em' }}>
+                  ⚠ Your maps are saved to this browser only — clearing browser data or switching devices will erase your property data.
+                </span>
+              </div>
             </div>
           </div>
         </div>

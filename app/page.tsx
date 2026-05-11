@@ -3,7 +3,7 @@
 import { motion, useInView, AnimatePresence } from 'framer-motion'
 import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
-import BuckLogo from '../src/components/buckgrid/ui/BuckLogo'
+import BuckGridMark from '../components/BuckGridMark'
 
 // ─── Color tokens ─────────────────────────────────────────────────────────────
 const C = {
@@ -67,7 +67,7 @@ function Nav() {
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
-          <BuckLogo size={30} color="#6B7A57" />
+          <BuckGridMark size={32} color="#B8923A" accent="#6B7A57" fill="#1E2122" />
           <div style={{ lineHeight: 1 }}>
             <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '18px', letterSpacing: '0.14em', color: '#D8D3C5', textTransform: 'uppercase', display: 'flex', alignItems: 'baseline', gap: '5px' }}>
               <span>BUCK<span style={{ color: C.accent }}>GRID</span></span>
