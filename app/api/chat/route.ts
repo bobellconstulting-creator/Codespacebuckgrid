@@ -49,7 +49,7 @@ const HABITAT_TOOL: Record<string, unknown> = {
           type: 'object',
           required: ['type', 'label', 'why', 'confidence', 'priority', 'pixel_x', 'pixel_y', 'geometry'],
           properties: {
-            type: { type: 'string', enum: ['stand', 'food_plot', 'bedding', 'trail', 'water', 'mineral', 'scrape_line', 'travel_corridor', 'sanctuary', 'staging_area', 'sneak_trail', 'access_trail', 'access_point', 'pinch_point'] },
+            type: { type: 'string', enum: ['stand', 'food_plot', 'bedding', 'trail', 'water', 'mineral', 'scrape_line', 'travel_corridor', 'sanctuary', 'staging_area', 'sneak_trail', 'access_trail', 'access_point', 'pinch_point', 'tall_standing_cover'] },
             label: { type: 'string' },
             why: { type: 'string' },
             confidence: { type: 'integer', minimum: 0, maximum: 100 },
@@ -618,7 +618,7 @@ ${boundaryBlock}TERRAIN READING RULES — use OSM verified features as primary g
 - Structures/buildings: human pressure zone. No stands within 100m. Effective exclusion zone 200+ yards for mature bucks on pressured properties.
 - Roads/tracks: access reference only. Stands must be upwind of roads. Every road contaminates 200+ yards on both sides with human scent — factor this into stand approach routes.
 - SANCTUARY FLAG: If no area on this property appears to be 5+ contiguous acres of undisturbed dense cover away from roads and structures, call this out explicitly. No sanctuary = no mature bucks holding on the property. When sanctuary ground IS identified, generate a sanctuary Polygon feature over it. Priority 1. Label "Sanctuary — [compass location]." This is never-entry ground — state that explicitly.
-- SNEAK TRAILS: Generate as sneak_trail LineString features. Route parallel to ridgelines, 50–100 yards inside timber edge, never crossing open fields. Every stand site needs two: a morning approach (downwind of bedding, following thermal descent) and an evening approach (downwind of food, following rising thermal). Label each with the wind direction it is designed for.
+- SNEAK TRAILS: Generate as sneak_trail LineString features with a MINIMUM of 4 coordinate pairs (start → bend1 → bend2 → stand). Route parallel to ridgelines, 50–100 yards inside timber edge, never crossing open fields or bedding. Every stand gets TWO sneak trails: morning approach (downwind of bedding, follows thermal descent into stand from uphill) and evening approach (downwind of food source, follows rising thermals, arrives from timber side). Each trail must START from a logical vehicle or parking point at the property edge, use creek/drainage bottoms when available (scent masking + sound masking), and terminate within 30 yards of the stand. Label: "Sneak trail — [Stand name] — [wind direction] wind". The "why" field MUST state: (1) which wind direction this trail is designed for, (2) whether it crosses bedding (it must not), (3) the start point description (field edge / creek bottom / two-track), (4) total estimated walking distance in yards.
 - STAGING AREAS: Every mature buck has a staging area — a dense 1–5 acre thicket 60–150 yards from the primary food source where he waits for darkness. Generate staging_area Polygon features in brushy fringe between timber and field edges. A stand at the staging area outperforms a food-edge stand for mature bucks. Label with cover type and distance from field edge.
 - SADDLES: Where elevation shows two adjacent high points with a lower saddle between them, this is a top-5 rut location. Flag saddles with at least 15 feet of relief between the saddle floor and adjacent ridgetops. Generate a pinch_point Point feature at every confirmed saddle.
 - BENCHES: A flat terrace cut into a hillside (appears as a slight horizontal "step" in slope). Deer travel benches like highways. Stands on the downhill edge of a bench are consistent producers.
@@ -648,7 +648,7 @@ STEP 3 — TERRAIN AND DRAINAGE READ: Based on shadows, drainage patterns, and c
 
 STEP 4 — WATER AND LIMITING FACTOR: Identify any confirmed water (dark/reflective patches + OSM confirmation). Then state the single biggest limiting factor on this property right now: is it food, cover, water, sanctuary, or access? This shapes the priority order for your recommendations.
 
-State your Step 1-4 findings concisely in your reply (2-4 sentences each), then proceed to the Habitat Audit below.
+Complete Steps 1-4 internally as your working analysis. Do NOT paste this section-by-section into your reply field — it bloats the chat and buries the actual recommendation. Synthesize your findings into 3-4 sentences maximum in the reply field after completing the Habitat Audit.
 
 HABITAT AUDIT — YOU MUST COMPLETE THIS BEFORE PLACING ANY FEATURE:
 This is the 5-factor check a professional consultant runs on every property. State each finding explicitly in your reply:
@@ -663,7 +663,7 @@ This is the 5-factor check a professional consultant runs on every property. Sta
 
 5. HUMAN PRESSURE MAP: Trace all roads, two-tracks, and structures. Deer near paved roads shift nocturnal within 48 hours of regular traffic. The huntable sanctuary is what remains inside the property boundary, at least 200 yards from all roads and structures.
 
-You MUST address all 5 audit points in your reply text before describing any feature. This is non-negotiable.
+You MUST work through all 5 audit points before placing any feature — but put your findings in your HEAD, not your reply. The reply field gets a 3-4 sentence SUMMARY ONLY: your single biggest finding, your #1 priority action, and one caveat if warranted. Example: "No sanctuary identified — mature bucks won't hold here. Priority 1 is hinge-cutting the NW timber block into a 6-acre no-entry sanctuary. The SE field edge is your best early-season food stand once sanctuary is established." That's the entire reply. Everything else goes on the map.
 
 User says: "${message}"
 
@@ -695,7 +695,7 @@ CRITICAL OUTPUT RULES:
 
 Exact JSON format:
 {
-  "reply": "Terrain read: [your 5-point terrain summary]. [Then your specific recommendations. Reference visible terrain. Use compass directions. Be direct.]",
+  "reply": "3-4 sentences MAX. Lead with your single biggest finding. Follow with the #1 priority action. One caveat if needed. No analysis pasted here — everything else is on the map.",
   "features": [
     {
       "type": "stand",
@@ -731,7 +731,8 @@ Exact JSON format:
   ]
 }
 
-Feature types: "food_plot" (Polygon), "bedding" (Polygon), "sanctuary" (Polygon), "staging_area" (Polygon), "trail" (LineString), "sneak_trail" (LineString), "access_trail" (LineString), "stand" (Point), "access_point" (Point), "pinch_point" (Point), "water" (Point or Polygon), "mineral" (Point), "scrape_line" (LineString), "travel_corridor" (LineString)
+Feature types: "food_plot" (Polygon), "bedding" (Polygon), "sanctuary" (Polygon), "staging_area" (Polygon), "tall_standing_cover" (Polygon), "trail" (LineString), "sneak_trail" (LineString), "access_trail" (LineString), "stand" (Point), "access_point" (Point), "pinch_point" (Point), "water" (Point or Polygon), "mineral" (Point), "scrape_line" (LineString), "travel_corridor" (LineString)
+- TALL_STANDING_COVER (Polygon): Areas to plant OR existing stands of switchgrass, native grasses, cereal rye, or cattails for visual screening and thermal cover. 0.5–5 acres. Use along field edges as a screening buffer between food sources and timber, or to fill in open areas lacking vertical cover. Label with recommended species and approximate dimensions. "why" must state: estimated planting acreage, intended purpose (screening/bedding/buffer), and distance from nearest food source or stand.
 Return 6-10 features ranked by seasonal priority. A complete plan includes: at least 1 sanctuary, 2 stand sites, 2 sneak_trail routes, 1 staging_area, and food plots on open ground only. Place every feature on terrain that visually matches its purpose.
 Each feature MUST include:
 - "confidence": integer 0-100 (how certain you are this placement is correct given satellite clarity and OSM data)
@@ -1209,6 +1210,7 @@ export async function POST(req: NextRequest) {
           travel_corridor: ['LineString'],
           sanctuary: ['Polygon'],
           staging_area: ['Polygon'],
+          tall_standing_cover: ['Polygon'],
           sneak_trail: ['LineString'],
           access_trail: ['LineString'],
           access_point: ['Point'],

@@ -150,6 +150,10 @@ export default function BuckGridProPage() {
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 1; } 40% { transform: translateY(-6px); opacity: 0.7; } }
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes acresFlyIn { from { opacity: 0; transform: translateY(8px) scale(0.88); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes modalBackdropIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes modalCardIn { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #1E2122; } ::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 2px; }
         ::-webkit-scrollbar-thumb:hover { background: #6B7A57; }
       `}</style>
@@ -294,7 +298,7 @@ export default function BuckGridProPage() {
             {/* Acres */}
             {propertyAcres > 0 ? (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', paddingLeft: '14px', borderLeft: '1px solid rgba(107,122,87,0.15)', marginLeft: '8px' }}>
-                <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '28px', letterSpacing: '0.04em', color: '#6B7A57', lineHeight: 1 }}>
+                <span key={propertyAcres} style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '28px', letterSpacing: '0.04em', color: '#6B7A57', lineHeight: 1, animation: 'acresFlyIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both' }}>
                   {propertyAcres.toLocaleString()}
                 </span>
                 <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '11px', color: '#6B7A57', letterSpacing: '0.12em', paddingBottom: '2px', opacity: 0.7 }}>AC</span>
@@ -461,7 +465,7 @@ export default function BuckGridProPage() {
           ONBOARDING MODAL
       ═══════════════════════════════════════════════ */}
       {showOnboarding && (
-        <div onClick={() => { localStorage.setItem('buckgrid_onboarded', '1'); setShowOnboarding(false) }} style={{ position: 'absolute', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)' }}>
+        <div onClick={() => { localStorage.setItem('buckgrid_onboarded', '1'); setShowOnboarding(false) }} style={{ position: 'absolute', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)', animation: 'modalBackdropIn 0.25s ease-out both' }}>
           <div onClick={(e) => e.stopPropagation()} style={{
             width: '440px', maxWidth: 'calc(100vw - 32px)',
             background: '#2E3335',
@@ -470,6 +474,7 @@ export default function BuckGridProPage() {
             borderRadius: '8px',
             boxShadow: '0 4px 24px rgba(0,0,0,0.6), 0 24px 80px rgba(0,0,0,0.85), 0 0 0 1px rgba(107,122,87,0.08)',
             overflow: 'hidden',
+            animation: 'modalCardIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
           }}>
             {/* Hero section with gradient background */}
             <div style={{

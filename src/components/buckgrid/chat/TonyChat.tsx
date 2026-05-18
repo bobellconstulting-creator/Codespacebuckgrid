@@ -293,7 +293,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             }
             const isUser = m.role === 'user'
             return (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: isUser ? 'flex-end' : 'flex-start', animation: 'fadeSlideIn 0.22s ease-out both' }}>
                 <div
                   style={{
                     padding: '8px 12px',
@@ -355,6 +355,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                           padding: '5px 9px',
                           fontSize: '11px',
                           cursor: ann.centroid && flyTo ? 'pointer' : 'default',
+                          animation: `fadeSlideIn 0.2s ease-out ${ai * 55}ms both`,
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' as const }}>
@@ -413,6 +414,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               <span><span style={{ color: '#CD853F' }}>✦</span> Mineral</span>
               <span><span style={{ color: '#8B0000' }}>⟿</span> Scrape Line</span>
               <span><span style={{ color: '#B8860B' }}>⇌</span> Travel Corridor</span>
+              <span><span style={{ color: '#7B9E5A' }}>■</span> Tall Cover</span>
               <span><span style={{ color: '#6B7A57' }}>▲</span> Tony rec</span>
             </div>
           )}
@@ -446,6 +448,9 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           <button
             onClick={send}
             disabled={loading || !input.trim()}
+            onMouseDown={e => { if (!loading && input.trim()) e.currentTarget.style.transform = 'scale(0.91)' }}
+            onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)' }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)' }}
             style={{
               background: loading || !input.trim() ? '#1A2018' : '#6B7A57',
               color: '#fff',
@@ -457,6 +462,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               fontSize: '14px',
               flexShrink: 0,
               minHeight: '44px',
+              transition: 'transform 0.1s ease, background 0.15s ease',
             }}
           >
             ➤
@@ -516,7 +522,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               boxShadow: '0 -8px 40px rgba(0,0,0,0.8)',
               fontFamily: "'Barlow Condensed', 'Inter', sans-serif",
               transform: isOpen ? 'translateY(0)' : 'translateY(100%)',
-              transition: 'transform 0.3s ease',
+              transition: isOpen ? 'transform 0.32s cubic-bezier(0.16, 1, 0.3, 1)' : 'transform 0.24s cubic-bezier(0.4, 0, 1, 1)',
               overflow: 'hidden',
             }}
           >

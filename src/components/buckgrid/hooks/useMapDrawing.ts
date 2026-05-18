@@ -81,6 +81,7 @@ const ANNOTATION_COLORS: Record<string, string> = {
   mineral: '#CD853F',
   scrape_line: '#8B0000',
   travel_corridor: '#B8860B',
+  tall_standing_cover: '#7B9E5A',
 }
 
 function colorForTool(tool: string): string {
