@@ -182,6 +182,8 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           if (drawable.length > 0) {
             drawAnnotations(drawable)
             setChat(p => [...p, { role: 'tony', text: `📍 ${drawable.length} feature${drawable.length !== 1 ? 's' : ''} drawn on map — tap any marker for details.` }])
+          } else if (data.annotations.length > 0) {
+            setChat(p => [...p, { role: 'tony', text: `Coordinates landed outside the current view. Zoom in closer to your property and tap Get Advice again.` }])
           }
         }
       } catch {

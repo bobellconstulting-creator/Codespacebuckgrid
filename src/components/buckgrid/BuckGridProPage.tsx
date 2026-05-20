@@ -102,7 +102,7 @@ export default function BuckGridProPage() {
     chatRef.current.triggerScan(contextPrompt)
     save({ name: propertyName || 'Unnamed Property', acres: result.acres, lastAnalysis: contextPrompt, date: new Date().toLocaleDateString(), uiPropertyName: propertyName || undefined })
     if (isMobile) setIsMenuOpen(false)
-  }, [propertyName, save, updateFeatures, isMobile, isAnalyzing])
+  }, [propertyName, save, updateFeatures, isMobile, isAnalyzing, isAdvising])
 
   const handleRestoreSession = useCallback(() => {
     const restored = restore()

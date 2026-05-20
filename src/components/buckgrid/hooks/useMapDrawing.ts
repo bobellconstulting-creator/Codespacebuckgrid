@@ -468,16 +468,19 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
     if (!layer) return
     layer.clearLayers()
 
+    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
     const popupContent = (ann: TonyAnnotation) => {
-      const why = (ann as any).why ?? ''
+      const why = esc((ann as any).why ?? '')
+      const label = esc(ann.label ?? '')
+      const typeName = esc(ann.type.replace(/_/g,' '))
       const conf = (ann as any).confidence
       const pri = (ann as any).priority
       const confBar = typeof conf === 'number'
-        ? `<div style="height:3px;background:#1a2a1a;border-radius:2px;margin:4px 0 6px"><div style="height:100%;width:${conf}%;background:${conf >= 75 ? '#4ade80' : conf >= 50 ? '#facc15' : '#ef4444'};border-radius:2px"></div></div>`
+        ? `<div style="height:3px;background:#1a2a1a;border-radius:2px;margin:4px 0 6px"><div style="height:100%;width:${Math.max(0,Math.min(100,conf))}%;background:${conf >= 75 ? '#4ade80' : conf >= 50 ? '#facc15' : '#ef4444'};border-radius:2px"></div></div>`
         : ''
       return `<div style="font-family:'Barlow Condensed',sans-serif;min-width:180px;max-width:240px;padding:2px 0">
-        <div style="font-family:'Teko',sans-serif;font-weight:700;font-size:13px;color:#6B7A57;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">${ann.type.replace(/_/g,' ')}</div>
-        <div style="font-size:13px;color:#D8D3C5;line-height:1.4;margin-bottom:4px">${ann.label}</div>
+        <div style="font-family:'Teko',sans-serif;font-weight:700;font-size:13px;color:#6B7A57;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">${typeName}</div>
+        <div style="font-size:13px;color:#D8D3C5;line-height:1.4;margin-bottom:4px">${label}</div>
         ${confBar}
         ${why ? `<div style="font-size:11px;color:#9A9588;line-height:1.4">${why}</div>` : ''}
         ${typeof pri === 'number' ? `<div style="font-size:10px;color:#6B7A57;margin-top:4px;letter-spacing:.06em">PRIORITY ${pri}</div>` : ''}
