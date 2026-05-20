@@ -179,7 +179,10 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         })
         if (drawAnnotations && Array.isArray(data.annotations)) {
           const drawable = data.annotations.filter((a: any) => a?.geojson?.geometry && a.label !== undefined)
-          if (drawable.length > 0) drawAnnotations(drawable)
+          if (drawable.length > 0) {
+            drawAnnotations(drawable)
+            setChat(p => [...p, { role: 'tony', text: `📍 ${drawable.length} feature${drawable.length !== 1 ? 's' : ''} drawn on map — tap any marker for details.` }])
+          }
         }
       } catch {
         setChat(p => {

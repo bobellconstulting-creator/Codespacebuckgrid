@@ -37,6 +37,7 @@ export default function BuckGridProPage() {
   const [isMobile, setIsMobile] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isAdvising, setIsAdvising] = useState(false)
 
   const { save, restore, savedIndicator, hasRestorable, updateFeatures } = usePropertyMemory()
   const currentSeason = getSeason(new Date())
@@ -71,7 +72,7 @@ export default function BuckGridProPage() {
   }, [])
 
   const onLockBorder = useCallback(() => {
-    if (isAnalyzing) return
+    if (isAnalyzing || isAdvising) return
     setActiveTool(TOOLS[0])
     const result = mapRef.current?.lockBoundary()
     if (!result) return
@@ -127,21 +128,26 @@ export default function BuckGridProPage() {
   }, [])
 
   const handleAnalyze = useCallback(() => {
-    if (isAnalyzing || !chatRef.current) return
-    const data = mapRef.current?.getBoundsAndFeatures()
-    const featureInfo = data && data.features.length > 0
-      ? ` I've drawn ${data.features.length} feature(s) on the map.`
-      : ''
-    const prompt = `Full property analysis.${featureInfo} Read the terrain, identify all key habitat features, and give me your top 3 stand placements for ${season.label}.`
+    if (isAnalyzing || isAdvising || !chatRef.current) return
+    const prompt = `Analyze this satellite view. Describe what you see: cover types (timber, brush, open field, water), terrain features (ridges, draws, saddles), and edges. Identify the single biggest habitat limiting factor. Text analysis only.`
     setIsAnalyzing(true)
     chatRef.current.triggerScan(prompt)
     if (isMobile) setIsMenuOpen(false)
-  }, [season.label, isMobile, isAnalyzing])
+  }, [isMobile, isAnalyzing, isAdvising])
+
+  const handleGetAdvice = useCallback(() => {
+    if (isAdvising || isAnalyzing || !chatRef.current) return
+    mapRef.current?.drawTonyAnnotations([])
+    const prompt = `Place your top habitat recommendations on this map. Return at least 6 features: 1 sanctuary polygon, 2 stand points, 1-2 food plot polygons, 1 staging area polygon, and 2 sneak trail linestrings. Every feature needs exact coordinates inside the visible viewport. This is the drawing phase — prioritize feature placement over text analysis.`
+    setIsAdvising(true)
+    chatRef.current.triggerScan(prompt)
+    if (isMobile) setIsMenuOpen(false)
+  }, [isMobile, isAnalyzing, isAdvising])
 
   // Stable refs for TonyChat props — prevents React.memo bailout on every render
   const getBoundsAndFeatures = useCallback(() => mapRef.current?.getBoundsAndFeatures() ?? null, [])
   const drawAnnotations = useCallback((annotations: TonyAnnotation[]) => mapRef.current?.drawTonyAnnotations(annotations), [])
-  const handleScanComplete = useCallback(() => setIsAnalyzing(false), [])
+  const handleScanComplete = useCallback(() => { setIsAnalyzing(false); setIsAdvising(false) }, [])
 
   const isDrawing = activeTool.id !== 'nav'
 
@@ -156,6 +162,11 @@ export default function BuckGridProPage() {
         @keyframes modalCardIn { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #1E2122; } ::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 2px; }
         ::-webkit-scrollbar-thumb:hover { background: #6B7A57; }
+        .tony-label { background: rgba(10,15,9,0.82) !important; border: 1px solid rgba(107,122,87,0.5) !important; border-radius: 2px !important; color: #D8D3C5 !important; font-family: 'Teko','Oswald',sans-serif !important; font-size: 11px !important; font-weight: 700 !important; letter-spacing: .06em !important; text-transform: uppercase !important; padding: 2px 6px !important; box-shadow: 0 0 8px rgba(107,122,87,0.3) !important; white-space: nowrap !important; }
+        .tony-label::before { display: none !important; }
+        .leaflet-popup-content-wrapper { background: #1E2122 !important; border: 1px solid rgba(107,122,87,0.35) !important; border-radius: 3px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 20px rgba(107,122,87,0.15) !important; color: #D8D3C5 !important; }
+        .leaflet-popup-tip { background: #1E2122 !important; }
+        .leaflet-popup-close-button { color: #6E6A5C !important; }
       `}</style>
 
       {/* ═══════════════════════════════════════════════
@@ -179,11 +190,19 @@ export default function BuckGridProPage() {
             </div>
             <button
               onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              style={{ minHeight: '44px', padding: '0 14px', background: 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.4)', borderRadius: '3px', cursor: isAnalyzing ? 'not-allowed' : 'pointer', color: '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px', opacity: isAnalyzing ? 0.5 : 1 }}
+              disabled={isAnalyzing || isAdvising}
+              style={{ minHeight: '44px', padding: '0 12px', background: 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.4)', borderRadius: '3px', cursor: (isAnalyzing || isAdvising) ? 'not-allowed' : 'pointer', color: '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: '6px', opacity: (isAnalyzing || isAdvising) ? 0.5 : 1 }}
               aria-label="Analyze property"
             >
               {isAnalyzing ? '◌' : 'Analyze'}
+            </button>
+            <button
+              onClick={handleGetAdvice}
+              disabled={isAdvising || isAnalyzing}
+              style={{ minHeight: '44px', padding: '0 12px', background: isAdvising ? 'rgba(107,122,87,0.3)' : '#6B7A57', border: '1px solid rgba(107,122,87,0.6)', borderRadius: '3px', cursor: (isAdvising || isAnalyzing) ? 'not-allowed' : 'pointer', color: '#fff', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: '8px', opacity: (isAdvising || isAnalyzing) ? 0.6 : 1 }}
+              aria-label="Get advice drawn on map"
+            >
+              {isAdvising ? '◌' : '⊕ Advice'}
             </button>
             <button
               onClick={() => setIsMenuOpen(v => !v)}
@@ -278,13 +297,25 @@ export default function BuckGridProPage() {
             {/* Analyze button */}
             <button
               onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              style={{ padding: '7px 18px', background: isAnalyzing ? 'rgba(107,122,87,0.06)' : 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.45)', borderRadius: '3px', cursor: isAnalyzing ? 'not-allowed' : 'pointer', color: isAnalyzing ? 'rgba(107,122,87,0.4)' : '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px', transition: 'all 0.15s ease', whiteSpace: 'nowrap', opacity: isAnalyzing ? 0.6 : 1 }}
-              onMouseEnter={e => { if (!isAnalyzing) { e.currentTarget.style.background = 'rgba(107,122,87,0.22)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(107,122,87,0.25)' } }}
+              disabled={isAnalyzing || isAdvising}
+              style={{ padding: '7px 18px', background: isAnalyzing ? 'rgba(107,122,87,0.06)' : 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.45)', borderRadius: '3px', cursor: (isAnalyzing || isAdvising) ? 'not-allowed' : 'pointer', color: (isAnalyzing || isAdvising) ? 'rgba(107,122,87,0.4)' : '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '6px', transition: 'all 0.15s ease', whiteSpace: 'nowrap', opacity: (isAnalyzing || isAdvising) ? 0.5 : 1 }}
+              onMouseEnter={e => { if (!isAnalyzing && !isAdvising) { e.currentTarget.style.background = 'rgba(107,122,87,0.22)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(107,122,87,0.25)' } }}
               onMouseLeave={e => { e.currentTarget.style.background = isAnalyzing ? 'rgba(107,122,87,0.06)' : 'rgba(107,122,87,0.12)'; e.currentTarget.style.boxShadow = 'none' }}
               aria-label="Analyze property with Tony"
             >
-              {isAnalyzing ? '◌ Analyzing...' : '▲ Analyze'}
+              {isAnalyzing ? '◌ Scanning...' : '▲ Analyze'}
+            </button>
+
+            {/* Get Advice button */}
+            <button
+              onClick={handleGetAdvice}
+              disabled={isAdvising || isAnalyzing}
+              style={{ padding: '7px 18px', background: isAdvising ? 'rgba(107,122,87,0.3)' : '#6B7A57', border: '1px solid rgba(107,122,87,0.6)', borderRadius: '3px', cursor: (isAdvising || isAnalyzing) ? 'not-allowed' : 'pointer', color: '#fff', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px', transition: 'all 0.15s ease', whiteSpace: 'nowrap', opacity: (isAdvising || isAnalyzing) ? 0.6 : 1, boxShadow: isAdvising ? 'none' : '0 0 14px rgba(107,122,87,0.35)' }}
+              onMouseEnter={e => { if (!isAdvising && !isAnalyzing) { e.currentTarget.style.background = '#7A8A66'; e.currentTarget.style.boxShadow = '0 0 20px rgba(107,122,87,0.55)' } }}
+              onMouseLeave={e => { e.currentTarget.style.background = isAdvising ? 'rgba(107,122,87,0.3)' : '#6B7A57'; e.currentTarget.style.boxShadow = isAdvising ? 'none' : '0 0 14px rgba(107,122,87,0.35)' }}
+              aria-label="Get advice drawn on map from Tony"
+            >
+              {isAdvising ? '◌ Drawing...' : '⊕ Get Advice'}
             </button>
 
             {/* Season chip */}

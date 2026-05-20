@@ -468,26 +468,53 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
     if (!layer) return
     layer.clearLayers()
 
+    const popupContent = (ann: TonyAnnotation) => {
+      const why = (ann as any).why ?? ''
+      const conf = (ann as any).confidence
+      const pri = (ann as any).priority
+      const confBar = typeof conf === 'number'
+        ? `<div style="height:3px;background:#1a2a1a;border-radius:2px;margin:4px 0 6px"><div style="height:100%;width:${conf}%;background:${conf >= 75 ? '#4ade80' : conf >= 50 ? '#facc15' : '#ef4444'};border-radius:2px"></div></div>`
+        : ''
+      return `<div style="font-family:'Barlow Condensed',sans-serif;min-width:180px;max-width:240px;padding:2px 0">
+        <div style="font-family:'Teko',sans-serif;font-weight:700;font-size:13px;color:#6B7A57;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">${ann.type.replace(/_/g,' ')}</div>
+        <div style="font-size:13px;color:#D8D3C5;line-height:1.4;margin-bottom:4px">${ann.label}</div>
+        ${confBar}
+        ${why ? `<div style="font-size:11px;color:#9A9588;line-height:1.4">${why}</div>` : ''}
+        ${typeof pri === 'number' ? `<div style="font-size:10px;color:#6B7A57;margin-top:4px;letter-spacing:.06em">PRIORITY ${pri}</div>` : ''}
+      </div>`
+    }
+
     for (const ann of annotations) {
       const geometry = ann.geojson?.geometry
       if (!geometry) continue
       const color = ANNOTATION_COLORS[ann.type] ?? '#FF6B00'
-      const tooltip = ann.label + ((ann as any).why ? `\n${(ann as any).why}` : '')
 
       if (geometry.type === 'Polygon') {
         const ring = geometry.coordinates[0] as [number, number][]
         const latlngs = ring.map(([lng, lat]) => [lat, lng] as [number, number])
-        L.polygon(latlngs, { color, weight: 2, fillColor: color, fillOpacity: 0.25 })
-          .bindTooltip(tooltip, { sticky: true }).addTo(layer)
+        L.polygon(latlngs, { color, weight: 2, fillColor: color, fillOpacity: 0.32 })
+          .bindPopup(popupContent(ann), { maxWidth: 260 }).addTo(layer)
+        // Permanent centroid label so food plots/bedding show their name without hovering
+        const centLat = ring.reduce((s, c) => s + c[1], 0) / ring.length
+        const centLng = ring.reduce((s, c) => s + c[0], 0) / ring.length
+        L.circleMarker([centLat, centLng], { radius: 0, color: 'transparent', fillColor: 'transparent', fillOpacity: 0 })
+          .bindTooltip(ann.label, { permanent: true, direction: 'center', className: 'tony-label' }).addTo(layer)
       } else if (geometry.type === 'LineString') {
         const coords = geometry.coordinates as [number, number][]
         const latlngs = coords.map(([lng, lat]) => [lat, lng] as [number, number])
-        L.polyline(latlngs, { color, weight: 3, dashArray: '8 4' })
-          .bindTooltip(tooltip, { sticky: true }).addTo(layer)
+        L.polyline(latlngs, { color, weight: 3, dashArray: '8 4', opacity: 0.9 })
+          .bindPopup(popupContent(ann), { maxWidth: 260 }).addTo(layer)
+        // Label at midpoint of trail
+        const mid = latlngs[Math.floor(latlngs.length / 2)]
+        if (mid) {
+          L.circleMarker(mid, { radius: 4, color, weight: 2, fillColor: color, fillOpacity: 0.9 })
+            .bindTooltip(ann.label, { permanent: true, direction: 'top', offset: [0, -8], className: 'tony-label' }).addTo(layer)
+        }
       } else if (geometry.type === 'Point') {
         const [lng, lat] = geometry.coordinates as [number, number]
-        L.circleMarker([lat, lng], { radius: 9, color, weight: 2, fillColor: color, fillOpacity: 0.85 })
-          .bindTooltip(ann.label, { permanent: true, direction: 'top', offset: [0, -12] }).addTo(layer)
+        L.circleMarker([lat, lng], { radius: 10, color, weight: 2, fillColor: color, fillOpacity: 0.9 })
+          .bindTooltip(ann.label, { permanent: true, direction: 'top', offset: [0, -13], className: 'tony-label' })
+          .bindPopup(popupContent(ann), { maxWidth: 260 }).addTo(layer)
       }
     }
   }, [])
