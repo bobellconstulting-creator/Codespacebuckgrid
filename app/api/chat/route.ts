@@ -747,6 +747,27 @@ Low confidence (<60): you cannot clearly see the terrain — say so in "why" and
 - WATER: state (1) OSM confirmation status, (2) cover situation on approach sides, (3) distance to nearest bedding`
 }
 
+function tryCloseJson(candidate: string): string | null {
+  // Walk backwards through closing braces/brackets to find the longest valid prefix.
+  // Handles Gemini responses truncated mid-feature.
+  const closers = [']}', '}]}', ']}}}', '}}']
+  for (const suffix of closers) {
+    // Find each } position from the right and try closing there
+    let pos = candidate.length - 1
+    while (pos > 0) {
+      const lastBrace = candidate.lastIndexOf('}', pos)
+      if (lastBrace < 0) break
+      const attempt = candidate.slice(0, lastBrace + 1) + suffix.slice(1)
+      try { JSON.parse(attempt); return attempt } catch {}
+      // Also try without extra suffix
+      try { JSON.parse(candidate.slice(0, lastBrace + 1)); return candidate.slice(0, lastBrace + 1) } catch {}
+      pos = lastBrace - 1
+      if (pos < candidate.length * 0.5) break // don't strip more than half the response
+    }
+  }
+  return null
+}
+
 function extractJsonFromText(text: string): string {
   // Try markdown fences first
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -754,16 +775,14 @@ function extractJsonFromText(text: string): string {
     const candidate = fenceMatch[1].trim()
     try { JSON.parse(candidate); return candidate } catch {}
   }
-  // Try raw JSON object
+  // Try raw JSON object (exact match)
   const objMatch = text.match(/\{[\s\S]*\}/)
   if (objMatch) {
     const candidate = objMatch[0]
     try { JSON.parse(candidate); return candidate } catch {
-      const lastBrace = candidate.lastIndexOf('}')
-      if (lastBrace > 0) {
-        const truncated = candidate.slice(0, lastBrace + 1)
-        try { JSON.parse(truncated); return truncated } catch {}
-      }
+      // Try salvaging a truncated response by closing open arrays/objects
+      const salvaged = tryCloseJson(candidate)
+      if (salvaged) return salvaged
     }
   }
   // Try raw JSON array — Gemini often returns [{...}] without a wrapper object
@@ -777,6 +796,12 @@ function extractJsonFromText(text: string): string {
         try { JSON.parse(truncated); return truncated } catch {}
       }
     }
+  }
+  // Last resort: try to find a truncated object and close it
+  const firstBrace = text.indexOf('{')
+  if (firstBrace >= 0) {
+    const salvaged = tryCloseJson(text.slice(firstBrace))
+    if (salvaged) return salvaged
   }
   return text.trim()
 }

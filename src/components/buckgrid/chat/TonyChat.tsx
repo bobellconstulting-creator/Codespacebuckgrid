@@ -173,13 +173,11 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               }
             })
           : []
-        // Guard against raw JSON leaking into the chat when the API response gets truncated
+        // Guard against raw JSON leaking into chat when Gemini response is truncated mid-object
         const replyText = typeof data.reply === 'string' ? data.reply : 'No response.'
         const looksLikeJson = replyText.trimStart().startsWith('{') || replyText.trimStart().startsWith('[')
         const safeReply = looksLikeJson
-          ? (Array.isArray(data.annotations) && data.annotations.length > 0
-              ? `Terrain read complete — ${data.annotations.length} feature${data.annotations.length !== 1 ? 's' : ''} placed on map.`
-              : 'Analysis complete. Try zooming in closer and hitting Get Advice again.')
+          ? 'Response was too large — zoom in to a smaller area and try again.'
           : replyText
         setChat(p => {
           const updated = p.filter(m => m.text !== '__thinking__')

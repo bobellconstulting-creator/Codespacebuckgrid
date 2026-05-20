@@ -138,7 +138,7 @@ export default function BuckGridProPage() {
   const handleGetAdvice = useCallback(() => {
     if (isAdvising || isAnalyzing || !chatRef.current) return
     mapRef.current?.drawTonyAnnotations([])
-    const prompt = `Place your top habitat recommendations on this map. Return at least 6 features: 1 sanctuary polygon, 2 stand points, 1-2 food plot polygons, 1 staging area polygon, and 2 sneak trail linestrings. Every feature needs exact coordinates inside the visible viewport. This is the drawing phase — prioritize feature placement over text analysis.`
+    const prompt = `Place your top 4-5 habitat recommendations on this map. Return exactly: 1 sanctuary polygon, 2 stand points, and 1-2 food plot polygons. Keep the "why" field under 30 words per feature. Every feature needs coordinates inside the visible viewport. Drawing phase only — reply text 2 sentences max.`
     setIsAdvising(true)
     chatRef.current.triggerScan(prompt)
     if (isMobile) setIsMenuOpen(false)
