@@ -128,12 +128,13 @@ export default function BuckGridProPage() {
   }, [])
 
   const handleAnalyze = useCallback(() => {
-    if (isAnalyzing || isAdvising || !chatRef.current) return
-    const prompt = `Analyze this satellite view. Describe what you see: cover types (timber, brush, open field, water), terrain features (ridges, draws, saddles), and edges. Identify the single biggest habitat limiting factor. Text analysis only.`
-    setIsAnalyzing(true)
-    chatRef.current.triggerScan(prompt)
+    // Analyze = navigate the user: open Tony panel and prompt them to zoom in if needed
+    if (!chatRef.current) return
+    chatRef.current.addTonyMessage(
+      `Navigate to your property on the satellite map, then draw your boundary with the Boundary tool. Once you're zoomed in to your land, hit **Get Advice** and I'll draw my recommendations directly on the map.`
+    )
     if (isMobile) setIsMenuOpen(false)
-  }, [isMobile, isAnalyzing, isAdvising])
+  }, [isMobile])
 
   const handleGetAdvice = useCallback(() => {
     if (isAdvising || isAnalyzing || !chatRef.current) return
@@ -194,7 +195,8 @@ export default function BuckGridProPage() {
               style={{ minHeight: '44px', padding: '0 12px', background: 'rgba(107,122,87,0.12)', border: '1px solid rgba(107,122,87,0.4)', borderRadius: '3px', cursor: (isAnalyzing || isAdvising) ? 'not-allowed' : 'pointer', color: '#6B7A57', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: '6px', opacity: (isAnalyzing || isAdvising) ? 0.5 : 1 }}
               aria-label="Analyze property"
             >
-              {isAnalyzing ? '◌' : 'Analyze'}
+              {'? How'}
+
             </button>
             <button
               onClick={handleGetAdvice}
@@ -303,7 +305,7 @@ export default function BuckGridProPage() {
               onMouseLeave={e => { e.currentTarget.style.background = isAnalyzing ? 'rgba(107,122,87,0.06)' : 'rgba(107,122,87,0.12)'; e.currentTarget.style.boxShadow = 'none' }}
               aria-label="Analyze property with Tony"
             >
-              {isAnalyzing ? '◌ Scanning...' : '▲ Analyze'}
+              {'▲ How It Works'}
             </button>
 
             {/* Get Advice button */}
