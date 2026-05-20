@@ -57,12 +57,12 @@ type ChatMessage = {
   annotations?: AnnotationSummary[]
 }
 
-const ONBOARDING_MESSAGE = `I'm Tony — your AI habitat consultant. Here's how to use me:
+const ONBOARDING_MESSAGE = `I'm Tony — your AI habitat consultant.
 
-1. **Navigate** the satellite map to your land
-2. **Draw your boundary** with the Boundary tool
-3. **Mark habitat** — food plots, bedding, stands
-4. Hit **Lock Border** and I'll analyze your terrain
+1. **Navigate** to your land on the satellite map
+2. **Draw your property boundary** with the Boundary tool
+3. Hit **Analyze** — I'll read the terrain and identify key habitat features
+4. Hit **Get Advice** — I'll draw stand locations, food plots, and trails directly on your map
 
 Then ask me anything: "Where should my food plots go?" or "What's the best entry trail to that stand?"`
 
@@ -173,9 +173,17 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
               }
             })
           : []
+        // Guard against raw JSON leaking into the chat when the API response gets truncated
+        const replyText = typeof data.reply === 'string' ? data.reply : 'No response.'
+        const looksLikeJson = replyText.trimStart().startsWith('{') || replyText.trimStart().startsWith('[')
+        const safeReply = looksLikeJson
+          ? (Array.isArray(data.annotations) && data.annotations.length > 0
+              ? `Terrain read complete — ${data.annotations.length} feature${data.annotations.length !== 1 ? 's' : ''} placed on map.`
+              : 'Analysis complete. Try zooming in closer and hitting Get Advice again.')
+          : replyText
         setChat(p => {
           const updated = p.filter(m => m.text !== '__thinking__')
-          return [...updated, { role: 'tony', text: typeof data.reply === 'string' ? data.reply : 'No response.', annotations: annotationSummaries.length > 0 ? annotationSummaries : undefined }]
+          return [...updated, { role: 'tony', text: safeReply, annotations: annotationSummaries.length > 0 ? annotationSummaries : undefined }]
         })
         if (drawAnnotations && Array.isArray(data.annotations)) {
           const drawable = data.annotations.filter((a: any) => a?.geojson?.geometry && a.label !== undefined)
