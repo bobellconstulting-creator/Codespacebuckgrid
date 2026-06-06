@@ -15,90 +15,56 @@ const HAIKU_TIMEOUT_MS = 25000
 const ANTHROPIC_TIMEOUT_MS = 50000
 const GEMINI_TIMEOUT_MS = 55000
 const OPENAI_TIMEOUT_MS = 25000
+const OLLAMA_TIMEOUT_MS = 45000
 // Global deadline — ensures we always respond before Vercel's 120s hard kill
 const GLOBAL_DEADLINE_MS = 108_000
 
-// ─── Tony's persistent identity — goes in system: field of every Anthropic call ──
-const TONY_SYSTEM_PROMPT = `You are Tony — a direct, systematic whitetail habitat analyst. You analyze satellite imagery step by step and deliver specific, evidence-based placement advice. Every recommendation cites visible terrain. No generic tips. No padding.
+// ─── Tony v2 system prompt — relative positioning, no GPS output ──────────────
+const TONY_SYSTEM_PROMPT = `You are Tony — a direct whitetail habitat consultant for BuckGrid Pro. You know every property. You give specific advice.
+
+CRITICAL OUTPUT RULE: NEVER output raw GPS coordinates. Always describe where features go using compass directions relative to the property boundary (north, northeast, east, southeast, south, southwest, west, northwest, center). The client handles coordinate translation — your job is analysis and reasoning, not GPS math.
+
+HONEST POSITIONING:
+- You are a habitat consultant, not a GPS system. Your zone suggestions are directional approximations (compass-based) intended to focus the hunter's attention, not survey-grade coordinates.
+- When users share field observations ("deer are bedding in the northeast," "I saw three bucks near the creek"), treat that as ground truth and reason FROM it. This is your most valuable mode.
+- Always acknowledge that zone placements are suggestions: "I'm putting this in the northeast based on the terrain, but walk it — you'll know better than I do."
+- Lead with strategic reasoning (why this zone, what wind, what timing) more than placement precision.
+- When a user brings field intel, prioritize that over terrain data inference. Their eyes on the ground beat satellite analysis every time.
 
 ABSOLUTE RULES (violating any is a critical failure):
 1. NEVER place any feature outside the user's stated property boundary
-2. OSM-verified coordinates OVERRIDE visual inference — always anchor to OSM lat/lng
-3. NEVER recommend water features unless OSM data explicitly confirms them
-4. Every coordinate MUST be calculated via the pixel formula — pixel position first, then formula
-5. Every feature MUST include confidence (0-100) and priority (1-5) fields
-6. NEVER place a stand or food_plot inside a confirmed OSM forest polygon or water polygon
-7. Every response MUST complete the 4-step Scene Analysis and 5-factor Habitat Audit before placing features
-8. Your pixel_x and pixel_y fields are REQUIRED — the server verifies your math against them
-9. CITE VISUAL EVIDENCE: every recommendation must name the specific location using compass direction and cover type — "NW corner where brushy fringe meets the creek draw" not "the edge area"
-10. QUANTIFY: use real numbers — acreage, distances in yards, soil pH targets, plot % of total property`
+2. NEVER recommend water features unless OSM data explicitly confirms them
+3. Every feature MUST include confidence and season fields
+4. NEVER place a stand or food_plot inside a confirmed OSM forest polygon or water polygon
+5. Every response MUST complete the 4-step Scene Analysis and 5-factor Habitat Audit before placing features
+6. CITE VISUAL EVIDENCE: every recommendation must name the specific location using compass direction and cover type
+7. QUANTIFY: use real numbers — acreage, distances in yards, soil pH targets, plot % of total property`
 
-// ─── Anthropic tool_use schema — enforces pixel→coordinate workflow ────────────
-const HABITAT_TOOL: Record<string, unknown> = {
-  name: 'place_habitat_features',
-  description: 'Complete the 5-factor habitat audit, then place features using pixel-calculated coordinates',
-  input_schema: {
-    type: 'object',
-    required: ['reply', 'features'],
-    properties: {
-      reply: { type: 'string', description: 'Full habitat analysis and recommendations for display to user. Must address all 5 audit factors.' },
-      features: {
-        type: 'array',
-        maxItems: 10,
-        items: {
-          type: 'object',
-          required: ['type', 'label', 'why', 'confidence', 'priority', 'pixel_x', 'pixel_y', 'geometry'],
-          properties: {
-            type: { type: 'string', enum: ['stand', 'food_plot', 'bedding', 'trail', 'water', 'mineral', 'scrape_line', 'travel_corridor', 'sanctuary', 'staging_area', 'sneak_trail', 'access_trail', 'access_point', 'pinch_point', 'tall_standing_cover'] },
-            label: { type: 'string' },
-            why: { type: 'string' },
-            confidence: { type: 'integer', minimum: 0, maximum: 100 },
-            priority: { type: 'integer', minimum: 1, maximum: 5 },
-            pixel_x: { type: 'number', description: 'X pixel position of feature center in 640px-wide image (0=left/west, 640=right/east)' },
-            pixel_y: { type: 'number', description: 'Y pixel position of feature center in 480px-tall image (0=top/north, 480=bottom/south)' },
-            geometry: {
-              type: 'object',
-              required: ['type', 'coordinates'],
-              properties: {
-                type: { type: 'string', enum: ['Point', 'LineString', 'Polygon'] },
-                coordinates: {}
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+// ─── v2 Zone and StandSite types ──────────────────────────────────────────────
+type RelativePosition = 'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest' | 'center'
+type ZoneType = 'food_plot' | 'kill_plot' | 'access_route' | 'bedding' | 'stand_site' | 'water' | 'staging_area' | 'sanctuary'
+type RelativeSize = 'tiny' | 'small' | 'medium' | 'large'
+type ConfidenceLevel = 'high' | 'medium' | 'low'
+type SeasonLabel = 'all' | 'spring' | 'summer' | 'fall' | 'winter'
+
+interface TonyZone {
+  id: string
+  name: string
+  type: ZoneType
+  relative_position: RelativePosition
+  relative_size: RelativeSize
+  description: string
+  confidence: ConfidenceLevel
+  season: SeasonLabel
 }
 
-// ─── Recalculate coordinates from pixel positions — eliminates coordinate hallucination ──
-function recalcCoordsFromPixels(f: any, bounds: Bounds): any {
-  const px = f.pixel_x
-  const py = f.pixel_y
-  if (typeof px !== 'number' || typeof py !== 'number') return f
-  const clampedPx = Math.max(0, Math.min(640, px))
-  const clampedPy = Math.max(0, Math.min(480, py))
-  const lng = bounds.west + (clampedPx / 640) * (bounds.east - bounds.west)
-  const lat = bounds.north - (clampedPy / 480) * (bounds.north - bounds.south)
-
-  if (f.geometry?.type === 'Point') {
-    return { ...f, geometry: { type: 'Point', coordinates: [lng, lat] } }
-  }
-  // For polygons/lines: shift centroid toward pixel-derived center if drift > ~100m
-  if (f.geometry?.type === 'Polygon') {
-    const ring: [number, number][] = f.geometry.coordinates[0] ?? []
-    if (ring.length > 0) {
-      const centLng = ring.reduce((s, c) => s + c[0], 0) / ring.length
-      const centLat = ring.reduce((s, c) => s + c[1], 0) / ring.length
-      const dLng = lng - centLng
-      const dLat = lat - centLat
-      if (Math.abs(dLng) > 0.001 || Math.abs(dLat) > 0.001) {
-        const shifted = ring.map(([lo, la]) => [lo + dLng, la + dLat] as [number, number])
-        return { ...f, geometry: { type: 'Polygon', coordinates: [shifted] } }
-      }
-    }
-  }
-  return f
+interface StandSite {
+  id: string
+  name: string
+  relative_position: RelativePosition
+  wind_direction: string
+  rating: number
+  description: string
 }
 
 // ─── OSM bbox terrain validation — check coord isn't inside a forest/water polygon ──
@@ -106,40 +72,6 @@ function isPointInOsmBbox(coord: [number, number], f: OsmFeature): boolean {
   if (!f.bbox) return false
   const [minLng, minLat, maxLng, maxLat] = f.bbox
   return coord[0] >= minLng && coord[0] <= maxLng && coord[1] >= minLat && coord[1] <= maxLat
-}
-
-function validateTerrainType(f: any, osmFeatures: OsmFeature[]): string | undefined {
-  const geom = f.geometry
-  let coord: [number, number] | null = null
-  if (geom?.type === 'Point') coord = geom.coordinates as [number, number]
-  else if (geom?.type === 'Polygon') {
-    const ring = geom.coordinates[0] as [number, number][]
-    if (ring?.length > 0) coord = [ring.reduce((s, c) => s + c[0], 0) / ring.length, ring.reduce((s, c) => s + c[1], 0) / ring.length]
-  }
-  if (!coord) return undefined
-  for (const osm of osmFeatures) {
-    if ((osm.kind === 'forest') && (f.type === 'food_plot' || f.type === 'stand') && isPointInOsmBbox(coord, osm)) {
-      return `Placed inside confirmed forest polygon — move to edge or open ground`
-    }
-    if ((osm.kind === 'water' || osm.kind === 'wetland') && isPointInOsmBbox(coord, osm)) {
-      return `Placed inside confirmed water/wetland polygon — invalid placement`
-    }
-  }
-  return undefined
-}
-
-// ─── Feature spacing — flag stands too close together ─────────────────────────
-function checkFeatureSpacing(annotations: any[]): any[] {
-  const stands = annotations.filter(f => f.type === 'stand' && f.geometry?.type === 'Point')
-  return annotations.map(f => {
-    if (f.type !== 'stand' || f.geometry?.type !== 'Point') return f
-    const coord = f.geometry.coordinates as [number, number]
-    const tooClose = stands.find(other => other !== f && haversineMeters(coord, other.geometry.coordinates) < 75)
-    if (tooClose) {
-      return { ...f, spacingWarning: `Stand within 75m of another stand — consider consolidating to reduce pressure` }
-    }
-    return f
-  })
 }
 
 // ─── Terrain conflict detection ───────────────────────────────────────────────
@@ -318,59 +250,55 @@ function latLngToPixel(lat: number, lng: number, bounds: Bounds): { px: number; 
 function buildSpatialContextBlock(ctx: SpatialContext, bounds: Bounds): string {
   const lines: string[] = ['=== SPATIAL INTELLIGENCE (verified data — trust this over visual inference) ===']
 
-  // OSM land cover — with pixel positions so Tony can cross-reference against visible image
+  // OSM land cover — described in compass terms for v2 relative positioning
   if (ctx.osmFeatures.length > 0) {
-    const osmLines: string[] = ['VERIFIED LAND COVER (OpenStreetMap) — pixel positions are approximate (±10px):']
+    const osmLines: string[] = ['VERIFIED LAND COVER (OpenStreetMap) — use compass directions to reference these:']
     const byKind: Record<string, typeof ctx.osmFeatures> = {}
     for (const f of ctx.osmFeatures) {
       byKind[f.kind] = byKind[f.kind] ?? []
       byKind[f.kind].push(f)
     }
 
+    // Helper: convert lat/lng to compass quadrant relative to property center
+    const centerLat = (bounds.north + bounds.south) / 2
+    const centerLng = (bounds.east + bounds.west) / 2
+    function toCompass(lat: number, lng: number): string {
+      const ns = lat > centerLat ? 'north' : 'south'
+      const ew = lng > centerLng ? 'east' : 'west'
+      const latFrac = Math.abs(lat - centerLat) / ((bounds.north - bounds.south) / 2)
+      const lngFrac = Math.abs(lng - centerLng) / ((bounds.east - bounds.west) / 2)
+      if (latFrac < 0.25 && lngFrac < 0.25) return 'center'
+      if (latFrac > lngFrac * 1.5) return ns
+      if (lngFrac > latFrac * 1.5) return ew
+      return `${ns}${ew}`
+    }
+
     if (byKind.water?.length) {
-      const pts = byKind.water.slice(0, 3).map(f => {
-        const { px, py } = latLngToPixel(f.point[1], f.point[0], bounds)
-        return `pixel(${px},${py}) = lat ${f.point[1].toFixed(4)}, lng ${f.point[0].toFixed(4)}`
-      }).join(' | ')
-      osmLines.push(`- WATER (${byKind.water.length}): ${pts} — DO NOT place stands or food plots within 20m. Verify blue/dark tones at these pixels.`)
+      const dirs = byKind.water.slice(0, 3).map(f => toCompass(f.point[1], f.point[0])).join(', ')
+      osmLines.push(`- WATER (${byKind.water.length}): ${dirs} portion of property — DO NOT place stands or food plots within 20m. Verify on satellite.`)
     }
     if (byKind.wetland?.length) {
-      const pts = byKind.wetland.slice(0, 2).map(f => {
-        const { px, py } = latLngToPixel(f.point[1], f.point[0], bounds)
-        return `pixel(${px},${py}) = lat ${f.point[1].toFixed(4)}, lng ${f.point[0].toFixed(4)}`
-      }).join(' | ')
-      osmLines.push(`- WETLAND (${byKind.wetland.length}): ${pts} — Poor access, soft ground. Avoid stands and plots within 20m.`)
+      const dirs = byKind.wetland.slice(0, 2).map(f => toCompass(f.point[1], f.point[0])).join(', ')
+      osmLines.push(`- WETLAND (${byKind.wetland.length}): ${dirs} — Poor access, soft ground. Avoid stands and plots within 20m.`)
     }
     if (byKind.building?.length) {
-      const pts = byKind.building.slice(0, 3).map(f => {
-        const { px, py } = latLngToPixel(f.point[1], f.point[0], bounds)
-        return `pixel(${px},${py}) = lat ${f.point[1].toFixed(4)}, lng ${f.point[0].toFixed(4)}`
-      }).join(' | ')
-      osmLines.push(`- STRUCTURE (${byKind.building.length}): ${pts} — Human pressure zone. DO NOT place stands within 100m.`)
+      const dirs = byKind.building.slice(0, 3).map(f => toCompass(f.point[1], f.point[0])).join(', ')
+      osmLines.push(`- STRUCTURE (${byKind.building.length}): ${dirs} — Human pressure zone. DO NOT place stands within 100m.`)
     }
     if (byKind.forest?.length) {
       osmLines.push(`- FOREST (${byKind.forest.length} polygon(s)): Confirmed timber cover. Use edges for stand placement — place stands on the OPEN GROUND side of these forest boundaries, not inside canopy.`)
     }
     if (byKind.road?.length) {
-      const pts = byKind.road.slice(0, 2).map(f => {
-        const { px, py } = latLngToPixel(f.point[1], f.point[0], bounds)
-        return `pixel(${px},${py}) = lat ${f.point[1].toFixed(4)}, lng ${f.point[0].toFixed(4)}`
-      }).join(' | ')
-      osmLines.push(`- ROAD (${byKind.road.length}): ${pts} — Use as access route reference. Stands must be placed UPWIND of roads, never downwind.`)
+      const dirs = byKind.road.slice(0, 2).map(f => toCompass(f.point[1], f.point[0])).join(', ')
+      osmLines.push(`- ROAD (${byKind.road.length}): ${dirs} — Use as access route reference. Stands must be placed UPWIND of roads, never downwind.`)
     }
     if (byKind.farmland?.length) {
-      const pts = byKind.farmland.slice(0, 3).map(f => {
-        const { px, py } = latLngToPixel(f.point[1], f.point[0], bounds)
-        return `pixel(${px},${py}) = lat ${f.point[1].toFixed(4)}, lng ${f.point[0].toFixed(4)}`
-      }).join(' | ')
-      osmLines.push(`- FARMLAND (${byKind.farmland.length}): ${pts} — CONFIRMED food source field(s). The EDGE of this field adjacent to timber is your #1 food plot / stand candidate.`)
+      const dirs = byKind.farmland.slice(0, 3).map(f => toCompass(f.point[1], f.point[0])).join(', ')
+      osmLines.push(`- FARMLAND (${byKind.farmland.length}): ${dirs} — CONFIRMED food source field(s). The EDGE of this field adjacent to timber is your #1 food plot / stand candidate.`)
     }
     if (byKind.scrub?.length) {
-      const pts = byKind.scrub.slice(0, 2).map(f => {
-        const { px, py } = latLngToPixel(f.point[1], f.point[0], bounds)
-        return `pixel(${px},${py}) = lat ${f.point[1].toFixed(4)}, lng ${f.point[0].toFixed(4)}`
-      }).join(' | ')
-      osmLines.push(`- SCRUB/THICKET (${byKind.scrub.length}): ${pts} — Dense brushy cover. Prime bedding zone. Stands on downwind edge are excellent rut sites.`)
+      const dirs = byKind.scrub.slice(0, 2).map(f => toCompass(f.point[1], f.point[0])).join(', ')
+      osmLines.push(`- SCRUB/THICKET (${byKind.scrub.length}): ${dirs} — Dense brushy cover. Prime bedding zone. Stands on downwind edge are excellent rut sites.`)
     }
     lines.push(osmLines.join('\n'))
   }
@@ -383,23 +311,27 @@ function buildSpatialContextBlock(ctx: SpatialContext, bounds: Bounds): string {
   if (ctx.highGroundPoints.length > 0) {
     const pts = ctx.highGroundPoints.slice(0, 3).map(p => {
       const { px, py } = latLngToPixel(p.lat, p.lng, bounds)
-      return `pixel(${px},${py}) = lat ${p.lat.toFixed(5)}, lng ${p.lng.toFixed(5)} (${p.elevationM.toFixed(0)}m)`
+      const ns = py < 240 ? 'north' : 'south'
+      const ew = px > 320 ? 'east' : 'west'
+      return `${ns}${ew} (${p.elevationM.toFixed(0)}m)`
     }).join(' | ')
-    lines.push(`HIGH GROUND — Stand placement rule: place stands 20-40m DOWNHILL from these peaks (thermals carry scent upward from the valley; stands at the exact peak are exposed to wind from all directions). Look for benches or saddles near these coordinates:\n  ${pts}`)
+    lines.push(`HIGH GROUND — Stand placement rule: place stands 20-40m DOWNHILL from these peaks (thermals carry scent upward from the valley; stands at the exact peak are exposed to wind from all directions). Look for benches or saddles near:\n  ${pts}`)
   }
 
   if (ctx.lowGroundPoints.length > 0) {
     const pts = ctx.lowGroundPoints.slice(0, 3).map(p => {
       const { px, py } = latLngToPixel(p.lat, p.lng, bounds)
-      return `pixel(${px},${py}) = lat ${p.lat.toFixed(5)}, lng ${p.lng.toFixed(5)} (${p.elevationM.toFixed(0)}m)`
+      const ns = py < 240 ? 'north' : 'south'
+      const ew = px > 320 ? 'east' : 'west'
+      return `${ns}${ew} (${p.elevationM.toFixed(0)}m)`
     }).join(' | ')
-    lines.push(`LOW DRAINAGE ZONES — Natural creek bottoms and bedding pinch points. These are trail and bedding candidates, NOT stand sites (cold air drainage, scent pooling). Water sources and travel corridors likely here:\n  ${pts}`)
+    lines.push(`LOW DRAINAGE ZONES — Natural creek bottoms and bedding pinch points. These are trail and bedding candidates, NOT stand sites (cold air drainage, scent pooling):\n  ${pts}`)
   }
 
   // Soil data — capability class and drainage
   if (ctx.soilSummary) {
     lines.push(`\n${ctx.soilSummary}`)
-    lines.push('SOIL PLACEMENT RULES: Class I-II = prime food plot ground. Class VI-VIII = do not plant. "Poorly drained" = wet/soft in spring, may hold water — avoid food plots, good for natural water source locations. State soil capability class in every food plot "why" field.')
+    lines.push('SOIL PLACEMENT RULES: Class I-II = prime food plot ground. Class VI-VIII = do not plant. "Poorly drained" = wet/soft in spring, may hold water — avoid food plots, good for natural water source locations. State soil capability class in every food plot description.')
   }
 
   // NLCD land cover
@@ -501,7 +433,19 @@ function getRegionalWindDefault(bounds: Bounds): string {
   return 'W/NW (Central/Midwest US prevailing)'
 }
 
-function buildTonyPrompt(message: string, bounds: Bounds, zoom: number, features: any[], season: string, propertyName: string, spatialContext?: SpatialContext, windDirection?: string, boundaryRing?: [number, number][] | null, chatHistory?: Array<{ role: string; text: string }>): string {
+// ─── v2 buildTonyPrompt — outputs relative zones, NOT GPS coordinates ─────────
+function buildTonyPrompt(
+  message: string,
+  bounds: Bounds,
+  zoom: number,
+  features: any[],
+  season: string,
+  propertyName: string,
+  spatialContext?: SpatialContext,
+  windDirection?: string,
+  boundaryRing?: [number, number][] | null,
+  chatHistory?: Array<{ role: string; text: string }>
+): string {
   const featureDesc = features.length > 0
     ? `\n\nThe user has already drawn ${features.length} feature(s) on the map:\n${features.slice(0, MAX_FEATURES).map((f, i) => {
         const type = f.properties?.layerType ?? f.type ?? 'unknown'
@@ -519,250 +463,125 @@ function buildTonyPrompt(message: string, bounds: Bounds, zoom: number, features
     : ''
 
   const centerLat = (bounds.north + bounds.south) / 2
-  const centerLng = (bounds.east + bounds.west) / 2
-  const metersPerPixelNS = ((bounds.north - bounds.south) * 111000) / 480
-  const metersPerPixelEW = ((bounds.east - bounds.west) * 111000 * Math.cos(centerLat * Math.PI / 180)) / 640
   const approxAcres = Math.round(
     ((bounds.north - bounds.south) * 111000) *
     ((bounds.east - bounds.west) * 111000 * Math.cos(centerLat * Math.PI / 180)) / 4047
   )
   const targetFoodPlotAcres = `${(approxAcres * 0.03).toFixed(1)}–${(approxAcres * 0.05).toFixed(1)}`
 
-  // Worked coordinate examples using image quadrant centers for anchor reference
-  const nwLat = bounds.north - (bounds.north - bounds.south) * 0.25
-  const nwLng = bounds.west + (bounds.east - bounds.west) * 0.25
-  const seLat = bounds.north - (bounds.north - bounds.south) * 0.75
-  const seLng = bounds.west + (bounds.east - bounds.west) * 0.75
-
   const prevailingWind = windDirection ?? getRegionalWindDefault(bounds)
 
-  // Build strict boundary constraint block if user has drawn a boundary
   const boundaryBlock = boundaryRing && boundaryRing.length >= 3
-    ? `\nPROPERTY BOUNDARY — HARD RULE (NON-NEGOTIABLE):
-The user ONLY owns land INSIDE the following polygon. Every single feature you place — stands, food plots, trails, water, bedding — MUST have coordinates that fall INSIDE this boundary. Do not place anything outside it. The satellite image shows neighboring land the user does not own.
-Boundary polygon corners (lng, lat): ${boundaryRing.slice(0, 8).map(([lng, lat]) => `[${lng.toFixed(5)}, ${lat.toFixed(5)}]`).join(' → ')}
-Before placing each feature: verify its coordinates are inside this polygon. If you cannot fit a feature inside the boundary, omit it.\n`
+    ? `\nPROPERTY BOUNDARY — HARD RULE: The user ONLY owns land INSIDE the drawn boundary. Every zone and stand site you recommend MUST be positioned INSIDE this boundary. The satellite image shows neighboring land the user does not own. Describe all placements using compass directions relative to the property center.\n`
     : ''
 
-  // Food plot size constraints in degrees (approximate)
-  const minPlotDegLat = 0.00045 // ~50m minimum dimension
-  const maxPlotDegLat = 0.00360 // ~400m maximum dimension (≈15 acres at this scale)
-
-  return `You are Tony — a systematic, direct whitetail habitat analyst. You work through this satellite image step by step before making any recommendations. Every feature you place must land on terrain that visually matches its purpose, backed by specific visual evidence you can name.
-${propertyLine}${approxAcres > 0 ? `\nVisible area: approximately ${approxAcres} acres. Target food plot coverage for this property: ${targetFoodPlotAcres} acres total (3–5% of huntable area).` : ''}${historyBlock}
+  return `You are Tony — a direct whitetail habitat consultant for WildLogic. You know every property. You give specific advice.
+${propertyLine}${approxAcres > 0 ? `\nVisible area: approximately ${approxAcres} acres. Target food plot coverage: ${targetFoodPlotAcres} acres total (3–5% of huntable area).` : ''}${historyBlock}
 
 ${seasonGuidance}
 
-IMAGE ORIENTATION AND COORDINATE SYSTEM — MEMORIZE BEFORE PLACING ANYTHING:
-- TOP of image = NORTH (lat ${bounds.north.toFixed(5)})
-- BOTTOM of image = SOUTH (lat ${bounds.south.toFixed(5)})
-- LEFT of image = WEST (lng ${bounds.west.toFixed(5)})
-- RIGHT of image = EAST (lng ${bounds.east.toFixed(5)})
-- Image dimensions: 640px wide × 480px tall
-- Each pixel ≈ ${metersPerPixelNS.toFixed(1)}m N–S and ${metersPerPixelEW.toFixed(1)}m E–W
+PROPERTY ORIENTATION (for compass directions in your output):
+- NORTH = top of image (lat ${bounds.north.toFixed(5)})
+- SOUTH = bottom of image (lat ${bounds.south.toFixed(5)})
+- WEST = left of image (lng ${bounds.west.toFixed(5)})
+- EAST = right of image (lng ${bounds.east.toFixed(5)})
+- Property center = lat ${centerLat.toFixed(5)}, lng ${((bounds.east + bounds.west) / 2).toFixed(5)}
 
-COORDINATE FORMULA (compute exactly — never estimate from vibes):
-  lng = ${bounds.west.toFixed(5)} + (pixel_x / 640) × ${(bounds.east - bounds.west).toFixed(6)}
-  lat = ${bounds.north.toFixed(5)} - (pixel_y / 480) × ${(bounds.north - bounds.south).toFixed(6)}
-
-ANCHOR-OFFSET PROCEDURE — use this for EVERY coordinate placement:
-Step 1: Identify which anchor below is nearest to your target
-Step 2: Estimate pixel offset from that anchor (e.g., "60px east, 40px south")
-Step 3: Compute target pixel: anchor_pixel + offset
-Step 4: Apply formula above to get lat/lng
-Step 5: Record pixel_x and pixel_y in the feature — the server verifies these
-
-CALIBRATION ANCHORS for this image:
-  NW quadrant center → pixel(160,120) = lat ${nwLat.toFixed(5)}, lng ${nwLng.toFixed(5)}
-  NE quadrant center → pixel(480,120) = lat ${nwLat.toFixed(5)}, lng ${seLng.toFixed(5)}
-  SW quadrant center → pixel(160,360) = lat ${seLat.toFixed(5)}, lng ${nwLng.toFixed(5)}
-  SE quadrant center → pixel(480,360) = lat ${seLat.toFixed(5)}, lng ${seLng.toFixed(5)}
-  Image center       → pixel(320,240) = lat ${centerLat.toFixed(5)}, lng ${centerLng.toFixed(5)}
-
-VISUAL IDENTIFICATION GUIDE — use these signatures when reading THIS satellite image:
-- MATURE HARDWOOD FOREST: Dark green to gray-green, rounded crown shapes visible, irregular dense texture, continuous cover
-- CONIFER STAND: Darker green, pointed/star-shaped crowns, sharper cleaner edges, uniform height canopy
-- OPEN FIELD / CLEARED GROUND: Lighter tan, green, or brown — smooth uniform texture, often geometric edges if cultivated
-- EARLY SUCCESSIONAL / BRUSH (prime bedding): Mottled green-gray, patchy irregular texture, intermediate between open and forest — denser than field, thinner than timber
-- WETLAND / SATURATED GROUND: Dark coloration with irregular wet patches, possible standing water (very dark/black patches), found at terrain low points
-- FOOD PLOT / CULTIVATED: Geometric shape, uniform color across entire area, typically rectangular or follows field contours
-- WATER (POND/STREAM): Dark to black in direct sun, bright white if sun glare angle; streams = sinuous dark lines through terrain
-- HARD EDGE: Abrupt color change where forest meets field — good, but lower value than soft edge
-- SOFT EDGE (premium habitat): Gradual color gradient from dark forest → lighter brushy fringe → open field — highest deer use
-- INSIDE CORNER: Where two field edges meet forming an L or V — deer funnel to inside corners; these are top stand sites
-- STAGING AREA INDICATORS: Dense brush 60–150 yards back from field edge, between timber block and open ground — where mature bucks wait before entering fields
-
-OSM-FIRST PLACEMENT RULE — when OSM has confirmed a feature at exact coordinates:
-  - Use the OSM lat/lng as your anchor point, NOT a visual estimate
-  - Confirmed farmland: center your food_plot polygon on the OSM farmland coordinates
-  - Confirmed forest edge: place your stand within 30m of the OSM forest boundary
-  - Confirmed water: your water feature goes at the OSM water coordinates
-  Visual estimates may be off by 100-300m. OSM coordinates are within 5-10m. Always anchor to OSM when available.
-
-CONFIDENCE CALIBRATION — score against these anchors (be honest, not optimistic):
-  90-100: OSM confirmed feature at exact coordinates, clear satellite imagery, no occlusion
-  75-89:  Visually clear terrain type, no OSM conflict, good image resolution
-  50-74:  Edge zone visible but unclear if timber vs scrub, or partial shadow
-  25-49:  Area in shadow/cloud, uncertain terrain type — MUST say "verify on-site" in why
-  <25:    Cannot see terrain — omit the feature entirely
-  NOTE: If confidence < 60, you MUST explain what you cannot see and instruct user to verify before acting.
-
-${boundaryBlock}TERRAIN READING RULES — use OSM verified features as primary ground truth, satellite color as secondary:
-- Verified OSM features (listed in SPATIAL INTELLIGENCE section below) are ground truth. Trust coordinates there over visual color inference.
-- Dense canopy (forest/woodland) edges are your highest-value stand zones — place stands on the TIMBER SIDE of the edge, 20-40m inside the canopy, facing toward the open. This conceals the hunter while giving a clear shooting lane into the edge.
-- EDGE TYPES: A hard edge (timber directly into field) is lower value than a soft edge (timber → brushy fringe → grass strip → field). If you see a gradual "feathered" color transition in the satellite image, call it out as a soft edge — this is premium habitat.
-- INSIDE CORNERS: Where two field edges meet in an L-shape, the inside corner is almost always the highest-value stand site on the property. Flag this whenever visible.
-- Open agricultural/cleared ground: primary food plot candidate. Never place food plots inside confirmed forest polygons.
-- SUN EXPOSURE: Food plots need 6–8 hours direct sun. Any clearing entirely surrounded by tall timber may get less than 4 hours — flag this; minimum clearing width for adequate sun is ~1.5× the height of surrounding trees.
-- WATER FEATURES — STRICT RULE: Do NOT recommend ponds, impoundments, or water features unless they are explicitly confirmed in the SPATIAL INTELLIGENCE section as OSM-verified water. Dark patches, shadows, or low depressions visible in the satellite image are NOT proof of water. If OSM shows no water feature, do not place one. Water features placed in open areas will NOT be used during daylight — they require 50+ yards of timber cover on at least two sides.
-- Structures/buildings: human pressure zone. No stands within 100m. Effective exclusion zone 200+ yards for mature bucks on pressured properties.
-- Roads/tracks: access reference only. Stands must be upwind of roads. Every road contaminates 200+ yards on both sides with human scent — factor this into stand approach routes.
-- SANCTUARY FLAG: If no area on this property appears to be 5+ contiguous acres of undisturbed dense cover away from roads and structures, call this out explicitly. No sanctuary = no mature bucks holding on the property. When sanctuary ground IS identified, generate a sanctuary Polygon feature over it. Priority 1. Label "Sanctuary — [compass location]." This is never-entry ground — state that explicitly.
-- SNEAK TRAILS: Generate as sneak_trail LineString features with a MINIMUM of 4 coordinate pairs (start → bend1 → bend2 → stand). Route parallel to ridgelines, 50–100 yards inside timber edge, never crossing open fields or bedding. Every stand gets TWO sneak trails: morning approach (downwind of bedding, follows thermal descent into stand from uphill) and evening approach (downwind of food source, follows rising thermals, arrives from timber side). Each trail must START from a logical vehicle or parking point at the property edge, use creek/drainage bottoms when available (scent masking + sound masking), and terminate within 30 yards of the stand. Label: "Sneak trail — [Stand name] — [wind direction] wind". The "why" field MUST state: (1) which wind direction this trail is designed for, (2) whether it crosses bedding (it must not), (3) the start point description (field edge / creek bottom / two-track), (4) total estimated walking distance in yards.
-- STAGING AREAS: Every mature buck has a staging area — a dense 1–5 acre thicket 60–150 yards from the primary food source where he waits for darkness. Generate staging_area Polygon features in brushy fringe between timber and field edges. A stand at the staging area outperforms a food-edge stand for mature bucks. Label with cover type and distance from field edge.
-- SADDLES: Where elevation shows two adjacent high points with a lower saddle between them, this is a top-5 rut location. Flag saddles with at least 15 feet of relief between the saddle floor and adjacent ridgetops. Generate a pinch_point Point feature at every confirmed saddle.
-- BENCHES: A flat terrace cut into a hillside (appears as a slight horizontal "step" in slope). Deer travel benches like highways. Stands on the downhill edge of a bench are consistent producers.
-- THERMAL RULES — MORNING HUNTS: stands should be on elevated terrain, benches, or mid-slope. Cold air pools scent in drainages at dawn — a morning stand in a drainage is a mistake. EVENING HUNTS: stands in lower terrain, drainage edges, or valley floors. Thermals rise uphill in the evening — scent goes upward.
-- ENTRY TRAIL RULE: Every entry trail you recommend must (1) never cross through bedding, (2) approach from downwind or crosswind of bedding, (3) use creek bottoms when available (sound and scent masking), and (4) be designed for a specific wind direction — state which wind the trail is designed for.
-- STAND-TO-BEDDING DISTANCE: Early season and food-based stands: minimum 100 yards from confirmed bedding, 150 yards preferred. Rut funnel stands: 30-60 yards is acceptable. State the approximate distance in every stand's "why" field.
-- CORRIDOR WIDTH: Only call something a "funnel" or "pinch point" if the wooded corridor is 50-200 yards wide. Wider than 300 yards = open block — set up on an interior feature instead.
-- STAGING AREAS: Every mature buck has a staging area — a dense 1-5 acre thicket 60-150 yards from the primary food source where he waits for darkness. You CANNOT see these from summer satellite (leaves mask them) but you CAN identify WHERE they would be: look for brushy fringe or early-successional cover between the main timber block and any field edge. Staging area stands outperform food-edge stands for mature bucks. Label any stand in this 60-150 yard zone a "staging area stand" and specify how it intercepts the buck before he commits to the field.
-- KILL PLOT vs DESTINATION PLOT: A kill plot is 0.1-0.5 acres of clover or brassicas tucked inside the timber edge 60-100 yards from the main food source — designed specifically to hold mature bucks in daylight, adjacent to their staging area. A destination plot is 2-5+ acres in open ground for herd nutrition, not usually hunted. When both fit the property, put the kill plot on the timber edge nearest suspected bedding; destination plot further away.
-- FOOD PLOT COVERAGE: Target 3–5% of huntable acres in food plots (~${targetFoodPlotAcres} acres for this property). State this in your reply and in each food_plot feature's "why" as "X acres = Y% of ~${approxAcres}-acre property."
-- TSI (TIMBER STAND IMPROVEMENT): When recommending bedding area improvements where canopy is too open (deer visible 100+ yards under canopy), prescribe TSI: hinge-cut 10–20 trees per acre — cut 60% through the trunk at 4 feet height so the tree falls but stays alive, creating horizontal screening cover and browse. State "hinge-cut TSI recommended" with estimated tree density.
-- SOUTH-FACING SLOPES: Lighter, drier-looking ground, less dense canopy. These warm first in winter — deer bed on south-facing slopes November–February. Flag when slope/aspect data confirms.
-- When uncertain about terrain type, state your uncertainty and recommend the user verify on satellite before acting.
-
-PREVAILING WIND: ${prevailingWind}
-Stand approach rule: hunters must approach from DOWNWIND (stand is downwind of where deer will be). Entry trail must approach from the direction OPPOSITE to prevailing wind. Example: if wind is NW, hunter approaches from SW or S and stand faces NW toward timber.
+${boundaryBlock}PREVAILING WIND: ${prevailingWind}
 
 ${featureDesc}
 
-${spatialContext ? buildSpatialContextBlock(spatialContext, bounds) + '\n\n' : ''}SCENE ANALYSIS PROTOCOL — COMPLETE STEPS 1-4 IN YOUR REPLY BEFORE ANY FEATURE OR HABITAT AUDIT:
+${spatialContext ? buildSpatialContextBlock(spatialContext, bounds) + '\n\n' : ''}SCENE ANALYSIS PROTOCOL — COMPLETE STEPS 1-4 INTERNALLY BEFORE PLACING ANY FEATURE:
 
-STEP 1 — COVER TYPE INVENTORY: Look at the entire image. List every distinct cover type you see using the Visual Identification Guide above. For each type: (a) cover type name, (b) approximate % of total visible area, (c) which quadrant(s) of the image (NW/NE/SW/SE/center). Count total distinct cover types — fewer than 3 means low habitat diversity, call it out.
+STEP 1 — COVER TYPE INVENTORY: List every distinct cover type visible (mature hardwood, conifer, open field, early successional brush, wetland, cultivated). Note which compass quadrant each occupies.
 
-STEP 2 — EDGE AND TRANSITION MAPPING: Identify every edge where two cover types meet. For each edge: (a) which two cover types meet, (b) compass location in image, (c) is it a hard edge (abrupt) or soft edge (gradual brushy fringe)? Flag any inside corners where two edges form an L or V. These are your top stand candidates.
+STEP 2 — EDGE AND TRANSITION MAPPING: Identify every edge where two cover types meet. Flag inside corners (L/V shaped edge junctions) — these are top stand candidates.
 
-STEP 3 — TERRAIN AND DRAINAGE READ: Based on shadows, drainage patterns, and color gradients in the image: (a) does the property appear to slope toward any compass direction? (b) are there any visible ridges, draws, or low creek bottoms? (c) do you see any potential saddle points where a ridge narrows between two higher points?
+STEP 3 — TERRAIN AND DRAINAGE READ: Does the property slope toward any compass direction? Are there visible ridges, draws, or potential saddle points?
 
-STEP 4 — WATER AND LIMITING FACTOR: Identify any confirmed water (dark/reflective patches + OSM confirmation). Then state the single biggest limiting factor on this property right now: is it food, cover, water, sanctuary, or access? This shapes the priority order for your recommendations.
+STEP 4 — WATER AND LIMITING FACTOR: Identify confirmed water (OSM only). State the single biggest limiting factor: food, cover, water, sanctuary, or access.
 
-Complete Steps 1-4 internally as your working analysis. Do NOT paste this section-by-section into your reply field — it bloats the chat and buries the actual recommendation. Synthesize your findings into 3-4 sentences maximum in the reply field after completing the Habitat Audit.
+HABITAT AUDIT — COMPLETE ALL 5 FACTORS BEFORE OUTPUTTING ZONES:
 
-HABITAT AUDIT — YOU MUST COMPLETE THIS BEFORE PLACING ANY FEATURE:
-This is the 5-factor check a professional consultant runs on every property. State each finding explicitly in your reply:
+1. EDGE DENSITY AND COVER DIVERSITY: Count distinct cover types. Flag hard vs soft edges. Name any inside corners.
+2. SANCTUARY ASSESSMENT: Is there a 5+ acre block of dense cover far from roads? If no, flag it — "No sanctuary: mature bucks won't hold here."
+3. WATER AVAILABILITY: OSM-verified water within 400 yards of bedding? If no: "No confirmed water within range — water development is a priority."
+4. TERRAIN FEATURES: Saddles, benches, pinch points, funnels. Terrain features outrank food sources for stand placement Oct 15–Nov 20.
+5. HUMAN PRESSURE MAP: Roads, structures, exclusion zones. Huntable sanctuary = 200+ yards from all roads and structures.
 
-1. EDGE DENSITY AND COVER DIVERSITY: How many distinct cover types are visible? (timber, brush/scrub, open field, transitional edge). Count them. A property with fewer than 3 cover types needs diversity work before stand placement pays off. Identify hard edges (abrupt timber-to-field transition) vs soft edges (feathered transition with brushy fringe) — soft edges are higher value. Flag any L-shaped inside corners where two field edges meet (top-5 stand locations).
-
-2. SANCTUARY ASSESSMENT: Is there a block of 5+ contiguous acres of dense cover that is far from roads, structures, and likely access points? If yes, identify it. If no, flag this explicitly — "No sanctuary identified: no mature bucks will hold on this property without one." Sanctuary is the single most important habitat element.
-
-3. WATER AVAILABILITY: Based on OSM verified data only — is water confirmed within 400 yards of the likely bedding area? If yes, state distance. If no, state "No confirmed water within range — water development is a priority in summer months."
-
-4. TERRAIN FEATURES (saddles, benches, pinch points, funnels): Identify any saddles (elevation low point between two adjacent high points — top rut location if 15+ feet of relief). Identify any benches (flat horizontal terrace cut into a hillside — deer travel these like roads). Identify any pinch points or funnels (wooded corridors 50-200 yards wide connecting two larger blocks). These terrain features outrank food sources for mature buck stand placement Oct 15-Nov 20.
-
-5. HUMAN PRESSURE MAP: Trace all roads, two-tracks, and structures. Deer near paved roads shift nocturnal within 48 hours of regular traffic. The huntable sanctuary is what remains inside the property boundary, at least 200 yards from all roads and structures.
-
-You MUST work through all 5 audit points before placing any feature — but put your findings in your HEAD, not your reply. The reply field gets a 3-4 sentence SUMMARY ONLY: your single biggest finding, your #1 priority action, and one caveat if warranted. Example: "No sanctuary identified — mature bucks won't hold here. Priority 1 is hinge-cutting the NW timber block into a 6-acre no-entry sanctuary. The SE field edge is your best early-season food stand once sanctuary is established." That's the entire reply. Everything else goes on the map.
+TERRAIN READING RULES:
+- Dense canopy edges: place stands on the TIMBER SIDE, 20-40m inside canopy, facing toward the open.
+- Soft edges (feathered timber-to-field transition) are premium habitat — call them out.
+- Inside corners where two field edges form an L/V are almost always the highest-value stand site on the property.
+- SANCTUARY: If no 5+ acre undisturbed block exists, state this explicitly. Sanctuary is never-entry ground.
+- KILL PLOT vs DESTINATION PLOT: Kill plot = 0.1-0.5 acres tucked 60-100 yards inside timber edge near staging area. Destination plot = 2-5+ acres in open ground for herd nutrition.
+- FOOD PLOT COVERAGE: Target 3–5% of huntable acres (~${targetFoodPlotAcres} acres for this property).
+- TSI: Where canopy is too open for bedding (deer visible 100+ yards), prescribe hinge-cut TSI — 10-20 trees/acre cut 60% through at 4 feet height.
+- SOUTH-FACING SLOPES: Deer bed here November–February. Flag when slope/aspect data confirms.
+- THERMAL RULES: Morning hunts = elevated/mid-slope stands. Evening hunts = lower slope/drainage edge stands.
+- STAND-TO-BEDDING DISTANCE: Early season minimum 100 yards, 150 preferred. Rut funnel stands 30-60 yards acceptable.
+- STAGING AREAS: Dense 1-5 acre thicket 60-150 yards from primary food source. Staging area stands outperform food-edge stands for mature bucks.
+- WATER: Only recommend if OSM-confirmed. Water features require 50+ yards of timber cover on at least two sides.
 
 User says: "${message}"
 
-PRE-PLACEMENT VERIFICATION — for each feature before including it:
-[ ] Is the coordinate INSIDE the user's property boundary? (This is the #1 check — if outside boundary, DO NOT include it)
-[ ] Is the center coordinate on the correct terrain type?
-[ ] Is the coordinate within image bounds? (lng ${bounds.west.toFixed(5)}–${bounds.east.toFixed(5)}, lat ${bounds.south.toFixed(5)}–${bounds.north.toFixed(5)})
-[ ] STAND: Is it at least 100 yards from confirmed bedding (or 30 yards minimum during rut only)? State the estimated distance in "why".
-[ ] STAND: Is it positioned on the timber side of the edge (not open ground)? Is it 20-40m inside canopy facing the open?
-[ ] STAND: Does the entry trail approach from downwind/crosswind of bedding, NEVER crossing through bedding or feeding areas?
-[ ] STAND: Does the thermal strategy match time-of-day? (Morning = elevated/mid-slope; Evening = lower slope/drainage edge)
-[ ] FOOD PLOT: Is it on open ground with estimated 6+ hours of sun (not surrounded by tall timber on all sides)?
-[ ] FOOD PLOT: Is it above the drainage bottom (not in a natural depression that will collect standing water)?
-[ ] FOOD PLOT: Is it the minimum viable size for the species? (soybeans 2 acres min, corn 3 acres min, clover/brassicas 0.5 acres min)
-[ ] FOOD PLOT: Does the "why" field include a soil test recommendation?
-[ ] FOOD PLOT: Is the polygon at a reasonable size? (food_plot: 0.5–15 acres ≈ lat span ${minPlotDegLat.toFixed(5)}–${maxPlotDegLat.toFixed(5)}°; bedding: 2–50 acres)
-[ ] WATER: Is it confirmed by OSM data? If not, omit it. Does it have 50+ yards of timber cover on at least two sides?
-[ ] BEDDING IMPROVEMENT: Is the proposed bedding area at least 5 contiguous acres? Is it the furthest point from roads and structures?
-If any check fails, adjust or drop the feature.
+OUTPUT FORMAT: Return JSON with 'message', 'zones', and 'stand_sites' arrays. NEVER output lat/lng coordinates. Use relative_position (northeast, southwest, etc.) for all placements. The client software translates positions to map coordinates using the property boundary.
+
+VALID relative_position values: "north" | "northeast" | "east" | "southeast" | "south" | "southwest" | "west" | "northwest" | "center"
+VALID zone types: "food_plot" | "kill_plot" | "access_route" | "bedding" | "stand_site" | "water" | "staging_area" | "sanctuary"
+VALID relative_size: "tiny" (under 0.5ac) | "small" (0.5-2ac) | "medium" (2-10ac) | "large" (10+ ac)
+VALID confidence: "high" | "medium" | "low"
+VALID season: "all" | "spring" | "summer" | "fall" | "winter"
 
 CRITICAL OUTPUT RULES:
 - Respond ONLY with raw valid JSON — no markdown, no code fences, zero text outside JSON
-- "stand" features MUST use geometry type "Point" — a stand is a single tree or blind, not a polygon
-- "trail" features MUST use geometry type "LineString" — minimum 3 coordinate pairs
-- "food_plot" and "bedding" features MUST use geometry type "Polygon" — ring must close (first coordinate = last coordinate)
-- "water" features use geometry type "Point" for a water source or "Polygon" for a pond/impoundment
-- Reference actual visible terrain in your reply — name what you see (field edge, timber corner, creek bottom, bench, saddle, etc.)
+- NEVER output lat/lng/coordinates — only relative_position compass directions
+- Reference actual visible terrain in descriptions — name what you see (field edge, timber corner, creek bottom, bench, saddle)
 - Use compass directions (NW corner, SE field edge, etc.) consistently
+- "message" field: 3-4 sentences MAX. Direct, specific, named features. v2 Tony voice: like a land manager who's walked 1000 properties. Lead with your single biggest finding. Follow with #1 priority action.
 
 Exact JSON format:
 {
-  "reply": "3-4 sentences MAX. Lead with your single biggest finding. Follow with the #1 priority action. One caveat if needed. No analysis pasted here — everything else is on the map.",
-  "features": [
+  "message": "Conversational text — 3-4 sentences max. Direct, specific, named features. v2 Tony voice.",
+  "zones": [
     {
-      "type": "stand",
-      "label": "Timber edge stand — NE corner",
-      "why": "Timber edge meets open field at NE, 50 yards downwind of bedding, clean approach from S",
-      "confidence": 85,
-      "priority": 1,
-      "pixel_x": 420,
-      "pixel_y": 145,
-      "geometry": {
-        "type": "Point",
-        "coordinates": [lng, lat]
-      }
-    },
+      "id": "z1",
+      "name": "NE Bench Kill Plot",
+      "type": "kill_plot",
+      "relative_position": "northeast",
+      "relative_size": "small",
+      "description": "One sentence of specific habitat advice referencing visible terrain.",
+      "confidence": "high",
+      "season": "fall"
+    }
+  ],
+  "stand_sites": [
     {
-      "type": "food_plot",
-      "label": "3-acre brassica plot — SE clearing",
-      "why": "Open tan ground SE quadrant, timber wind block on north side, 80 yards from creek bedding",
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": [[[lng, lat], [lng, lat], [lng, lat], [lng, lat], [lng, lat]]]
-      }
-    },
-    {
-      "type": "trail",
-      "label": "Access trail — S entry to stand",
-      "why": "Downwind approach from S, stays out of bedding timber, connects parking to stand",
-      "geometry": {
-        "type": "LineString",
-        "coordinates": [[lng, lat], [lng, lat], [lng, lat]]
-      }
+      "id": "s1",
+      "name": "SE Bench Stand",
+      "relative_position": "southeast",
+      "wind_direction": "northwest",
+      "rating": 9,
+      "description": "One sentence — distance from bedding, thermal strategy, what the hunter covers."
     }
   ]
 }
 
-Feature types: "food_plot" (Polygon), "bedding" (Polygon), "sanctuary" (Polygon), "staging_area" (Polygon), "tall_standing_cover" (Polygon), "trail" (LineString), "sneak_trail" (LineString), "access_trail" (LineString), "stand" (Point), "access_point" (Point), "pinch_point" (Point), "water" (Point or Polygon), "mineral" (Point), "scrape_line" (LineString), "travel_corridor" (LineString)
-- TALL_STANDING_COVER (Polygon): Areas to plant OR existing stands of switchgrass, native grasses, cereal rye, or cattails for visual screening and thermal cover. 0.5–5 acres. Use along field edges as a screening buffer between food sources and timber, or to fill in open areas lacking vertical cover. Label with recommended species and approximate dimensions. "why" must state: estimated planting acreage, intended purpose (screening/bedding/buffer), and distance from nearest food source or stand.
-Return 6-10 features ranked by seasonal priority. A complete plan includes: at least 1 sanctuary, 2 stand sites, 2 sneak_trail routes, 1 staging_area, and food plots on open ground only. Place every feature on terrain that visually matches its purpose.
-Each feature MUST include:
-- "confidence": integer 0-100 (how certain you are this placement is correct given satellite clarity and OSM data)
-- "priority": integer 1-5 (1 = do this first this season)
-Low confidence (<60): you cannot clearly see the terrain — say so in "why" and tell user to verify on-site.
-
-"why" field requirements by feature type:
-- STAND: state (1) estimated distance from nearest bedding, (2) which wind direction this stand is designed for, (3) thermal strategy (morning/evening), (4) what the hunter is covering (field edge / saddle / pinch point / etc.)
-- FOOD PLOT: state (1) estimated acreage, (2) sun exposure estimate, (3) "Soil test required — target pH 6.2-6.8", (4) species recommendation for this season
-- TRAIL: state (1) which wind direction this approach is designed for, (2) confirmation it does not cross bedding or feeding areas, (3) whether a creek/drainage bottom approach is available
-- BEDDING: state (1) approximate acreage, (2) why this location is sanctuary-quality (distance from roads/structures), (3) recommended enhancement (hinge cuts, native grass planting, etc.)
-- WATER: state (1) OSM confirmation status, (2) cover situation on approach sides, (3) distance to nearest bedding`
+Return 4-8 zones and 2-4 stand_sites ranked by seasonal priority. A complete plan includes: at least 1 sanctuary zone, 1-2 staging_area zones, food plots on open ground only, and stand_sites with wind direction specified.`
 }
 
 function tryCloseJson(candidate: string): string | null {
-  // Walk backwards through closing braces/brackets to find the longest valid prefix.
-  // Handles Gemini responses truncated mid-feature.
   const closers = [']}', '}]}', ']}}}', '}}']
   for (const suffix of closers) {
-    // Find each } position from the right and try closing there
     let pos = candidate.length - 1
     while (pos > 0) {
       const lastBrace = candidate.lastIndexOf('}', pos)
       if (lastBrace < 0) break
       const attempt = candidate.slice(0, lastBrace + 1) + suffix.slice(1)
       try { JSON.parse(attempt); return attempt } catch {}
-      // Also try without extra suffix
       try { JSON.parse(candidate.slice(0, lastBrace + 1)); return candidate.slice(0, lastBrace + 1) } catch {}
       pos = lastBrace - 1
-      if (pos < candidate.length * 0.5) break // don't strip more than half the response
+      if (pos < candidate.length * 0.5) break
     }
   }
   return null
@@ -780,12 +599,11 @@ function extractJsonFromText(text: string): string {
   if (objMatch) {
     const candidate = objMatch[0]
     try { JSON.parse(candidate); return candidate } catch {
-      // Try salvaging a truncated response by closing open arrays/objects
       const salvaged = tryCloseJson(candidate)
       if (salvaged) return salvaged
     }
   }
-  // Try raw JSON array — Gemini often returns [{...}] without a wrapper object
+  // Try raw JSON array
   const arrMatch = text.match(/\[[\s\S]*\]/)
   if (arrMatch) {
     const candidate = arrMatch[0]
@@ -797,7 +615,7 @@ function extractJsonFromText(text: string): string {
       }
     }
   }
-  // Last resort: try to find a truncated object and close it
+  // Last resort: salvage truncated object
   const firstBrace = text.indexOf('{')
   if (firstBrace >= 0) {
     const salvaged = tryCloseJson(text.slice(firstBrace))
@@ -806,44 +624,164 @@ function extractJsonFromText(text: string): string {
   return text.trim()
 }
 
-function isCoordInBounds(coord: number[], bounds: Bounds): boolean {
-  const [lng, lat] = coord
-  return typeof lng === 'number' && typeof lat === 'number'
-    && lng >= bounds.west && lng <= bounds.east
-    && lat >= bounds.south && lat <= bounds.north
+// ─── Validate and normalize a relative_position value ────────────────────────
+const VALID_POSITIONS: RelativePosition[] = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'center']
+function normalizePosition(val: unknown): RelativePosition {
+  if (typeof val === 'string' && VALID_POSITIONS.includes(val as RelativePosition)) {
+    return val as RelativePosition
+  }
+  return 'center'
 }
 
-// Ray-casting point-in-polygon for boundary enforcement
-function isPointInPolygon(lng: number, lat: number, ring: [number, number][]): boolean {
-  let inside = false
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i]
-    const [xj, yj] = ring[j]
-    const intersect = ((yi > lat) !== (yj > lat)) && (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi)
-    if (intersect) inside = !inside
+function normalizeConfidence(val: unknown): ConfidenceLevel {
+  if (val === 'high' || val === 'medium' || val === 'low') return val
+  if (typeof val === 'number') {
+    if (val >= 75) return 'high'
+    if (val >= 50) return 'medium'
+    return 'low'
   }
-  return inside
+  return 'medium'
 }
 
-function isFeatureInBoundary(f: any, ring: [number, number][]): boolean {
-  const { type, coordinates } = f.geometry
-  const checkPoint = (c: number[]) => isPointInPolygon(c[0], c[1], ring)
-  if (type === 'Point') return checkPoint(coordinates)
-  if (type === 'LineString') return (coordinates as number[][]).some(checkPoint)
-  if (type === 'Polygon') {
-    // Check centroid — Tony's polygon vertices often slightly overhang the drawn boundary
-    // due to LLM coordinate precision; centroid-inside is the right intent check
-    const featureRing = coordinates[0] as number[][]
-    if (!featureRing?.length) return false
-    const centLng = featureRing.reduce((s: number, c: number[]) => s + c[0], 0) / featureRing.length
-    const centLat = featureRing.reduce((s: number, c: number[]) => s + c[1], 0) / featureRing.length
-    return isPointInPolygon(centLng, centLat, ring)
+function normalizeSeason(val: unknown): SeasonLabel {
+  const valid: SeasonLabel[] = ['all', 'spring', 'summer', 'fall', 'winter']
+  if (typeof val === 'string' && valid.includes(val as SeasonLabel)) return val as SeasonLabel
+  return 'all'
+}
+
+function normalizeZoneType(val: unknown): ZoneType {
+  const valid: ZoneType[] = ['food_plot', 'kill_plot', 'access_route', 'bedding', 'stand_site', 'water', 'staging_area', 'sanctuary']
+  if (typeof val === 'string' && valid.includes(val as ZoneType)) return val as ZoneType
+  return 'food_plot'
+}
+
+function normalizeSize(val: unknown): RelativeSize {
+  const valid: RelativeSize[] = ['tiny', 'small', 'medium', 'large']
+  if (typeof val === 'string' && valid.includes(val as RelativeSize)) return val as RelativeSize
+  return 'small'
+}
+
+// ─── Parse and sanitize Tony v2 response → typed zones + stand_sites ─────────
+function parseV2Response(rawText: string): { message: string; zones: TonyZone[]; stand_sites: StandSite[] } {
+  let message = ''
+  let zones: TonyZone[] = []
+  let stand_sites: StandSite[] = []
+
+  try {
+    const jsonStr = extractJsonFromText(rawText)
+    const parsed = JSON.parse(jsonStr)
+
+    message = typeof parsed.message === 'string' ? parsed.message : typeof parsed.reply === 'string' ? parsed.reply : ''
+
+    // Parse zones
+    if (Array.isArray(parsed.zones)) {
+      zones = parsed.zones
+        .filter((z: any) => z && typeof z === 'object')
+        .map((z: any, i: number): TonyZone => ({
+          id: typeof z.id === 'string' ? z.id : `z${i + 1}`,
+          name: typeof z.name === 'string' ? z.name.slice(0, 100) : `Zone ${i + 1}`,
+          type: normalizeZoneType(z.type),
+          relative_position: normalizePosition(z.relative_position),
+          relative_size: normalizeSize(z.relative_size),
+          description: typeof z.description === 'string' ? z.description.slice(0, 300) : '',
+          confidence: normalizeConfidence(z.confidence),
+          season: normalizeSeason(z.season),
+        }))
+        .slice(0, 12)
+    }
+
+    // Parse stand_sites
+    if (Array.isArray(parsed.stand_sites)) {
+      stand_sites = parsed.stand_sites
+        .filter((s: any) => s && typeof s === 'object')
+        .map((s: any, i: number): StandSite => ({
+          id: typeof s.id === 'string' ? s.id : `s${i + 1}`,
+          name: typeof s.name === 'string' ? s.name.slice(0, 100) : `Stand ${i + 1}`,
+          relative_position: normalizePosition(s.relative_position),
+          wind_direction: typeof s.wind_direction === 'string' ? s.wind_direction.slice(0, 50) : '',
+          rating: typeof s.rating === 'number' ? Math.max(1, Math.min(10, Math.round(s.rating))) : 7,
+          description: typeof s.description === 'string' ? s.description.slice(0, 300) : '',
+        }))
+        .slice(0, 6)
+    }
+
+    // Fallback: if old v1 format with features array, extract a message at minimum
+    if (!message && typeof parsed.reply === 'string') {
+      message = parsed.reply
+    }
+    if (!message && Array.isArray(parsed.features) && parsed.features.length > 0) {
+      message = `Identified ${parsed.features.length} habitat features on the map.`
+    }
+
+  } catch {
+    // Raw text fallback — Tony returned prose, not JSON
+    message = rawText.trim() || 'No response from Tony.'
   }
-  return true
+
+  if (!message) message = 'No response from Tony.'
+
+  return { message, zones, stand_sites }
+}
+
+// ─── NLCD-based zone confidence downgrade ────────────────────────────────────
+// For food_plot and kill_plot zones in the 'high' confidence tier,
+// spot-check the target compass position against NLCD. If it lands on forest,
+// downgrade confidence to 'low' and add a note.
+async function nlcdCheckZones(zones: TonyZone[], bounds: Bounds): Promise<TonyZone[]> {
+  const FOREST_CLASSES = new Set([41, 42, 43, 90])
+  const WATER_CLASSES = new Set([11])
+
+  // Map relative_position to approximate center lat/lng within bounds
+  function positionToLatLng(pos: RelativePosition): [number, number] {
+    const centerLat = (bounds.north + bounds.south) / 2
+    const centerLng = (bounds.east + bounds.west) / 2
+    const latSpan = (bounds.north - bounds.south) * 0.3
+    const lngSpan = (bounds.east - bounds.west) * 0.3
+
+    const offsets: Record<RelativePosition, [number, number]> = {
+      north:     [latSpan,       0],
+      northeast: [latSpan,       lngSpan],
+      east:      [0,             lngSpan],
+      southeast: [-latSpan,      lngSpan],
+      south:     [-latSpan,      0],
+      southwest: [-latSpan,      -lngSpan],
+      west:      [0,             -lngSpan],
+      northwest: [latSpan,       -lngSpan],
+      center:    [0,             0],
+    }
+    const [dLat, dLng] = offsets[pos]
+    return [centerLat + dLat, centerLng + dLng]
+  }
+
+  return Promise.all(
+    zones.map(async (zone): Promise<TonyZone> => {
+      if (zone.type !== 'food_plot' && zone.type !== 'kill_plot') return zone
+      try {
+        const [lat, lng] = positionToLatLng(zone.relative_position)
+        const sample = await fetchNlcdPoint(lat, lng).catch(() => null)
+        if (!sample) return zone
+        if (FOREST_CLASSES.has(sample.landCoverCode)) {
+          return {
+            ...zone,
+            confidence: 'low',
+            description: zone.description + ' (Note: NLCD shows forest cover at this position — verify open ground before planting.)',
+          }
+        }
+        if (WATER_CLASSES.has(sample.landCoverCode)) {
+          return {
+            ...zone,
+            confidence: 'low',
+            description: zone.description + ' (Note: NLCD shows open water at this position — invalid plot location.)',
+          }
+        }
+      } catch {}
+      return zone
+    })
+  )
 }
 
 export async function POST(req: NextRequest) {
-  // Global deadline — race everything against this so we always respond before Vercel's hard kill
+  // Global deadline — ensures we always respond before Vercel's hard kill
   const globalAbort = new AbortController()
   const globalTimer = setTimeout(() => globalAbort.abort(), GLOBAL_DEADLINE_MS)
 
@@ -857,12 +795,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Free tier limit reached', reply: "You've used your 3 free Tony analyses for today. Upgrade to Pro for unlimited access.", paywallHit: true }, { status: 402 })
     }
 
-    const nvidiaKey = process.env.NVIDIA_API_KEY
     const googleKey = process.env.GOOGLE_AI_KEY || process.env.GOOGLE_API_KEY
-    const groqKey = process.env.GROQ_API_KEY
+    const groqKey = process.env.GROQ_API_KEY || process.env.GROQ_JARVIS_API_KEY
     const openaiKey = process.env.OPENAI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
-    if (!nvidiaKey && !googleKey && !groqKey && !openaiKey && !anthropicKey) {
+    const ollamaUrl = process.env.OLLAMA_BASE_URL   // e.g., http://localhost:11434
+    const ollamaModel = process.env.OLLAMA_MODEL || 'hermes3'
+
+    if (!googleKey && !groqKey && !openaiKey && !anthropicKey && !ollamaUrl) {
       return NextResponse.json({ error: 'Server configuration error', reply: 'Tony needs a fresh API key — contact support to get Tony back online.' }, { status: 500 })
     }
 
@@ -872,7 +812,6 @@ export async function POST(req: NextRequest) {
     // Validate and sanitize inputs
     const rawMsg = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE_LENGTH).replace(/["""]/g, "'") : ''
     if (!rawMsg) return NextResponse.json({ error: 'Message required' }, { status: 400 })
-    // Augment very short messages so LLMs don't refuse or hallucinate without context
     const trimmedMsg = rawMsg.length < 20
       ? `Analyze this hunting property and ${rawMsg}. Recommend stand locations, food plots, and bedding areas based on what you see.`
       : rawMsg
@@ -887,12 +826,12 @@ export async function POST(req: NextRequest) {
     )
     const boundaryRing: [number, number][] | null = boundaryFeature?.geometry?.coordinates?.[0] ?? null
 
-    // Fetch satellite image and spatial context in parallel — neither waits on the other
+    // Fetch satellite image and spatial context in parallel
     const esriUrl = `https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export` +
       `?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}` +
       `&bboxSR=4326&imageSR=4326&size=640,480&format=png&f=image`
 
-    const SPATIAL_TIMEOUT_MS = 7_000 // Spatial must resolve within 7s or Tony fires without it
+    const SPATIAL_TIMEOUT_MS = 7_000
 
     const [imgResult, spatialResult] = await Promise.allSettled([
       fetch(esriUrl, { signal: AbortSignal.any([AbortSignal.timeout(ESRI_TIMEOUT_MS), globalAbort.signal]) }),
@@ -921,7 +860,7 @@ export async function POST(req: NextRequest) {
         reply: 'Satellite image timed out while downloading. Move the map slightly and try again.',
       }, { status: 500 })
     }
-    // spatialResult is always 'fulfilled' (Promise.allSettled + inner .catch)
+
     const resolvedSpatial = spatialResult.status === 'fulfilled' ? spatialResult.value : undefined
 
     let rawText = ''
@@ -944,9 +883,8 @@ export async function POST(req: NextRequest) {
         safeChatHistory,
       )
 
-      let usedGemini = false
-      let usedAnthropic = false
-      let usedOpenAI = false
+      let usedVision = false
+      let usedFallback = false
       const paidFallbackEnabled = process.env.ENABLE_PAID_FALLBACK === '1'
       let geminiRateLimited = false
 
@@ -958,7 +896,7 @@ export async function POST(req: NextRequest) {
         generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json' },
       })
 
-      // 1. Gemini 2.5 Flash — PRIMARY (best spatial vision)
+      // ── 1. Gemini 2.5 Flash — PRIMARY (best spatial vision, free) ────────────
       if (googleKey) {
         try {
           const result = await Promise.race([
@@ -973,15 +911,15 @@ export async function POST(req: NextRequest) {
           if (!result.ok) throw new Error(`Gemini2.5 ${result.status}`)
           const j = await result.json()
           rawText = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
-          if (rawText) usedGemini = true
+          if (rawText) usedVision = true
           else throw new Error('Gemini2.5 empty')
         } catch (e: unknown) {
           console.warn('[chat] Gemini 2.5 Flash failed:', e instanceof Error ? e.message : e)
         }
       }
 
-      // 2. Gemini 2.0 Flash — stable Google fallback
-      if (!usedGemini && googleKey) {
+      // ── 2. Gemini 2.0 Flash — stable Google vision fallback ──────────────────
+      if (!usedVision && googleKey) {
         try {
           const result = await Promise.race([
             fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
@@ -995,168 +933,198 @@ export async function POST(req: NextRequest) {
           if (!result.ok) throw new Error(`Gemini2.0 ${result.status}`)
           const j = await result.json()
           rawText = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
-          if (rawText) usedGemini = true
+          if (rawText) usedVision = true
           else throw new Error('Gemini2.0 empty')
         } catch (e: unknown) {
           console.warn('[chat] Gemini 2.0 Flash failed:', e instanceof Error ? e.message : e)
         }
       }
 
-      // 2b. Free text-only fallback via Groq — fires when Gemini rate-limits, before touching paid APIs.
-      // Degraded: no satellite image analysis, but Tony can still advise using spatial context + chat history.
-      if (!usedGemini && geminiRateLimited) {
-        const groqKey = process.env.GROQ_API_KEY || process.env.GROQ_JARVIS_API_KEY
-        if (groqKey) {
-          try {
-            const degradedPrompt = `${tonyPrompt}\n\n[NOTE: Satellite image unavailable due to rate limits. Advise based on property description, spatial data context, and user message only. Be explicit that you cannot see the satellite image this turn.]`
-            const groqResult = await Promise.race([
-              fetch('https://api.groq.com/openai/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
-                body: JSON.stringify({
-                  model: 'llama-3.3-70b-versatile',
-                  messages: [{ role: 'user', content: degradedPrompt }],
-                  max_tokens: 1200,
-                  temperature: 0.3,
-                }),
+      // ── 3. Ollama/Hermes — FREE local fallback (before cloud paid APIs) ──────
+      // Fires when Gemini fails AND OLLAMA_BASE_URL is configured.
+      // Text-only (no satellite image) but zero cost if user runs local Hermes.
+      if (!usedVision && ollamaUrl) {
+        try {
+          const degradedPrompt = `${tonyPrompt}\n\n[NOTE: Satellite image unavailable. Advise based on property description, spatial data context, and user message only. Be explicit that you cannot see the satellite image this turn.]`
+          const ollamaResult = await Promise.race([
+            fetch(`${ollamaUrl}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: ollamaModel,
+                prompt: degradedPrompt,
+                stream: false,
               }),
-              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GroqTimeout')), 20_000)),
-            ])
-            if (groqResult.ok) {
-              const groqJson = await groqResult.json()
-              const groqText = groqJson.choices?.[0]?.message?.content?.trim() ?? ''
-              if (groqText) {
-                rawText = JSON.stringify({ reply: groqText + '\n\n_(Satellite image temporarily unavailable — Tony is working from terrain data only this turn.)_', features: [] })
-                usedGemini = true // marks as handled so paid chain is skipped
+            }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('OllamaTimeout')), OLLAMA_TIMEOUT_MS)),
+          ])
+          if (ollamaResult.ok) {
+            const ollamaJson = await ollamaResult.json()
+            const ollamaText = (typeof ollamaJson.response === 'string' ? ollamaJson.response : '').trim()
+            if (ollamaText) {
+              // Wrap as v2 JSON if Ollama returned prose
+              try {
+                JSON.parse(ollamaText) // already JSON?
+                rawText = ollamaText
+              } catch {
+                rawText = JSON.stringify({
+                  message: ollamaText.slice(0, 800) + '\n\n_(Satellite image temporarily unavailable — Tony is working from terrain data only this turn.)_',
+                  zones: [],
+                  stand_sites: [],
+                })
               }
+              usedFallback = true
             }
-          } catch (e: unknown) {
-            console.warn('[chat] Groq degraded fallback failed:', e instanceof Error ? e.message : e)
           }
+        } catch (e: unknown) {
+          console.warn('[chat] Ollama/Hermes fallback failed:', e instanceof Error ? e.message : e)
         }
       }
 
-      // 3. Anthropic Haiku 4.5 — paid vision fallback. Only fires with ENABLE_PAID_FALLBACK=1.
-      if (!usedGemini && anthropicKey && paidFallbackEnabled) {
+      // ── 4. Groq text-only — free cloud fallback (rate-limited Gemini path) ───
+      if (!usedVision && !usedFallback && geminiRateLimited && groqKey) {
         try {
-          const haikuPromise = fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': anthropicKey,
-              'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-              model: 'claude-haiku-4-5-20251001',
-              max_tokens: 4096,
-              system: TONY_SYSTEM_PROMPT,
-              tools: [HABITAT_TOOL],
-              tool_choice: { type: 'tool', name: 'place_habitat_features' },
-              messages: [{
-                role: 'user',
-                content: [
-                  { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imgBase64 } },
-                  { type: 'text', text: tonyPrompt },
-                ],
-              }],
+          const degradedPrompt = `${tonyPrompt}\n\n[NOTE: Satellite image unavailable due to rate limits. Advise based on property description, spatial data context, and user message only. Be explicit that you cannot see the satellite image this turn.]`
+          const groqResult = await Promise.race([
+            fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${groqKey}` },
+              body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: degradedPrompt }],
+                max_tokens: 1400,
+                temperature: 0.3,
+              }),
             }),
-          })
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GroqTimeout')), 20_000)),
+          ])
+          if (groqResult.ok) {
+            const groqJson = await groqResult.json()
+            const groqText = groqJson.choices?.[0]?.message?.content?.trim() ?? ''
+            if (groqText) {
+              // Try to parse as JSON first; fall back to wrapping in v2 envelope
+              try {
+                JSON.parse(groqText)
+                rawText = groqText
+              } catch {
+                rawText = JSON.stringify({
+                  message: groqText.slice(0, 800) + '\n\n_(Satellite image temporarily unavailable — Tony is working from terrain data only this turn.)_',
+                  zones: [],
+                  stand_sites: [],
+                })
+              }
+              usedFallback = true
+            }
+          }
+        } catch (e: unknown) {
+          console.warn('[chat] Groq degraded fallback failed:', e instanceof Error ? e.message : e)
+        }
+      }
+
+      // ── 5. Anthropic Haiku 4.5 — paid vision fallback (ENABLE_PAID_FALLBACK=1) ──
+      if (!usedVision && !usedFallback && anthropicKey && paidFallbackEnabled) {
+        try {
           const haikuResult = await Promise.race([
-            haikuPromise,
+            fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': anthropicKey,
+                'anthropic-version': '2023-06-01',
+              },
+              body: JSON.stringify({
+                model: 'claude-haiku-4-5-20251001',
+                max_tokens: 4096,
+                system: TONY_SYSTEM_PROMPT,
+                messages: [{
+                  role: 'user',
+                  content: [
+                    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imgBase64 } },
+                    { type: 'text', text: tonyPrompt },
+                  ],
+                }],
+              }),
+            }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), HAIKU_TIMEOUT_MS)),
           ])
           if (!haikuResult.ok) throw new Error(`Haiku ${haikuResult.status}`)
           const haikuJson = await haikuResult.json()
-          const haikuToolBlock = haikuJson.content?.find((c: any) => c.type === 'tool_use')
-          if (haikuToolBlock?.input) {
-            rawText = JSON.stringify(haikuToolBlock.input)
-          } else {
-            rawText = haikuJson.content?.find((c: any) => c.type === 'text')?.text?.trim() ?? ''
-          }
-          if (rawText) usedAnthropic = true
+          rawText = haikuJson.content?.find((c: any) => c.type === 'text')?.text?.trim() ?? ''
+          if (rawText) usedVision = true
           else throw new Error('Haiku empty response')
         } catch (e: unknown) {
           console.warn('[chat] Haiku 4.5 failed, trying Sonnet:', e instanceof Error ? e.message : e)
         }
       }
 
-      // 4. Anthropic Sonnet 4.6 — deeper paid fallback. Only fires with ENABLE_PAID_FALLBACK=1.
-      if (!usedGemini && !usedAnthropic && anthropicKey && paidFallbackEnabled) {
+      // ── 6. Anthropic Sonnet 4.6 — deeper paid fallback (ENABLE_PAID_FALLBACK=1) ──
+      if (!usedVision && !usedFallback && anthropicKey && paidFallbackEnabled) {
         try {
-          const anthropicPromise = fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': anthropicKey,
-              'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-6',
-              max_tokens: 5000,
-              system: TONY_SYSTEM_PROMPT,
-              tools: [HABITAT_TOOL],
-              tool_choice: { type: 'tool', name: 'place_habitat_features' },
-              messages: [{
-                role: 'user',
-                content: [
-                  { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imgBase64 } },
-                  { type: 'text', text: tonyPrompt },
-                ],
-              }],
-            }),
-          })
           const result = await Promise.race([
-            anthropicPromise,
+            fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': anthropicKey,
+                'anthropic-version': '2023-06-01',
+              },
+              body: JSON.stringify({
+                model: 'claude-sonnet-4-6',
+                max_tokens: 5000,
+                system: TONY_SYSTEM_PROMPT,
+                messages: [{
+                  role: 'user',
+                  content: [
+                    { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imgBase64 } },
+                    { type: 'text', text: tonyPrompt },
+                  ],
+                }],
+              }),
+            }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), ANTHROPIC_TIMEOUT_MS)),
           ])
           if (!result.ok) throw new Error(`Anthropic ${result.status}`)
           const anthropicJson = await result.json()
-          const toolBlock = anthropicJson.content?.find((c: any) => c.type === 'tool_use')
-          if (toolBlock?.input) {
-            rawText = JSON.stringify(toolBlock.input)
-          } else {
-            rawText = anthropicJson.content?.find((c: any) => c.type === 'text')?.text?.trim() ?? ''
-          }
-          if (rawText) usedAnthropic = true
-          else throw new Error('Anthropic empty response')
-        } catch (anthropicErr: unknown) {
-          console.warn('[chat] Anthropic failed, falling back to OpenAI:', anthropicErr instanceof Error ? anthropicErr.message : anthropicErr)
+          rawText = anthropicJson.content?.find((c: any) => c.type === 'text')?.text?.trim() ?? ''
+          if (rawText) usedVision = true
+          else throw new Error('Anthropic Sonnet empty response')
+        } catch (e: unknown) {
+          console.warn('[chat] Anthropic Sonnet failed, trying OpenAI:', e instanceof Error ? e.message : e)
         }
       }
 
-      // 5. OpenAI — final paid fallback. Only fires with ENABLE_PAID_FALLBACK=1.
-      if (!usedGemini && !usedAnthropic && openaiKey && paidFallbackEnabled) {
+      // ── 7. OpenAI — final paid fallback (ENABLE_PAID_FALLBACK=1) ─────────────
+      if (!usedVision && !usedFallback && openaiKey && paidFallbackEnabled) {
         try {
-          const openaiPromise = fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
-            body: JSON.stringify({
-              model: 'gpt-4o',
-              messages: [
-                { role: 'system', content: 'You are a JSON API. You MUST respond with raw valid JSON only — no markdown, no code fences, no prose before or after. The JSON must have "reply" (string) and "features" (array) keys.' },
-                { role: 'user', content: [
-                  { type: 'text', text: tonyPrompt },
-                  { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } }
-                ]}
-              ],
-              max_tokens: 4096,
-              temperature: 0.3,
-            }),
-          })
           const result = await Promise.race([
-            openaiPromise,
+            fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${openaiKey}` },
+              body: JSON.stringify({
+                model: 'gpt-4o',
+                messages: [
+                  { role: 'system', content: 'You are a JSON API. Respond with raw valid JSON only — no markdown, no code fences. The JSON must have "message" (string), "zones" (array), and "stand_sites" (array) keys.' },
+                  { role: 'user', content: [
+                    { type: 'text', text: tonyPrompt },
+                    { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } }
+                  ]}
+                ],
+                max_tokens: 4096,
+                temperature: 0.3,
+              }),
+            }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), OPENAI_TIMEOUT_MS)),
           ])
           if (!result.ok) throw new Error(`OpenAI ${result.status}`)
           const openaiJson = await result.json()
           rawText = openaiJson.choices?.[0]?.message?.content?.trim() ?? ''
-          if (rawText) usedOpenAI = true
-        } catch (openaiErr: unknown) {
-          console.warn('[chat] OpenAI failed:', openaiErr instanceof Error ? openaiErr.message : openaiErr)
+          if (rawText) usedVision = true
+        } catch (e: unknown) {
+          console.warn('[chat] OpenAI failed:', e instanceof Error ? e.message : e)
         }
       }
 
-      if (!usedGemini && !usedAnthropic && !usedOpenAI) {
+      if (!usedVision && !usedFallback) {
         throw new Error(geminiRateLimited ? 'TonyRateLimit' : 'TonyTimeout')
       }
     } catch (err: unknown) {
@@ -1173,185 +1141,18 @@ export async function POST(req: NextRequest) {
       }, { status: 503 })
     }
 
-    let reply = rawText
-    let tonyFeatures: any[] = []
+    // ── Parse v2 response → typed zones + stand_sites ────────────────────────
+    const { message: tonyMessage, zones: rawZones, stand_sites: rawStands } = parseV2Response(rawText)
 
-    try {
-      const jsonStr = extractJsonFromText(rawText)
-      const parsed = JSON.parse(jsonStr)
-
-      if (Array.isArray(parsed)) {
-        // Gemini returned a raw feature array — extract analysis text before the JSON as reply
-        tonyFeatures = parsed
-        const jsonStart = rawText.search(/\[/)
-        const textBefore = jsonStart > 20 ? rawText.slice(0, jsonStart).trim() : ''
-        // Strip any trailing backtick fence markers from the text portion
-        reply = textBefore.replace(/```[\s\S]*$/, '').trim()
-          || `Identified ${tonyFeatures.length} feature${tonyFeatures.length !== 1 ? 's' : ''} on the map.`
-      } else {
-        tonyFeatures = Array.isArray(parsed.features) ? parsed.features : []
-        if (parsed.reply) {
-          reply = parsed.reply
-        } else if (tonyFeatures.length > 0) {
-          // Extract text before JSON block as reply
-          const jsonStart = rawText.search(/[{\[]/)
-          const textBefore = jsonStart > 20 ? rawText.slice(0, jsonStart).replace(/```[\s\S]*$/, '').trim() : ''
-          reply = textBefore || `Identified ${tonyFeatures.length} feature${tonyFeatures.length !== 1 ? 's' : ''} on the map.`
-        } else {
-          reply = rawText || 'No response from Tony.'
-        }
-      }
-    } catch {
-      reply = rawText || 'No response from Tony.'
-    }
-
-    // Resolve OSM features for conflict checking — use server-fetched spatial data
-    const osmFeatures: OsmFeature[] = Array.isArray(resolvedSpatial?.osmFeatures)
-      ? resolvedSpatial.osmFeatures
-      : []
-
-    // Phase 1: Recalculate coordinates from pixel positions before any other checks
-    tonyFeatures = tonyFeatures.map(f => recalcCoordsFromPixels(f, bounds))
-
-    // Filter annotations to valid geometry within bounds, then flag terrain conflicts
-    const annotations = tonyFeatures
-      .filter(f => f.geometry?.type && Array.isArray(f.geometry?.coordinates))
-      .filter(f => {
-        const { type, coordinates } = f.geometry
-        if (type === 'Point') return isCoordInBounds(coordinates, bounds)
-        if (type === 'LineString') return coordinates.some((c: number[]) => isCoordInBounds(c, bounds))
-        if (type === 'Polygon') return coordinates[0]?.some((c: number[]) => isCoordInBounds(c, bounds))
-        return false
-      })
-      .filter(f => {
-        const validGeomTypes: Record<string, string[]> = {
-          stand: ['Point'],
-          water: ['Point', 'Polygon'],
-          food_plot: ['Polygon'],
-          bedding: ['Polygon'],
-          trail: ['LineString'],
-          mineral: ['Point'],
-          scrape_line: ['LineString'],
-          travel_corridor: ['LineString'],
-          sanctuary: ['Polygon'],
-          staging_area: ['Polygon'],
-          tall_standing_cover: ['Polygon'],
-          sneak_trail: ['LineString'],
-          access_trail: ['LineString'],
-          access_point: ['Point'],
-          pinch_point: ['Point'],
-        }
-        const allowed = validGeomTypes[f.type]
-        if (!allowed) return true // unknown type, allow through
-        return allowed.includes(f.geometry.type)
-      })
-      .filter(f => !boundaryRing || isFeatureInBoundary(f, boundaryRing))
-      .map(f => {
-        // Auto-close unclosed polygons; drop degenerate LineStrings
-        if (f.geometry.type === 'Polygon') {
-          const ring: [number, number][] = f.geometry.coordinates[0]
-          if (ring && ring.length > 0) {
-            const first = ring[0]
-            const last = ring[ring.length - 1]
-            if (first[0] !== last[0] || first[1] !== last[1]) {
-              f = { ...f, geometry: { ...f.geometry, coordinates: [[...ring, first]] } }
-            }
-          }
-        }
-        if (f.geometry.type === 'LineString' && f.geometry.coordinates.length < 3) {
-          return null
-        }
-        return f
-      })
-      .filter((f): f is NonNullable<typeof f> => f !== null)
-      .map(f => {
-        // Terrain conflict check: only run on stand-type features where placement matters most
-        let conflictWarning: string | undefined
-        if (osmFeatures.length > 0 && (f.type === 'stand' || f.type === 'food_plot')) {
-          const geom = f.geometry
-          let checkCoord: [number, number] | null = null
-          if (geom.type === 'Point') checkCoord = geom.coordinates as [number, number]
-          else if (geom.type === 'Polygon') {
-            // Use centroid of the first ring for a polygon check
-            const ring = geom.coordinates[0] as [number, number][]
-            if (ring.length > 0) {
-              const lngSum = ring.reduce((s: number, c: [number, number]) => s + c[0], 0)
-              const latSum = ring.reduce((s: number, c: [number, number]) => s + c[1], 0)
-              checkCoord = [lngSum / ring.length, latSum / ring.length]
-            }
-          }
-          if (checkCoord) {
-            const warning = checkTerrainConflict(checkCoord, osmFeatures)
-            if (warning) conflictWarning = warning
-          }
-        }
-
-        const confidence = typeof f.confidence === 'number' ? Math.max(0, Math.min(100, Math.round(f.confidence))) : undefined
-        const priority = typeof f.priority === 'number' ? Math.max(1, Math.min(5, Math.round(f.priority))) : undefined
-
-        // Phase 1: OSM bbox terrain type validation
-        const terrainConflict = validateTerrainType(f, osmFeatures)
-        const effectiveConflict = conflictWarning ?? terrainConflict
-
-        return {
-          type: f.type ?? 'stand',
-          label: f.label ?? '',
-          why: f.why ?? '',
-          confidence,
-          priority,
-          conflictWarning: effectiveConflict,
-          geojson: {
-            type: 'Feature',
-            geometry: f.geometry,
-            properties: { type: f.type, label: f.label, why: f.why, confidence, priority, conflictWarning: effectiveConflict }
-          }
-        }
-      })
-
-    // Phase 1: Feature spacing check
-    const spacedAnnotations = checkFeatureSpacing(annotations).map(f => ({
-      ...f,
-      conflictWarning: f.conflictWarning ?? f.spacingWarning,
-    }))
-
-    // NLCD post-validation: verify food_plot and stand centroids against actual land cover.
-    // Drop food_plots placed on forest/woody-wetland — the #1 reported accuracy bug.
-    const FOREST_CLASSES = new Set([41, 42, 43, 90])
-    const WATER_CLASSES = new Set([11])
-
-    const nlcdChecked = await Promise.all(
-      spacedAnnotations.map(async ann => {
-        if (ann.type !== 'food_plot' && ann.type !== 'stand') return ann
-        const geom = ann.geojson?.geometry
-        if (!geom) return ann
-        let centLat: number | null = null
-        let centLng: number | null = null
-        if (geom.type === 'Point') {
-          centLng = geom.coordinates[0]
-          centLat = geom.coordinates[1]
-        } else if (geom.type === 'Polygon') {
-          const ring = geom.coordinates[0] as [number, number][]
-          if (ring?.length) {
-            centLng = ring.reduce((s, c) => s + c[0], 0) / ring.length
-            centLat = ring.reduce((s, c) => s + c[1], 0) / ring.length
-          }
-        }
-        if (centLat === null || centLng === null) return ann
-        const sample = await fetchNlcdPoint(centLat, centLng).catch(() => null)
-        if (!sample) return ann
-        if (ann.type === 'food_plot' && FOREST_CLASSES.has(sample.landCoverCode)) {
-          return null // drop — food plot centroid is in forest/woody wetland
-        }
-        if (WATER_CLASSES.has(sample.landCoverCode)) {
-          return { ...ann, conflictWarning: `NLCD confirms open water at placement — invalid location` }
-        }
-        return ann
-      })
-    )
-    const validatedAnnotations = nlcdChecked.filter((a): a is NonNullable<typeof a> => a !== null)
+    // NLCD confidence check on food_plot and kill_plot zones
+    const checkedZones = await nlcdCheckZones(rawZones, bounds)
 
     clearTimeout(globalTimer)
-    return NextResponse.json({ reply, annotations: validatedAnnotations })
+    return NextResponse.json({
+      reply: tonyMessage,
+      zones: checkedZones,
+      stand_sites: rawStands,
+    })
   } catch (err) {
     clearTimeout(globalTimer)
     console.error('[chat] error:', err)
