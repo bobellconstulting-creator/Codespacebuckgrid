@@ -3,7 +3,7 @@
 import { motion, useInView, AnimatePresence } from 'framer-motion'
 import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
-import BuckGridMark from '../components/BuckGridMark'
+import WildLogicMark from '../components/WildLogicMark'
 
 // ─── Color tokens ─────────────────────────────────────────────────────────────
 const C = {
@@ -67,13 +67,7 @@ function Nav() {
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
-          <BuckGridMark size={32} color="#B8923A" accent="#6B7A57" fill="#1E2122" />
-          <div style={{ lineHeight: 1 }}>
-            <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '18px', letterSpacing: '0.14em', color: '#D8D3C5', textTransform: 'uppercase', display: 'flex', alignItems: 'baseline', gap: '5px' }}>
-              <span>BUCK<span style={{ color: C.accent }}>GRID</span></span>
-              <span style={{ fontSize: '10px', fontWeight: 600, letterSpacing: '0.16em', color: '#6E6A5C' }}>PRO</span>
-            </div>
-          </div>
+          <WildLogicMark size={32} variant="full" />
         </Link>
 
         {/* Center links */}
@@ -96,7 +90,7 @@ function Nav() {
           className="px-5 py-2 rounded-lg text-sm font-bold transition-all hover:opacity-90 hover:scale-105 active:scale-100"
           style={{ background: 'linear-gradient(135deg, #6B7A57, #4A543D)', color: '#0C0F0A' }}
         >
-          Try Free
+          Start Mapping Free →
         </Link>
       </div>
     </nav>
@@ -359,9 +353,8 @@ function Hero() {
             className="font-display text-7xl md:text-8xl lg:text-9xl leading-none mb-6 tracking-tight uppercase"
             style={{ color: '#fff' }}
           >
-            Draw Your Land.
+            You Know Your Land.
             <br />
-            Talk To{' '}
             <span
               style={{
                 backgroundImage: `linear-gradient(135deg, ${C.accent} 0%, #6B7A57 100%)`,
@@ -370,10 +363,8 @@ function Hero() {
                 backgroundClip: 'text',
               }}
             >
-              Tony.
+              Tony Knows Deer.
             </span>
-            <br />
-            Kill Bigger Bucks.
           </motion.h1>
 
           {/* Subheadline */}
@@ -384,7 +375,7 @@ function Hero() {
             className="text-lg md:text-xl leading-relaxed mb-10 max-w-xl mx-auto"
             style={{ color: C.muted }}
           >
-            Other apps show you a map. Tony reads your terrain — bedding zones, funnels, thermals — and tells you exactly where to hang your stand.
+            Tell Tony what you&apos;re seeing — where deer are bedding, how they&apos;re moving, what&apos;s working. Get a tactical game plan built around your actual terrain. BuckGrid Pro puts a habitat consultant in your pocket.
           </motion.p>
 
           {/* CTAs */}
@@ -403,8 +394,8 @@ function Hero() {
                 boxShadow: `0 8px 30px -8px rgba(107,122,87,0.5)`,
               }}
             >
-              Analyze My Land Free
-              <span className="group-hover:translate-x-1 transition-transform">→</span>
+              Start Mapping Free →
+              <span className="group-hover:translate-x-1 transition-transform"></span>
             </Link>
             <a
               href="#how-it-works"
@@ -438,10 +429,10 @@ function Hero() {
 // ─── Trust bar ────────────────────────────────────────────────────────────────
 
 const STATS = [
-  { val: '6 Layers', label: 'Data Sources' },
-  { val: '<60s',     label: 'Time to First Plan' },
-  { val: '$0',       label: 'To Try Tony' },
-  { val: '24/7',     label: 'Tony Is Available' },
+  { val: 'First Map Free', label: 'No Card Required' },
+  { val: 'Tony AI',        label: 'Wildlife Consultant' },
+  { val: 'Satellite Analysis', label: 'Real Imagery' },
+  { val: 'Zero Setup',    label: 'Start in Seconds' },
 ]
 
 function TrustBar() {
@@ -457,7 +448,7 @@ function TrustBar() {
                 borderRight: i < STATS.length - 1 ? `1px solid rgba(107,122,87,0.15)` : 'none',
               }}
             >
-              <div className="text-3xl font-bold font-display tracking-wide" style={{ color: C.accent }}>{s.val}</div>
+              <div className="text-2xl font-bold font-display tracking-wide leading-tight" style={{ color: C.accent }}>{s.val}</div>
               <div className="text-xs mt-1.5 font-semibold uppercase tracking-widest" style={{ color: C.muted }}>{s.label}</div>
             </div>
           ))}
@@ -488,7 +479,7 @@ const HOW_STEPS = [
     num: '03',
     icon: <IconBrain />,
     title: 'Get Tony\'s Expert Plan',
-    desc: 'Tony AI analyzes your map with the eye of a wildlife biologist and delivers a specific, actionable habitat strategy — drawn directly on your property.',
+    desc: 'Tony reads your terrain data and field intel — then delivers a specific, actionable habitat strategy tailored to your property\'s actual conditions.',
     color: C.accent,
   },
 ]
@@ -508,7 +499,7 @@ function HowItWorks() {
             className="inline-flex items-center gap-2 mt-6 px-4 py-1.5 rounded-full text-xs font-semibold"
             style={{ background: C.greenDim, color: C.green, border: `1px solid rgba(34,197,94,0.2)` }}
           >
-            Takes under 5 minutes
+            Takes under 90 seconds
           </div>
         </FadeIn>
 
@@ -561,23 +552,23 @@ function HowItWorks() {
 const FIELD_REPORTS = [
   {
     state: 'Kansas',
-    acres: '160 acres',
+    acres: '160-acre',
     terrain: 'Ag ground — CRP + soybeans',
-    finding: 'Tony identified a staging area stand 140 yards from the CRP edge on the downwind side of the neighbor\'s corn. Placed it on a bench where thermals rise in the evening. Recommended a 2-acre clover kill plot in the timber opening to the NE — confirmed open ground, 6+ hours sun.',
-    tags: ['Stand', 'Kill Plot', 'Staging Area'],
+    finding: 'On a property like this, Tony would identify a staging area stand 140 yards from the CRP edge on the downwind side of the neighbor\'s corn — placed on a bench where thermals rise in the evening. It would recommend a 2-acre clover kill plot in the timber opening to the NE, confirming open ground with 6+ hours of sun via satellite.',
+    tags: ['Stand Placement', 'Kill Plot', 'Staging Area'],
   },
   {
     state: 'Missouri',
-    acres: '80 acres',
+    acres: '80-acre',
     terrain: 'Ozark timber — heavy pressure',
-    finding: 'Tony flagged zero sanctuary on the property — no block of 5+ acres away from the two-track. Prescribed hinge-cut TSI on the south 12 acres first, then placed a funnel stand on the 60-yard corridor connecting two timber blocks. Entry trail designed for NW wind, creek bottom approach.',
+    finding: 'On tight Ozark timber, Tony would flag zero sanctuary — no block of 5+ acres away from the two-track. It would prescribe hinge-cut TSI on the south section first, then place a funnel stand on the corridor connecting two timber blocks. Entry trail designed for NW wind with a creek bottom approach.',
     tags: ['Sanctuary', 'TSI', 'Funnel Stand'],
   },
   {
     state: 'Illinois',
-    acres: '220 acres',
+    acres: '220-acre',
     terrain: 'Row crop edges + timber',
-    finding: 'Adjacent corn confirmed by CropScape data. Tony recommended staging area stands over destination food plots — deer are feeding off-property. Placed a 0.4-acre brassica kill plot at the timber fringe 80 yards from the field edge. Bedding block identified in the 15-acre NW woodlot.',
+    finding: 'With adjacent corn confirmed by CropScape data, Tony would recommend staging area stands over destination food plots — deer are feeding off-property. It would place a 0.4-acre brassica kill plot at the timber fringe 80 yards from the field edge and identify the bedding block in the NW woodlot.',
     tags: ['Staging Stand', 'Brassica Plot', 'Bedding'],
   },
 ]
@@ -587,14 +578,14 @@ function Testimonials() {
     <section id="testimonials" className="py-28 px-6" style={{ background: '#1E2122' }}>
       <div className="max-w-5xl mx-auto">
         <FadeIn className="text-center mb-16">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Field Reports</div>
+          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Example Analyses</div>
           <h2 className="font-display text-5xl md:text-6xl text-white uppercase tracking-tight">
-            What Tony actually finds.
+            This is what Tony finds.
             <br />
-            <span style={{ color: C.muted, fontSize: '0.85em' }}>On real ground.</span>
+            <span style={{ color: C.muted, fontSize: '0.85em' }}>On ground like yours.</span>
           </h2>
           <p className="mt-4 text-sm max-w-xl mx-auto" style={{ color: C.muted }}>
-            These are real property analyses from Tony. Not generic tips — specific terrain reads with stand locations, entry trails, and food plot specs drawn directly on the satellite map.
+            Not generic tips — specific terrain reads with stand locations, entry trails, and food plot specs drawn directly on the satellite map. This is the kind of output Tony delivers on every analysis.
           </p>
         </FadeIn>
 
@@ -661,15 +652,15 @@ function Testimonials() {
                   boxShadow: `0 8px 30px -8px rgba(107,122,87,0.5)`,
                 }}
               >
-                Try Tony Free First →
+                Start Mapping Free →
               </Link>
-              <a
-                href="mailto:bo@neuradexai.com?subject=Tony Property Report — $97&body=I want a full Tony AI property report. My property is located at: [describe or paste coordinates]"
-                className="px-8 py-4 rounded-xl font-bold text-base transition-all hover:text-white"
-                style={{ color: C.accent, border: `1px solid rgba(107,122,87,0.3)` }}
+              <button
+                onClick={() => startCheckout('/api/checkout/report')}
+                className="px-8 py-4 rounded-xl font-bold text-base transition-all hover:text-white cursor-pointer"
+                style={{ color: C.accent, border: `1px solid rgba(107,122,87,0.3)`, background: 'transparent' }}
               >
                 Get Full Report — $97
-              </a>
+              </button>
             </div>
             <p className="text-xs" style={{ color: C.muted }}>
               Full report includes: satellite analysis · top 3-5 stand locations · food plot specs · bedding corridors · entry trail recommendations
@@ -778,12 +769,12 @@ function Features() {
 // ─── Comparison Table ─────────────────────────────────────────────────────────
 
 const COMPARE_ROWS = [
-  { label: 'Cost', vals: ['$100/yr', '$79.99/yr', 'Free to start'] },
+  { label: 'Cost', vals: ['$36-108/yr', '$99/yr', 'Free to start'] },
   { label: 'Satellite layers + topo', vals: [true, true, true] },
   { label: 'AI terrain analysis', vals: [false, false, true] },
+  { label: 'AI reads your terrain + builds game plan', vals: [false, false, true] },
   { label: 'Tells you WHERE to hang your stand', vals: [false, false, true] },
   { label: 'Explains the reasoning', vals: [false, false, true] },
-  { label: 'Conversational — asks it anything', vals: [false, false, true] },
   { label: 'No account required to try', vals: [false, false, true] },
 ]
 
@@ -798,6 +789,9 @@ function ComparisonTable() {
             <br />
             <span style={{ color: C.muted, fontSize: '0.85em' }}>You need answers.</span>
           </h2>
+          <p className="mt-5 text-sm max-w-lg mx-auto" style={{ color: C.muted }}>
+            BuckGrid Pro AI reads your terrain and builds your game plan — they don&apos;t.
+          </p>
         </FadeIn>
 
         <FadeIn>
@@ -806,7 +800,7 @@ function ComparisonTable() {
             {/* Header */}
             <div className="grid grid-cols-4" style={{ background: C.card, borderBottom: `1px solid ${C.border}` }}>
               <div className="p-5" />
-              {['onX Hunt', 'Spartan Forge', 'BuckGrid Pro'].map((col, i) => (
+              {['HuntStand', 'Tactacam Habitat IQ', 'BuckGrid Pro'].map((col, i) => (
                 <div
                   key={col}
                   className="p-5 text-center"
@@ -916,7 +910,7 @@ function Pricing() {
                 ))}
               </ul>
               <Link href="/buckgrid" className="block text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90" style={{ background: 'transparent', color: C.text, border: `1px solid ${C.border}` }}>
-                Start Free
+                Start Mapping Free →
               </Link>
             </div>
           </FadeIn>
@@ -964,7 +958,7 @@ function Pricing() {
                 <div className="text-xs mt-1" style={{ color: C.muted }}>No subscription required</div>
               </div>
               <ul className="flex-1 space-y-3 mb-8">
-                {['Tony analyzes your land', 'Top 3-5 stand placements', 'Food plot specs + sizing', 'Entry trail recommendations', 'Bedding corridor mapping', 'Delivered in 48 hours'].map(f => (
+                {['Tony analyzes your land', 'Top 3-5 stand priorities', 'Food plot specs + sizing', 'Entry trail recommendations', 'Bedding corridor mapping', 'Zone strategy ready in seconds'].map(f => (
                   <li key={f} className="flex items-start gap-3 text-sm" style={{ color: C.text }}>
                     <span className="mt-0.5 flex-shrink-0" style={{ color: C.green }}><IconCheck /></span>{f}
                   </li>
@@ -983,7 +977,7 @@ function Pricing() {
 
         <FadeIn>
           <p className="text-center text-sm" style={{ color: C.muted }}>
-            Free tier available forever. Pro annual plan — flat rate, no acreage limits. Field Reports delivered in 48 hours.
+            Free tier available forever. Pro annual plan — flat rate, no acreage limits. Tony&apos;s analysis ready in seconds.
           </p>
         </FadeIn>
       </div>
@@ -996,11 +990,11 @@ function Pricing() {
 const FAQS = [
   {
     q: 'How does Tony know about my specific land?',
-    a: 'Tony uses Gemini Vision AI to actually read your satellite map — the same way a consultant would look at your property from the air. The more features you draw, the more specific his recommendations become.',
+    a: 'Tony reads your terrain data — elevation, soil type, land cover, OSM features — and reasons about habitat the way a consultant would. The more you tell him about what you\'re seeing on the ground, the sharper his game plan gets.',
   },
   {
     q: 'Does Tony replace a real habitat consultant?',
-    a: 'For most hunters on properties under 500 acres, Tony is genuinely better — he\'s available 24/7, costs a fraction of the price, and improves every season. For multi-thousand-acre commercial operations, Tony is an excellent complement.',
+    a: 'Tony gives you a real consultant\'s reasoning — zone priorities, wind strategy, seasonal timing — available 24/7 at a fraction of the cost. He\'s most valuable when you combine his terrain analysis with your own field observations. Your eyes on the ground plus Tony\'s pattern recognition is a hard combo to beat.',
   },
   {
     q: 'What\'s the difference between Free and Pro?',
@@ -1104,7 +1098,7 @@ function FinalCTA() {
             <span style={{ color: C.accent }}>right now.</span>
           </h2>
           <p className="text-lg mb-10" style={{ color: C.muted }}>
-            Tony will find them in under 60 seconds. Start free — no credit card required.
+            Tony will find them in under 90 seconds. Start free — no credit card required.
           </p>
           <Link
             href="/buckgrid"
@@ -1115,8 +1109,7 @@ function FinalCTA() {
               boxShadow: `0 16px 40px -8px rgba(107,122,87,0.45)`,
             }}
           >
-            Analyze My Land Free
-            <span>→</span>
+            Start Mapping Free →
           </Link>
           <p className="text-xs mt-6" style={{ color: C.muted }}>
             No account required · No credit card · Tony starts analyzing in seconds
@@ -1137,28 +1130,13 @@ function Footer() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2.5 mb-3">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{
-                  background: 'linear-gradient(135deg, #1e2a18, #2a3820)',
-                  border: `1px solid rgba(107,122,87,0.35)`,
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="5" stroke="#6B7A57" strokeWidth="1.2" />
-                  <circle cx="8" cy="8" r="1.5" fill="#6B7A57" />
-                  <line x1="8" y1="1" x2="8" y2="4.5" stroke="#6B7A57" strokeWidth="1.2" />
-                  <line x1="8" y1="11.5" x2="8" y2="15" stroke="#6B7A57" strokeWidth="1.2" />
-                  <line x1="1" y1="8" x2="4.5" y2="8" stroke="#6B7A57" strokeWidth="1.2" />
-                  <line x1="11.5" y1="8" x2="15" y2="8" stroke="#6B7A57" strokeWidth="1.2" />
-                </svg>
-              </div>
+              <WildLogicMark size={28} variant="mark" />
               <span className="font-bold text-white">
-                BuckGrid <span style={{ color: C.accent }}>Pro</span>
+                Buck<span style={{ color: C.accent }}>Grid Pro</span>
               </span>
             </div>
             <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: C.muted }}>
-              Precision habitat intelligence for serious hunters.
+              Habitat intelligence for serious hunters.
             </p>
             <p className="text-sm max-w-xs" style={{ color: C.muted }}>
               Expert AI advice 24/7 for less than a tank of gas.

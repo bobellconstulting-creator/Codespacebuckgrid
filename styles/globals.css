@@ -1,17 +1,294 @@
+/* ============================================================
+   WildLogic v2 — Global Styles
+   Tailwind v4 + WildLogic Design System
+   ============================================================ */
+
 @import 'tailwindcss';
 @import './neural_noir_map_visual_aids.css';
 
-/* Add any additional global styles here */
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ------------------------------------------------------------
+   Google Fonts
+   ------------------------------------------------------------ */
+@import url('https://fonts.googleapis.com/css2?family=Teko:wght@400;600;700;900&family=Share+Tech+Mono&family=Inter:wght@400;500;600&display=swap');
+
+/* ------------------------------------------------------------
+   CSS Custom Properties — WildLogic Design System
+   ------------------------------------------------------------ */
+:root {
+  --color-ink:       #1E2122;
+  --color-bone:      #D8D3C5;
+  --color-moss:      #7A8F62;
+  --color-brass:     #B8923A;
+  --color-terra:     #C47B3C;
+  --color-surface:   #2E3335;
+  --color-surface-2: #3A4042;
+  --color-muted:     #8A8580;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* ------------------------------------------------------------
+   Body Reset
+   ------------------------------------------------------------ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-ink);
+  color: var(--color-bone);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  min-height: 100dvh;
+}
+
+/* ------------------------------------------------------------
+   Premium Scrollbar — Moss-Tinted, Thin
+   ------------------------------------------------------------ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-ink);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(122, 143, 98, 0.35);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(122, 143, 98, 0.6);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--color-ink);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 143, 98, 0.35) var(--color-ink);
+}
+
+/* ------------------------------------------------------------
+   WildLogic Utility Classes
+   ------------------------------------------------------------ */
+
+/* Labels — Teko display font, uppercase, tracked */
+.wl-label {
+  font-family: 'Teko', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  line-height: 1.1;
+}
+
+/* Mono data readout — Share Tech Mono, compact */
+.wl-mono {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+}
+
+/* Card surface */
+.wl-card {
+  background: var(--color-surface);
+  border: 1px solid rgba(122, 143, 98, 0.15);
+  border-radius: 6px;
+}
+
+/* Primary button — brass gradient, ink text, Teko */
+.wl-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5em 1.25em;
+  background: linear-gradient(135deg, var(--color-brass) 0%, var(--color-terra) 100%);
+  color: var(--color-ink);
+  font-family: 'Teko', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.wl-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.wl-btn-primary:active {
+  transform: scale(0.98);
+}
+
+/* Ghost button — transparent, moss border + text */
+.wl-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45em 1.25em;
+  background: transparent;
+  color: var(--color-moss);
+  font-family: 'Teko', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid var(--color-moss);
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.wl-btn-ghost:hover {
+  background: rgba(122, 143, 98, 0.12);
+  color: var(--color-bone);
+}
+
+.wl-btn-ghost:active {
+  background: rgba(122, 143, 98, 0.2);
+}
+
+/* ------------------------------------------------------------
+   Keyframe Animations
+   ------------------------------------------------------------ */
+
+/* Fade up — element enters from slightly below */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Simple fade in */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Pulse — subtle scale throb */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+/* Bounce — playful vertical bounce */
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+  }
+  50% {
+    transform: translateY(-8px);
+    animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+  }
+}
+
+/* Zone Appear — Tony zones materializing on the map (fade in + scale from center) */
+@keyframes zoneAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Animation utility classes */
+.animate-fade-up {
+  animation: fadeUp 0.35s ease both;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease both;
+}
+
+.animate-zone-appear {
+  animation: zoneAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transform-origin: center center;
+}
+
+/* ------------------------------------------------------------
+   Mobile Safe Area Padding Utilities
+   ------------------------------------------------------------ */
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.safe-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+.safe-y {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-all {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+/* Margin variants */
+.safe-mt {
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-mb {
+  margin-bottom: env(safe-area-inset-bottom, 0px);
 }
