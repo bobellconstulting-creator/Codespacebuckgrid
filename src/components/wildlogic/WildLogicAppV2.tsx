@@ -8,7 +8,7 @@ import { useWildLogicStore } from '@/store/wildlogicStore'
 import type { ChatMessage } from '@/store/wildlogicStore'
 import WildLogicMap, { type WildLogicMapHandle } from '@/components/wildlogic/map/WildLogicMap'
 import TonyPanel, { type TonyPanelHandle } from '@/components/wildlogic/chat/TonyPanel'
-import { translateZonesToGeoJSON } from '../../../lib/tonyZones'
+import { zonesToMapFeatures } from '../../../lib/tonyZones'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function isPro() {
@@ -326,21 +326,40 @@ export default function WildLogicAppV2() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, bounds: viewport?.bounds ?? null, propertyName: name || 'My Property', season }),
+        body: JSON.stringify({
+          message,
+          bounds: viewport?.bounds ?? null,
+          // Send the real parcel polygon — the server placement engine clips
+          // every zone to this boundary
+          features: boundary
+            ? [{ type: 'Feature', properties: { layerType: 'boundary' }, geometry: boundary.geometry }]
+            : [],
+          propertyName: name || 'My Property',
+          season,
+        }),
       })
       const data = await res.json()
       if (data.paywallHit) { setPaywallHit(true); return }
       incrementFree()
       const newZoneIds: string[] = []
-      if (data.zones?.length > 0 && boundary) {
-        const geo = translateZonesToGeoJSON(data.zones, boundary.geometry)
-        const zones = data.zones.map((z: any, i: number) => {
+      // Merge stand sites into the renderable zone list (they arrive as a
+      // separate array but draw as point features on the map)
+      const standZones = (data.stand_sites ?? []).map((s: any) => ({
+        ...s,
+        type: 'stand_site',
+        confidence: typeof s.rating === 'number' ? (s.rating >= 8 ? 'high' : s.rating >= 6 ? 'medium' : 'low') : 'medium',
+        season: s.season ?? 'all',
+      }))
+      const allZones = [...(data.zones ?? []), ...standZones]
+      if (allZones.length > 0 && boundary) {
+        const geo = zonesToMapFeatures(allZones, boundary.geometry)
+        const zones = allZones.map((z: any, i: number) => {
           const id = z.id ?? `tz-${Date.now()}-${i}`
           newZoneIds.push(id)
           return { id, name: z.name ?? z.type ?? 'Zone', type: z.type ?? 'food_plot', relative_position: z.relative_position ?? 'center', relative_size: z.relative_size ?? 'medium', description: z.description ?? '', confidence: z.confidence ?? 'medium', season: z.season ?? 'all', messageId: `tony-${Date.now()}`, geoJSON: geo[i] ?? null }
         })
         setTonyZones(zones)
-        mapRef.current?.setTonyZones(geo)
+        mapRef.current?.setTonyZones(geo.filter(Boolean))
       }
       addMessage({ id: `tony-${Date.now()}`, role: 'tony', text: data.reply ?? 'Analysis complete.', tonyZoneIds: newZoneIds })
     } catch {

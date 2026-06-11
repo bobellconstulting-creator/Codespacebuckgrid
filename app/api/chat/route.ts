@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 import type { OsmFeature, SpatialContext } from '../../../lib/spatial'
 import { fetchSpatialData } from '../../../lib/spatial'
 import { fetchNlcdPoint } from '../../../lib/nlcd'
+import type { PlacementCandidate, PlacementResult } from '../../../lib/placement/engine'
+import { generatePlacements, candidateGeometry } from '../../../lib/placement/engine'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -56,6 +58,12 @@ interface TonyZone {
   description: string
   confidence: ConfidenceLevel
   season: SeasonLabel
+  /** Grounded mode: id of the engine candidate this zone references */
+  candidate_id?: string
+  /** Grounded mode: real geometry computed by the placement engine */
+  geometry?: { type: string; coordinates: any }
+  acres?: number
+  grounded?: boolean
 }
 
 interface StandSite {
@@ -65,6 +73,9 @@ interface StandSite {
   wind_direction: string
   rating: number
   description: string
+  candidate_id?: string
+  geometry?: { type: string; coordinates: any }
+  grounded?: boolean
 }
 
 // ─── OSM bbox terrain validation — check coord isn't inside a forest/water polygon ──
@@ -444,7 +455,8 @@ function buildTonyPrompt(
   spatialContext?: SpatialContext,
   windDirection?: string,
   boundaryRing?: [number, number][] | null,
-  chatHistory?: Array<{ role: string; text: string }>
+  chatHistory?: Array<{ role: string; text: string }>,
+  placement?: PlacementResult | null
 ): string {
   const featureDesc = features.length > 0
     ? `\n\nThe user has already drawn ${features.length} feature(s) on the map:\n${features.slice(0, MAX_FEATURES).map((f, i) => {
@@ -523,22 +535,46 @@ TERRAIN READING RULES:
 - STAGING AREAS: Dense 1-5 acre thicket 60-150 yards from primary food source. Staging area stands outperform food-edge stands for mature bucks.
 - WATER: Only recommend if OSM-confirmed. Water features require 50+ yards of timber cover on at least two sides.
 
-User says: "${message}"
+${placement ? placement.promptBlock + '\n\n' : ''}User says: "${message}"
 
-OUTPUT FORMAT: Return JSON with 'message', 'zones', and 'stand_sites' arrays. NEVER output lat/lng coordinates. Use relative_position (northeast, southwest, etc.) for all placements. The client software translates positions to map coordinates using the property boundary.
+${placement ? `OUTPUT FORMAT (GROUNDED MODE): The placement engine above already computed WHERE everything goes — real coordinates snapped to verified terrain inside the boundary. Your job is to SELECT, RANK, and EXPLAIN. Return JSON with 'message', 'zones', and 'stand_sites' arrays. Every zone and stand MUST reference one of the candidate ids above via "candidate_id". NEVER invent a position, NEVER output lat/lng, NEVER use a candidate id that is not listed above. Pick the 4-8 strongest zones and 2-4 stands for this property and season; skip weak candidates. In each description, explain WHY that computed spot works (wind, terrain, cover, distances from the candidate's evidence) in hunter language.
 
-VALID relative_position values: "north" | "northeast" | "east" | "southeast" | "south" | "southwest" | "west" | "northwest" | "center"
-VALID zone types: "food_plot" | "kill_plot" | "access_route" | "bedding" | "stand_site" | "water" | "staging_area" | "sanctuary"
-VALID relative_size: "tiny" (under 0.5ac) | "small" (0.5-2ac) | "medium" (2-10ac) | "large" (10+ ac)
+Exact JSON format:
+{
+  "message": "Conversational text — 3-4 sentences max. Direct, specific, named features. Tony voice.",
+  "zones": [
+    {
+      "candidate_id": "fp1",
+      "name": "North Field Edge Plot",
+      "description": "One sentence of specific habitat advice grounded in the candidate's evidence.",
+      "confidence": "high",
+      "season": "fall"
+    }
+  ],
+  "stand_sites": [
+    {
+      "candidate_id": "st1",
+      "name": "Funnel Stand",
+      "wind_direction": "northwest",
+      "rating": 9,
+      "description": "One sentence — what the hunter covers, which wind to hunt it on."
+    }
+  ]
+}` : `OUTPUT FORMAT: Return JSON with 'message', 'zones', and 'stand_sites' arrays. NEVER output lat/lng coordinates. Use relative_position (northeast, southwest, etc.) for all placements. The client software translates positions to map coordinates using the property boundary.`}
+
 VALID confidence: "high" | "medium" | "low"
 VALID season: "all" | "spring" | "summer" | "fall" | "winter"
 
 CRITICAL OUTPUT RULES:
 - Respond ONLY with raw valid JSON — no markdown, no code fences, zero text outside JSON
-- NEVER output lat/lng/coordinates — only relative_position compass directions
+- NEVER output lat/lng/coordinates
+- "message" field: 3-4 sentences MAX. Direct, specific, named features. v2 Tony voice: like a land manager who's walked 1000 properties. Lead with your single biggest finding. Follow with #1 priority action.
+${placement ? '' : `
+VALID relative_position values: "north" | "northeast" | "east" | "southeast" | "south" | "southwest" | "west" | "northwest" | "center"
+VALID zone types: "food_plot" | "kill_plot" | "access_route" | "bedding" | "stand_site" | "water" | "staging_area" | "sanctuary"
+VALID relative_size: "tiny" (under 0.5ac) | "small" (0.5-2ac) | "medium" (2-10ac) | "large" (10+ ac)
 - Reference actual visible terrain in descriptions — name what you see (field edge, timber corner, creek bottom, bench, saddle)
 - Use compass directions (NW corner, SE field edge, etc.) consistently
-- "message" field: 3-4 sentences MAX. Direct, specific, named features. v2 Tony voice: like a land manager who's walked 1000 properties. Lead with your single biggest finding. Follow with #1 priority action.
 
 Exact JSON format:
 {
@@ -567,7 +603,7 @@ Exact JSON format:
   ]
 }
 
-Return 4-8 zones and 2-4 stand_sites ranked by seasonal priority. A complete plan includes: at least 1 sanctuary zone, 1-2 staging_area zones, food plots on open ground only, and stand_sites with wind direction specified.`
+Return 4-8 zones and 2-4 stand_sites ranked by seasonal priority. A complete plan includes: at least 1 sanctuary zone, 1-2 staging_area zones, food plots on open ground only, and stand_sites with wind direction specified.`}`
 }
 
 function tryCloseJson(candidate: string): string | null {
@@ -686,6 +722,7 @@ function parseV2Response(rawText: string): { message: string; zones: TonyZone[];
           description: typeof z.description === 'string' ? z.description.slice(0, 300) : '',
           confidence: normalizeConfidence(z.confidence),
           season: normalizeSeason(z.season),
+          candidate_id: typeof z.candidate_id === 'string' ? z.candidate_id : undefined,
         }))
         .slice(0, 12)
     }
@@ -701,6 +738,7 @@ function parseV2Response(rawText: string): { message: string; zones: TonyZone[];
           wind_direction: typeof s.wind_direction === 'string' ? s.wind_direction.slice(0, 50) : '',
           rating: typeof s.rating === 'number' ? Math.max(1, Math.min(10, Math.round(s.rating))) : 7,
           description: typeof s.description === 'string' ? s.description.slice(0, 300) : '',
+          candidate_id: typeof s.candidate_id === 'string' ? s.candidate_id : undefined,
         }))
         .slice(0, 6)
     }
@@ -780,6 +818,184 @@ async function nlcdCheckZones(zones: TonyZone[], bounds: Bounds): Promise<TonyZo
   )
 }
 
+// ─── Grounded zone assembly — snap Tony's selections to engine candidates ────
+// Tony only picks candidate ids; the geometry ALWAYS comes from the engine, so
+// nothing can render outside the boundary or on a road regardless of what the
+// LLM says.
+
+function titleCompass(compass: string): string {
+  const map: Record<string, string> = {
+    north: 'North', northeast: 'NE', east: 'East', southeast: 'SE',
+    south: 'South', southwest: 'SW', west: 'West', northwest: 'NW', center: 'Center',
+  }
+  return map[compass] ?? compass
+}
+
+function defaultZoneName(cd: PlacementCandidate): string {
+  const names: Record<string, string> = {
+    food_plot: 'Food Plot', kill_plot: 'Kill Plot', bedding: 'Bedding',
+    stand_site: 'Stand', staging_area: 'Staging Area', sanctuary: 'Sanctuary',
+    access_route: 'Access Route', water: 'Water',
+  }
+  return `${titleCompass(cd.compass)} ${names[cd.type] ?? cd.type}`
+}
+
+function scoreToConfidence(score: number): ConfidenceLevel {
+  if (score >= 68) return 'high'
+  if (score >= 48) return 'medium'
+  return 'low'
+}
+
+function acresToSize(acres?: number): RelativeSize {
+  if (!acres) return 'small'
+  if (acres < 0.5) return 'tiny'
+  if (acres < 2) return 'small'
+  if (acres < 10) return 'medium'
+  return 'large'
+}
+
+function groundResponse(
+  zones: TonyZone[],
+  stands: StandSite[],
+  placement: PlacementResult
+): { zones: TonyZone[]; stands: StandSite[] } {
+  const byId = new Map(placement.candidates.map(cd => [cd.id, cd]))
+  const used = new Set<string>()
+
+  const claim = (candidateId: string | undefined, wantedType?: string): PlacementCandidate | null => {
+    if (candidateId && byId.has(candidateId) && !used.has(candidateId)) {
+      const cd = byId.get(candidateId)!
+      if (!wantedType || cd.type === wantedType) {
+        used.add(cd.id)
+        return cd
+      }
+    }
+    // Fallback: best unused candidate of the wanted type
+    if (wantedType) {
+      const fallback = placement.candidates
+        .filter(cd => cd.type === wantedType && !used.has(cd.id))
+        .sort((a, b) => b.score - a.score)[0]
+      if (fallback) {
+        used.add(fallback.id)
+        return fallback
+      }
+    }
+    return null
+  }
+
+  const groundedZones: TonyZone[] = []
+  for (const z of zones) {
+    // In grounded mode the candidate id determines the real type and geometry
+    const direct = z.candidate_id ? byId.get(z.candidate_id) : undefined
+    const cd = claim(z.candidate_id, direct ? direct.type : z.type)
+    if (!cd) continue
+    if (cd.type === 'stand_site') {
+      // A stand picked in the zones array — keep it as a zone point
+    }
+    groundedZones.push({
+      ...z,
+      id: cd.id,
+      type: cd.type as ZoneType,
+      relative_position: normalizePosition(cd.compass),
+      relative_size: acresToSize(cd.acres),
+      acres: cd.acres,
+      candidate_id: cd.id,
+      geometry: candidateGeometry(cd),
+      grounded: true,
+      description: z.description || cd.factors.join('; '),
+    })
+  }
+
+  const groundedStands: StandSite[] = []
+  for (const s of stands) {
+    const cd = claim(s.candidate_id, 'stand_site')
+    if (!cd) continue
+    groundedStands.push({
+      ...s,
+      id: cd.id,
+      relative_position: normalizePosition(cd.compass),
+      candidate_id: cd.id,
+      geometry: candidateGeometry(cd),
+      grounded: true,
+      description: s.description || cd.factors.join('; '),
+    })
+  }
+
+  // Auto-include the access route serving any selected stand
+  for (const st of groundedStands) {
+    const route = placement.candidates.find(
+      cd => cd.type === 'access_route' && cd.servesStand === st.id && !used.has(cd.id)
+    )
+    if (route && groundedZones.length < 12) {
+      used.add(route.id)
+      groundedZones.push({
+        id: route.id,
+        name: `Access to ${st.name}`,
+        type: 'access_route',
+        relative_position: normalizePosition(route.compass),
+        relative_size: 'tiny',
+        description: route.factors.join('; '),
+        confidence: 'high',
+        season: 'all',
+        candidate_id: route.id,
+        geometry: candidateGeometry(route),
+        grounded: true,
+      })
+    }
+  }
+
+  return { zones: groundedZones.slice(0, 12), stands: groundedStands.slice(0, 6) }
+}
+
+// When every model fails but the engine ran, return the deterministic plan
+// instead of a 503 — the placements are real either way.
+function deterministicFallback(placement: PlacementResult): {
+  message: string
+  zones: TonyZone[]
+  stands: StandSite[]
+} {
+  const zones: TonyZone[] = []
+  const stands: StandSite[] = []
+  for (const cd of placement.candidates) {
+    if (cd.type === 'stand_site') {
+      stands.push({
+        id: cd.id,
+        name: defaultZoneName(cd),
+        relative_position: normalizePosition(cd.compass),
+        wind_direction: placement.windFromDeg != null ? `${Math.round(placement.windFromDeg)}°` : '',
+        rating: Math.max(1, Math.min(10, Math.round(cd.score / 10))),
+        description: cd.factors.join('; '),
+        candidate_id: cd.id,
+        geometry: candidateGeometry(cd),
+        grounded: true,
+      })
+    } else {
+      zones.push({
+        id: cd.id,
+        name: defaultZoneName(cd),
+        type: cd.type as ZoneType,
+        relative_position: normalizePosition(cd.compass),
+        relative_size: acresToSize(cd.acres),
+        description: cd.factors.join('; '),
+        confidence: scoreToConfidence(cd.score),
+        season: 'all',
+        acres: cd.acres,
+        candidate_id: cd.id,
+        geometry: candidateGeometry(cd),
+        grounded: true,
+      })
+    }
+  }
+  return {
+    message:
+      "Tony's AI commentary is offline right now, but the terrain engine still ran the full analysis. " +
+      'Every placement below is computed from verified land cover, elevation, roads, and wind — snapped to real ground inside your boundary. ' +
+      'Ask again in a minute for the strategic breakdown.',
+    zones: zones.slice(0, 10),
+    stands: stands.slice(0, 4),
+  }
+}
+
 export async function POST(req: NextRequest) {
   // Global deadline — ensures we always respond before Vercel's hard kill
   const globalAbort = new AbortController()
@@ -826,17 +1042,38 @@ export async function POST(req: NextRequest) {
     )
     const boundaryRing: [number, number][] | null = boundaryFeature?.geometry?.coordinates?.[0] ?? null
 
+    // When the user has drawn a boundary, anchor the analysis on the PARCEL
+    // (padded bbox) instead of whatever the viewport happens to show — the
+    // satellite image, GIS fetch, and placement engine all see the property.
+    let effBounds: Bounds = bounds
+    if (boundaryRing && boundaryRing.length >= 4) {
+      let w = Infinity, e = -Infinity, s = Infinity, n = -Infinity
+      for (const [lng, lat] of boundaryRing) {
+        if (typeof lng !== 'number' || typeof lat !== 'number') continue
+        if (lng < w) w = lng
+        if (lng > e) e = lng
+        if (lat < s) s = lat
+        if (lat > n) n = lat
+      }
+      if (isFinite(w) && isFinite(s) && n > s && e > w) {
+        const padLat = (n - s) * 0.15
+        const padLng = (e - w) * 0.15
+        const padded = { north: n + padLat, south: s - padLat, east: e + padLng, west: w - padLng }
+        if (isValidBounds(padded)) effBounds = padded
+      }
+    }
+
     // Fetch satellite image and spatial context in parallel
     const esriUrl = `https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export` +
-      `?bbox=${bounds.west},${bounds.south},${bounds.east},${bounds.north}` +
+      `?bbox=${effBounds.west},${effBounds.south},${effBounds.east},${effBounds.north}` +
       `&bboxSR=4326&imageSR=4326&size=640,480&format=png&f=image`
 
-    const SPATIAL_TIMEOUT_MS = 7_000
+    const SPATIAL_TIMEOUT_MS = 12_000
 
     const [imgResult, spatialResult] = await Promise.allSettled([
       fetch(esriUrl, { signal: AbortSignal.any([AbortSignal.timeout(ESRI_TIMEOUT_MS), globalAbort.signal]) }),
       Promise.race([
-        fetchSpatialData(bounds),
+        fetchSpatialData(effBounds),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('SpatialTimeout')), SPATIAL_TIMEOUT_MS)),
       ]).catch((): SpatialContext | undefined => undefined),
     ])
@@ -863,6 +1100,25 @@ export async function POST(req: NextRequest) {
 
     const resolvedSpatial = spatialResult.status === 'fulfilled' ? spatialResult.value : undefined
 
+    // ── Deterministic placement engine — the source of truth for WHERE ───────
+    // Runs whenever a real boundary polygon exists. Tony then ranks/explains
+    // these candidates instead of inventing positions.
+    let placement: PlacementResult | null = null
+    if (boundaryRing && boundaryRing.length >= 4 && resolvedSpatial) {
+      try {
+        placement = generatePlacements({
+          boundaryRing: boundaryRing as [number, number][],
+          spatial: resolvedSpatial,
+          season: typeof season === 'string' ? season : '',
+        })
+        if (placement) {
+          console.log(`[chat] placement engine: ${placement.candidates.length} candidates, grid ${placement.gridInfo.rows}x${placement.gridInfo.cols} (${placement.gridInfo.cellM}m cells, ~${placement.gridInfo.acres} ac)`)
+        }
+      } catch (e) {
+        console.warn('[chat] placement engine failed:', e instanceof Error ? e.message : e)
+      }
+    }
+
     let rawText = ''
     try {
       const safeChatHistory = Array.isArray(chatHistory)
@@ -874,13 +1130,14 @@ export async function POST(req: NextRequest) {
         : undefined
 
       const tonyPrompt = buildTonyPrompt(
-        trimmedMsg, bounds, zoom ?? 14, safeFeatures,
+        trimmedMsg, effBounds, zoom ?? 14, safeFeatures,
         typeof season === 'string' ? season : '',
         safePropertyName,
         resolvedSpatial,
         resolvedSpatial?.windDirection,
         boundaryRing,
         safeChatHistory,
+        placement,
       )
 
       let usedVision = false
@@ -1128,6 +1385,19 @@ export async function POST(req: NextRequest) {
         throw new Error(geminiRateLimited ? 'TonyRateLimit' : 'TonyTimeout')
       }
     } catch (err: unknown) {
+      // Every model failed. If the placement engine ran, the plan is still
+      // real — return the deterministic placements instead of an error.
+      if (placement) {
+        const fallback = deterministicFallback(placement)
+        clearTimeout(globalTimer)
+        return NextResponse.json({
+          reply: fallback.message,
+          zones: fallback.zones,
+          stand_sites: fallback.stands,
+          grounded: true,
+          engineOnly: true,
+        })
+      }
       const msg = err instanceof Error ? err.message : ''
       const isRateLimit = msg === 'TonyRateLimit'
       const isTimeout = msg === 'TonyTimeout'
@@ -1141,11 +1411,29 @@ export async function POST(req: NextRequest) {
       }, { status: 503 })
     }
 
-    // ── Parse v2 response → typed zones + stand_sites ────────────────────────
+    // ── Parse response → typed zones + stand_sites ───────────────────────────
     const { message: tonyMessage, zones: rawZones, stand_sites: rawStands } = parseV2Response(rawText)
 
-    // NLCD confidence check on food_plot and kill_plot zones
-    const checkedZones = await nlcdCheckZones(rawZones, bounds)
+    if (placement) {
+      // Grounded mode: every zone snaps to engine-computed geometry. If Tony
+      // returned nothing usable, fall back to the deterministic plan.
+      let { zones: groundedZones, stands: groundedStands } = groundResponse(rawZones, rawStands, placement)
+      if (groundedZones.length === 0 && groundedStands.length === 0) {
+        const fb = deterministicFallback(placement)
+        groundedZones = fb.zones
+        groundedStands = fb.stands
+      }
+      clearTimeout(globalTimer)
+      return NextResponse.json({
+        reply: tonyMessage,
+        zones: groundedZones,
+        stand_sites: groundedStands,
+        grounded: true,
+      })
+    }
+
+    // Legacy path (no boundary drawn): compass zones + NLCD confidence check
+    const checkedZones = await nlcdCheckZones(rawZones, effBounds)
 
     clearTimeout(globalTimer)
     return NextResponse.json({

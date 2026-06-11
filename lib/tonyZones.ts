@@ -203,6 +203,45 @@ export function buildStandPoint(center: { lat: number; lng: number }): number[] 
   return [center.lng, center.lat];
 }
 
+/**
+ * Build map features from Tony's zones. Grounded zones (computed by the
+ * server-side placement engine) carry real geometry snapped inside the parcel
+ * — use it directly. Zones without geometry fall back to the legacy bbox
+ * translation so old responses still render.
+ */
+export function zonesToMapFeatures(zones: any[], propertyBoundary: any): any[] {
+  if (!zones || zones.length === 0) return []
+
+  // Order-preserving: callers index results by the original zone position
+  return zones.map((zone, i) => {
+    const rawGeom = zone?.geometry
+    const geom = rawGeom && typeof rawGeom === 'object'
+      ? (rawGeom.type === 'Feature' ? rawGeom.geometry : rawGeom)
+      : null
+    if (geom && typeof geom.type === 'string' && geom.coordinates) {
+      const type: string = zone.type ?? 'default'
+      const color = getZoneDisplayColor(type, zone.confidence ?? 'medium')
+      return {
+        type: 'Feature',
+        geometry: geom,
+        properties: {
+          id: zone.id ?? zone.candidate_id ?? `zone-${i}`,
+          name: zone.name ?? type,
+          type,
+          description: zone.description ?? '',
+          confidence: zone.confidence ?? 'medium',
+          season: zone.season ?? null,
+          color,
+          fillOpacity: ZONE_FILL_OPACITY[type] ?? ZONE_FILL_OPACITY['default'],
+          grounded: true,
+        },
+      }
+    }
+    const translated = translateZonesToGeoJSON([zone], propertyBoundary)
+    return translated[0] ?? null
+  })
+}
+
 export function translateZonesToGeoJSON(
   zones: any[],
   propertyBoundary: any

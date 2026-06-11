@@ -11,6 +11,10 @@ export interface OsmFeature {
   name?: string
   point: [number, number]
   bbox?: [number, number, number, number]
+  /** Way node coordinates [lng, lat] (downsampled) — used by the placement engine */
+  geometry?: [number, number][]
+  /** True when the OSM way is a closed ring (area feature like a forest or pond) */
+  closed?: boolean
 }
 
 export interface ElevationSample {
@@ -137,22 +141,39 @@ async function fetchOsmFeatures(bounds: Bounds): Promise<OsmFeature[]> {
 
     let point: [number, number]
     let bbox: [number, number, number, number] | undefined
+    let geometry: [number, number][] | undefined
+    let closed: boolean | undefined
     if (el.type === 'node') {
       point = [el.lon, el.lat]
     } else {
-      const nodes = (el.nodes ?? []).map((id: number) => nodeById.get(id)).filter(Boolean) as Array<{ lat: number; lon: number }>
+      const nodeIds: number[] = el.nodes ?? []
+      const nodes = nodeIds.map((id: number) => nodeById.get(id)).filter(Boolean) as Array<{ lat: number; lon: number }>
       if (nodes.length === 0) continue
       point = nodeCentroid(nodes)
       const lats = nodes.map(n => n.lat)
       const lons = nodes.map(n => n.lon)
       bbox = [Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)]
+      // Keep the real way geometry (downsampled to ≤150 vertices) so the
+      // placement engine can do true point-in-polygon / point-to-road tests
+      closed = nodeIds.length > 3 && nodeIds[0] === nodeIds[nodeIds.length - 1]
+      const coords: [number, number][] = nodes.map(n => [n.lon, n.lat])
+      const stride = Math.ceil(coords.length / 150)
+      geometry = stride > 1
+        ? coords.filter((_, i) => i % stride === 0 || i === coords.length - 1)
+        : coords
+      if (closed && geometry.length >= 3) {
+        const first = geometry[0]
+        const last = geometry[geometry.length - 1]
+        if (first[0] !== last[0] || first[1] !== last[1]) geometry.push([first[0], first[1]])
+      }
     }
-    features.push({ kind, name: tags.name, point, bbox })
+    features.push({ kind, name: tags.name, point, bbox, geometry, closed })
   }
 
-  const priority = (f: OsmFeature) => (f.kind === 'water' || f.kind === 'building' || f.kind === 'wetland') ? 0 : 1
+  const priority = (f: OsmFeature) => (f.kind === 'water' || f.kind === 'building' || f.kind === 'wetland') ? 0
+    : (f.kind === 'road' || f.kind === 'forest') ? 1 : 2
   features.sort((a, b) => priority(a) - priority(b))
-  return features.slice(0, 200)
+  return features.slice(0, 300)
 }
 
 const GRID_N = 16   // 256 points — LiDAR-derived 10m resolution via USGS EPQS
