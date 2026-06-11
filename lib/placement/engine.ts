@@ -186,14 +186,35 @@ export function generatePlacements(opts: {
   const cellM = (cellWM + cellHM) / 2
   const cellAcres = (cellWM * cellHM) / 4046.86
 
-  // ── Pre-index OSM features ──────────────────────────────────────────────────
-  const roadLines: LngLat[][] = []
-  const waterLines: LngLat[][] = []
-  const waterPolys: LngLat[][] = []
-  const wetlandPolys: LngLat[][] = []
-  const forestPolys: LngLat[][] = []
-  const scrubPolys: LngLat[][] = []
-  const farmPolys: LngLat[][] = []
+  // ── Pre-index OSM features (each ring/line keeps its bbox for fast rejects) ──
+  type Boxed = { pts: LngLat[]; box: [number, number, number, number] }
+  const boxOf = (pts: LngLat[]): [number, number, number, number] => {
+    let mw = Infinity, me = -Infinity, ms = Infinity, mn = -Infinity
+    for (const [x, y] of pts) {
+      if (x < mw) mw = x
+      if (x > me) me = x
+      if (y < ms) ms = y
+      if (y > mn) mn = y
+    }
+    return [mw, ms, me, mn]
+  }
+  const boxed = (pts: LngLat[]): Boxed => ({ pts, box: boxOf(pts) })
+  const inBox = (p: LngLat, b: [number, number, number, number]): boolean =>
+    p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3]
+  /** Lower bound on distance (m) from a point to a bbox — 0 if inside. */
+  const distToBoxM = (p: LngLat, b: [number, number, number, number]): number => {
+    const dx = Math.max(b[0] - p[0], 0, p[0] - b[2]) * scale.mLng
+    const dy = Math.max(b[1] - p[1], 0, p[1] - b[3]) * scale.mLat
+    return Math.hypot(dx, dy)
+  }
+
+  const roadLines: Boxed[] = []
+  const waterLines: Boxed[] = []
+  const waterPolys: Boxed[] = []
+  const wetlandPolys: Boxed[] = []
+  const forestPolys: Boxed[] = []
+  const scrubPolys: Boxed[] = []
+  const farmPolys: Boxed[] = []
   const buildingPts: LngLat[] = []
 
   const nearParcel = (f: OsmFeature): boolean => {
@@ -211,24 +232,24 @@ export function generatePlacements(opts: {
     const geom = f.geometry && f.geometry.length >= 2 ? (f.geometry as LngLat[]) : null
     switch (f.kind) {
       case 'road':
-        roadLines.push(geom ?? [f.point])
+        roadLines.push(boxed(geom ?? [f.point]))
         break
       case 'water':
-        if (geom && f.closed && geom.length >= 4) waterPolys.push(geom)
-        else waterLines.push(geom ?? [f.point])
+        if (geom && f.closed && geom.length >= 4) waterPolys.push(boxed(geom))
+        else waterLines.push(boxed(geom ?? [f.point]))
         break
       case 'wetland':
-        if (geom && f.closed && geom.length >= 4) wetlandPolys.push(geom)
-        else waterLines.push(geom ?? [f.point])
+        if (geom && f.closed && geom.length >= 4) wetlandPolys.push(boxed(geom))
+        else waterLines.push(boxed(geom ?? [f.point]))
         break
       case 'forest':
-        if (geom && f.closed && geom.length >= 4) forestPolys.push(geom)
+        if (geom && f.closed && geom.length >= 4) forestPolys.push(boxed(geom))
         break
       case 'scrub':
-        if (geom && f.closed && geom.length >= 4) scrubPolys.push(geom)
+        if (geom && f.closed && geom.length >= 4) scrubPolys.push(boxed(geom))
         break
       case 'farmland':
-        if (geom && f.closed && geom.length >= 4) farmPolys.push(geom)
+        if (geom && f.closed && geom.length >= 4) farmPolys.push(boxed(geom))
         break
       case 'building':
         buildingPts.push(f.point)
@@ -268,11 +289,13 @@ export function generatePlacements(opts: {
 
       if (inside) {
         // Cover from OSM polygons (priority: water > wetland > forest > scrub > farm)
-        if (waterPolys.some(p => pointInRing(center, p))) cover = 'water'
-        else if (wetlandPolys.some(p => pointInRing(center, p))) cover = 'wetland'
-        else if (forestPolys.some(p => pointInRing(center, p))) cover = 'forest'
-        else if (scrubPolys.some(p => pointInRing(center, p))) cover = 'scrub'
-        else if (farmPolys.some(p => pointInRing(center, p))) cover = 'open'
+        // bbox test first — full point-in-ring only when the bbox contains the cell
+        const hit = (polys: Boxed[]) => polys.some(p => inBox(center, p.box) && pointInRing(center, p.pts))
+        if (hit(waterPolys)) cover = 'water'
+        else if (hit(wetlandPolys)) cover = 'wetland'
+        else if (hit(forestPolys)) cover = 'forest'
+        else if (hit(scrubPolys)) cover = 'scrub'
+        else if (hit(farmPolys)) cover = 'open'
 
         // NLCD fallback (nearest sample)
         if (cover === 'unknown' && nlcdSamples.length > 0) {
@@ -288,16 +311,21 @@ export function generatePlacements(opts: {
           if (bestCode > 0) cover = nlcdToCover(bestCode)
         }
 
+        // Distance loops: skip any feature whose bbox is already further than
+        // the current minimum (cheap lower bound)
         for (const line of roadLines) {
-          const d = distPointToPolylineM(center, line, scale)
+          if (distToBoxM(center, line.box) >= roadDistM) continue
+          const d = distPointToPolylineM(center, line.pts, scale)
           if (d < roadDistM) roadDistM = d
         }
         for (const line of waterLines) {
-          const d = distPointToPolylineM(center, line, scale)
+          if (distToBoxM(center, line.box) >= waterDistM) continue
+          const d = distPointToPolylineM(center, line.pts, scale)
           if (d < waterDistM) waterDistM = d
         }
         for (const poly of waterPolys.concat(wetlandPolys)) {
-          const d = pointInRing(center, poly) ? 0 : distPointToPolylineM(center, poly, scale)
+          if (distToBoxM(center, poly.box) >= waterDistM) continue
+          const d = inBox(center, poly.box) && pointInRing(center, poly.pts) ? 0 : distPointToPolylineM(center, poly.pts, scale)
           if (d < waterDistM) waterDistM = d
         }
         for (const b of buildingPts) {
