@@ -134,15 +134,27 @@ const TOOLS = [
 const SEASONS = ['Spring', 'Summer', 'Early Fall', 'Rut', 'Late Season'] as const
 type Season = typeof SEASONS[number]
 
-// ─── Wordmark logo ─────────────────────────────────────────────────────────────
+// ─── Wordmark logo — BUCKGRID + blaze PRO badge (brand guide §5) ───────────────
 function WordMark({ size = 22 }: { size?: number }) {
   return (
-    <div className="flex items-baseline gap-0" style={{ fontFamily: "'Teko', 'Oswald', sans-serif" }}>
-      <span style={{ fontSize: size, fontWeight: 700, color: '#E8E4DC', letterSpacing: '0.04em', lineHeight: 1 }}>
-        WILD
+    <div className="flex items-baseline gap-1.5" style={{ fontFamily: "'Big Shoulders Display','Oswald',sans-serif" }}>
+      <span style={{ fontSize: size, fontWeight: 800, color: '#F4EFE3', letterSpacing: '0.02em', lineHeight: 1 }}>
+        BUCKGRID
       </span>
-      <span style={{ fontSize: size, fontWeight: 700, color: '#7FB069', letterSpacing: '0.04em', lineHeight: 1 }}>
-        LOGIC
+      <span
+        style={{
+          fontSize: size * 0.52,
+          fontWeight: 800,
+          color: '#F4EFE3',
+          background: '#E45A24',
+          letterSpacing: '0.08em',
+          lineHeight: 1,
+          padding: '2px 5px 1px',
+          borderRadius: 3,
+          transform: 'translateY(-1px)',
+        }}
+      >
+        PRO
       </span>
     </div>
   )
@@ -189,20 +201,20 @@ function PaywallModal({ open, onUpgrade, onDismiss }: { open: boolean; onUpgrade
                 <div
                   className="relative w-full max-w-sm mx-4 rounded-2xl overflow-hidden pointer-events-auto"
                   style={{
-                    background: 'rgba(10,14,10,0.96)',
-                    border: '1px solid rgba(201,162,39,0.3)',
-                    boxShadow: '0 0 0 1px rgba(201,162,39,0.1), 0 32px 64px rgba(0,0,0,0.7)',
+                    background: 'rgba(15,34,24,0.96)',
+                    border: '1px solid rgba(228,90,36,0.3)',
+                    boxShadow: '0 0 0 1px rgba(228,90,36,0.1), 0 32px 64px rgba(0,0,0,0.7)',
                   }}
                 >
-                  <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, #C9A227, transparent)' }} />
+                  <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, #E45A24, transparent)' }} />
                   <div className="px-8 pt-8 pb-10 flex flex-col items-center gap-5">
                     <WordMark size={26} />
                     <Dialog.Title asChild>
                       <div className="text-center">
-                        <p style={{ fontFamily: "'Teko','Oswald',sans-serif", fontSize: 32, fontWeight: 700, color: '#E8E4DC', letterSpacing: '0.04em', lineHeight: 1.1 }}>
+                        <p style={{ fontFamily: "'Big Shoulders Display','Oswald',sans-serif", fontSize: 32, fontWeight: 700, color: '#F4EFE3', letterSpacing: '0.04em', lineHeight: 1.1 }}>
                           Upgrade to Pro
                         </p>
-                        <p style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: 'rgba(232,228,220,0.5)', marginTop: 6 }}>
+                        <p style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: 'rgba(244,239,227,0.5)', marginTop: 6 }}>
                           Unlimited access — $79/year
                         </p>
                       </div>
@@ -211,22 +223,22 @@ function PaywallModal({ open, onUpgrade, onDismiss }: { open: boolean; onUpgrade
                     <ul className="w-full flex flex-col gap-2.5">
                       {['Unlimited Tony analyses', 'Save & revisit properties', 'Season-by-season breakdown', 'Mobile field access'].map(f => (
                         <li key={f} className="flex items-center gap-3">
-                          <span style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(127,176,105,0.15)', border: '1px solid rgba(127,176,105,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5l2 2L8 1" stroke="#7FB069" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          <span style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(127,176,143,0.15)', border: '1px solid rgba(127,176,143,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5l2 2L8 1" stroke="#7FB08F" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                           </span>
-                          <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: 'rgba(232,228,220,0.8)' }}>{f}</span>
+                          <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: 'rgba(244,239,227,0.8)' }}>{f}</span>
                         </li>
                       ))}
                     </ul>
                     <button
                       onClick={onUpgrade}
                       className="w-full py-3.5 rounded-xl transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500"
-                      style={{ background: 'linear-gradient(135deg, #C9A227, #A07820)', fontFamily: "'Teko','Oswald',sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '0.08em', color: '#0A0E0A' }}
+                      style={{ background: 'linear-gradient(135deg, #E45A24, #C2410C)', fontFamily: "'Big Shoulders Display','Oswald',sans-serif", fontSize: 20, fontWeight: 700, letterSpacing: '0.08em', color: '#F4EFE3' }}
                     >
                       UPGRADE NOW — $79/YR
                     </button>
                     <Dialog.Close asChild>
-                      <button style={{ fontFamily: "'Inter',sans-serif", fontSize: 12, color: 'rgba(232,228,220,0.35)' }} className="hover:text-white/60 transition-colors underline underline-offset-2">
+                      <button style={{ fontFamily: "'Inter',sans-serif", fontSize: 12, color: 'rgba(244,239,227,0.35)' }} className="hover:text-white/60 transition-colors underline underline-offset-2">
                         Not right now
                       </button>
                     </Dialog.Close>
@@ -374,12 +386,12 @@ export default function WildLogicAppV2() {
   }, [acres, season, askTony])
 
   const SEASON_COLORS: Record<Season, string> = {
-    Spring: '#7FB069', Summer: '#7FB069', 'Early Fall': '#C9A227', Rut: '#C0392B', 'Late Season': '#8E9EA0'
+    Spring: '#7FB08F', Summer: '#7FB08F', 'Early Fall': '#E0A23B', Rut: '#E45A24', 'Late Season': '#5E7C8A'
   }
 
   return (
     <Tooltip.Provider delayDuration={600}>
-      <div className="fixed inset-0" style={{ background: '#0A0E0A' }}>
+      <div className="fixed inset-0" style={{ background: '#0F2218' }}>
 
         {/* ── Full-bleed map ────────────────────────────────────────────────── */}
         <WildLogicMap
@@ -393,7 +405,7 @@ export default function WildLogicAppV2() {
         <div
           className="absolute top-0 left-0 right-0 z-40 h-14 flex items-center px-4 gap-4"
           style={{
-            background: 'linear-gradient(to bottom, rgba(10,14,10,0.92) 0%, rgba(10,14,10,0) 100%)',
+            background: 'linear-gradient(to bottom, rgba(15,34,24,0.92) 0%, rgba(15,34,24,0) 100%)',
           }}
         >
           <WordMark size={20} />
@@ -403,7 +415,7 @@ export default function WildLogicAppV2() {
             {acres > 0 && (
               <span
                 className="shrink-0 text-xs font-mono px-2 py-0.5 rounded"
-                style={{ background: 'rgba(201,162,39,0.12)', color: '#C9A227', border: '1px solid rgba(201,162,39,0.2)' }}
+                style={{ background: 'rgba(194,174,138,0.12)', color: '#C2AE8A', border: '1px solid rgba(194,174,138,0.25)', fontFamily: "'JetBrains Mono','Roboto Mono',monospace", letterSpacing: '0.08em' }}
               >
                 {Math.round(acres).toLocaleString()} AC
               </span>
@@ -414,7 +426,7 @@ export default function WildLogicAppV2() {
               onChange={e => setPropertyName(e.target.value)}
               placeholder="Property name"
               className="bg-transparent text-sm outline-none min-w-0 truncate"
-              style={{ fontFamily: "'Teko','Oswald',sans-serif", fontSize: 15, letterSpacing: '0.05em', color: 'rgba(232,228,220,0.7)', caretColor: '#7FB069' }}
+              style={{ fontFamily: "'Big Shoulders Display','Oswald',sans-serif", fontSize: 15, letterSpacing: '0.05em', color: 'rgba(244,239,227,0.7)', caretColor: '#7FB08F' }}
             />
           </div>
 
@@ -431,9 +443,9 @@ export default function WildLogicAppV2() {
                   fontFamily: "'Inter',sans-serif",
                   fontWeight: 500,
                   fontSize: 11,
-                  background: season === s ? 'rgba(127,176,105,0.15)' : 'transparent',
-                  color: season === s ? SEASON_COLORS[s as Season] : 'rgba(232,228,220,0.35)',
-                  border: `1px solid ${season === s ? 'rgba(127,176,105,0.25)' : 'transparent'}`,
+                  background: season === s ? 'rgba(127,176,143,0.15)' : 'transparent',
+                  color: season === s ? SEASON_COLORS[s as Season] : 'rgba(244,239,227,0.35)',
+                  border: `1px solid ${season === s ? 'rgba(127,176,143,0.25)' : 'transparent'}`,
                 }}
               >
                 {s}
@@ -446,19 +458,19 @@ export default function WildLogicAppV2() {
             onClick={() => setTonyOpen(v => !v)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all active:scale-[0.98]"
             style={{
-              background: tonyOpen ? 'rgba(127,176,105,0.2)' : 'linear-gradient(135deg, rgba(201,162,39,0.9), rgba(160,120,32,0.9))',
-              border: tonyOpen ? '1px solid rgba(127,176,105,0.3)' : '1px solid rgba(201,162,39,0.4)',
-              color: tonyOpen ? '#7FB069' : '#0A0E0A',
-              fontFamily: "'Teko','Oswald',sans-serif",
+              background: tonyOpen ? 'rgba(127,176,143,0.2)' : 'linear-gradient(135deg, rgba(228,90,36,0.9), rgba(160,120,32,0.9))',
+              border: tonyOpen ? '1px solid rgba(127,176,143,0.3)' : '1px solid rgba(228,90,36,0.4)',
+              color: tonyOpen ? '#7FB08F' : '#F4EFE3',
+              fontFamily: "'Big Shoulders Display','Oswald',sans-serif",
               fontWeight: 700,
               fontSize: 14,
               letterSpacing: '0.08em',
-              boxShadow: tonyOpen ? 'none' : '0 4px 16px rgba(201,162,39,0.3)',
+              boxShadow: tonyOpen ? 'none' : '0 4px 16px rgba(228,90,36,0.3)',
             }}
           >
             {isAnalyzing ? (
               <>
-                <span className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(127,176,105,0.3)', borderTopColor: '#7FB069' }} />
+                <span className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: 'rgba(127,176,143,0.3)', borderTopColor: '#7FB08F' }} />
                 ANALYZING
               </>
             ) : (
@@ -475,10 +487,10 @@ export default function WildLogicAppV2() {
           className="absolute left-4 z-40 flex flex-col gap-1 rounded-xl overflow-hidden"
           style={{
             top: 72,
-            background: 'rgba(10,14,10,0.82)',
+            background: 'rgba(15,34,24,0.82)',
             backdropFilter: 'blur(24px)',
             WebkitBackdropFilter: 'blur(24px)',
-            border: '1px solid rgba(127,176,105,0.1)',
+            border: '1px solid rgba(127,176,143,0.1)',
             boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
             padding: 4,
           }}
@@ -493,12 +505,12 @@ export default function WildLogicAppV2() {
                     aria-label={tool.tip}
                     className="flex items-center justify-center w-10 h-10 rounded-lg transition-all duration-150"
                     style={{
-                      background: active ? 'rgba(127,176,105,0.2)' : 'transparent',
-                      border: active ? '1px solid rgba(127,176,105,0.35)' : '1px solid transparent',
-                      color: active ? '#7FB069' : 'rgba(232,228,220,0.4)',
+                      background: active ? 'rgba(127,176,143,0.2)' : 'transparent',
+                      border: active ? '1px solid rgba(127,176,143,0.35)' : '1px solid transparent',
+                      color: active ? '#7FB08F' : 'rgba(244,239,227,0.4)',
                     }}
-                    onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(232,228,220,0.8)' }}
-                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(232,228,220,0.4)' }}
+                    onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(244,239,227,0.8)' }}
+                    onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.color = 'rgba(244,239,227,0.4)' }}
                   >
                     {tool.icon}
                   </button>
@@ -507,10 +519,10 @@ export default function WildLogicAppV2() {
                   <Tooltip.Content
                     side="right" sideOffset={10}
                     className="z-50 px-2.5 py-1.5 rounded-lg text-xs"
-                    style={{ background: 'rgba(10,14,10,0.95)', border: '1px solid rgba(127,176,105,0.15)', color: 'rgba(232,228,220,0.85)', fontFamily: "'Inter',sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
+                    style={{ background: 'rgba(15,34,24,0.95)', border: '1px solid rgba(127,176,143,0.15)', color: 'rgba(244,239,227,0.85)', fontFamily: "'Inter',sans-serif", boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
                   >
                     {tool.tip}
-                    <Tooltip.Arrow style={{ fill: 'rgba(10,14,10,0.95)' }} />
+                    <Tooltip.Arrow style={{ fill: 'rgba(15,34,24,0.95)' }} />
                   </Tooltip.Content>
                 </Tooltip.Portal>
               </Tooltip.Root>
@@ -518,7 +530,7 @@ export default function WildLogicAppV2() {
           })}
 
           {/* Separator */}
-          <div style={{ height: 1, background: 'rgba(127,176,105,0.1)', margin: '2px 4px' }} />
+          <div style={{ height: 1, background: 'rgba(127,176,143,0.1)', margin: '2px 4px' }} />
 
           {/* Undo */}
           <Tooltip.Root>
@@ -527,7 +539,7 @@ export default function WildLogicAppV2() {
                 onClick={() => userFeatures.length > 0 && removeUserFeature(userFeatures.length - 1)}
                 disabled={userFeatures.length === 0}
                 className="flex items-center justify-center w-10 h-10 rounded-lg transition-all"
-                style={{ color: 'rgba(232,228,220,0.3)', border: '1px solid transparent' }}
+                style={{ color: 'rgba(244,239,227,0.3)', border: '1px solid transparent' }}
                 aria-label="Undo last"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -536,9 +548,9 @@ export default function WildLogicAppV2() {
               </button>
             </Tooltip.Trigger>
             <Tooltip.Portal>
-              <Tooltip.Content side="right" sideOffset={10} className="z-50 px-2.5 py-1.5 rounded-lg text-xs" style={{ background: 'rgba(10,14,10,0.95)', border: '1px solid rgba(127,176,105,0.15)', color: 'rgba(232,228,220,0.85)', fontFamily: "'Inter',sans-serif" }}>
+              <Tooltip.Content side="right" sideOffset={10} className="z-50 px-2.5 py-1.5 rounded-lg text-xs" style={{ background: 'rgba(15,34,24,0.95)', border: '1px solid rgba(127,176,143,0.15)', color: 'rgba(244,239,227,0.85)', fontFamily: "'Inter',sans-serif" }}>
                 Undo last (⌘Z)
-                <Tooltip.Arrow style={{ fill: 'rgba(10,14,10,0.95)' }} />
+                <Tooltip.Arrow style={{ fill: 'rgba(15,34,24,0.95)' }} />
               </Tooltip.Content>
             </Tooltip.Portal>
           </Tooltip.Root>
@@ -555,10 +567,10 @@ export default function WildLogicAppV2() {
               transition={{ type: 'spring', stiffness: 320, damping: 32 }}
               className="absolute top-0 bottom-0 right-0 z-40 w-[360px]"
               style={{
-                background: 'rgba(10,14,10,0.9)',
+                background: 'rgba(15,34,24,0.9)',
                 backdropFilter: 'blur(32px)',
                 WebkitBackdropFilter: 'blur(32px)',
-                borderLeft: '1px solid rgba(127,176,105,0.1)',
+                borderLeft: '1px solid rgba(127,176,143,0.1)',
               }}
             >
               <TonyPanel
@@ -583,26 +595,26 @@ export default function WildLogicAppV2() {
               transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
               className="absolute bottom-8 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 px-4 py-3 rounded-xl"
               style={{
-                background: 'rgba(10,14,10,0.85)',
+                background: 'rgba(15,34,24,0.85)',
                 backdropFilter: 'blur(24px)',
-                border: '1px solid rgba(127,176,105,0.15)',
+                border: '1px solid rgba(127,176,143,0.15)',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               }}
             >
-              <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(127,176,105,0.15)', border: '1px solid rgba(127,176,105,0.3)' }}>
-                <span style={{ fontFamily: "'Teko',sans-serif", fontSize: 13, color: '#7FB069', fontWeight: 700 }}>1</span>
+              <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(127,176,143,0.15)', border: '1px solid rgba(127,176,143,0.3)' }}>
+                <span style={{ fontFamily: "'Big Shoulders Display',sans-serif", fontSize: 13, color: '#7FB08F', fontWeight: 700 }}>1</span>
               </div>
-              <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: 'rgba(232,228,220,0.7)' }}>
-                Select <strong style={{ color: '#E8E4DC' }}>Boundary</strong> and draw your property outline
+              <span style={{ fontFamily: "'Inter',sans-serif", fontSize: 13, color: 'rgba(244,239,227,0.7)' }}>
+                Select <strong style={{ color: '#F4EFE3' }}>Boundary</strong> and draw your property outline
               </span>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(232,228,220,0.3)" strokeWidth="1.2">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="rgba(244,239,227,0.3)" strokeWidth="1.2">
                 <polygon points="7,1 13,4.5 13,9.5 7,13 1,9.5 1,4.5" />
-                <circle cx="7" cy="1" r="1.2" fill="rgba(232,228,220,0.3)" stroke="none" />
-                <circle cx="13" cy="4.5" r="1.2" fill="rgba(232,228,220,0.3)" stroke="none" />
-                <circle cx="13" cy="9.5" r="1.2" fill="rgba(232,228,220,0.3)" stroke="none" />
-                <circle cx="7" cy="13" r="1.2" fill="rgba(232,228,220,0.3)" stroke="none" />
-                <circle cx="1" cy="9.5" r="1.2" fill="rgba(232,228,220,0.3)" stroke="none" />
-                <circle cx="1" cy="4.5" r="1.2" fill="rgba(232,228,220,0.3)" stroke="none" />
+                <circle cx="7" cy="1" r="1.2" fill="rgba(244,239,227,0.3)" stroke="none" />
+                <circle cx="13" cy="4.5" r="1.2" fill="rgba(244,239,227,0.3)" stroke="none" />
+                <circle cx="13" cy="9.5" r="1.2" fill="rgba(244,239,227,0.3)" stroke="none" />
+                <circle cx="7" cy="13" r="1.2" fill="rgba(244,239,227,0.3)" stroke="none" />
+                <circle cx="1" cy="9.5" r="1.2" fill="rgba(244,239,227,0.3)" stroke="none" />
+                <circle cx="1" cy="4.5" r="1.2" fill="rgba(244,239,227,0.3)" stroke="none" />
               </svg>
             </motion.div>
           )}
@@ -624,19 +636,19 @@ export default function WildLogicAppV2() {
                 animate={{ scale: [1, 1.5, 1], opacity: [0.4, 0, 0.4] }}
                 transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
                 className="absolute inset-0 rounded-2xl pointer-events-none"
-                style={{ background: 'rgba(201,162,39,0.25)' }}
+                style={{ background: 'rgba(228,90,36,0.25)' }}
               />
               <button
                 onClick={handleAnalyze}
                 className="relative flex items-center gap-3 px-7 py-4 rounded-2xl transition-all active:scale-[0.97]"
                 style={{
-                  background: 'linear-gradient(135deg, #C9A227 0%, #9A7A1E 100%)',
-                  boxShadow: '0 8px 32px rgba(201,162,39,0.4), 0 2px 8px rgba(0,0,0,0.5)',
-                  fontFamily: "'Teko','Oswald',sans-serif",
+                  background: 'linear-gradient(135deg, #E45A24 0%, #C2410C 100%)',
+                  boxShadow: '0 8px 32px rgba(228,90,36,0.4), 0 2px 8px rgba(0,0,0,0.5)',
+                  fontFamily: "'Big Shoulders Display','Oswald',sans-serif",
                   fontWeight: 700,
                   fontSize: 20,
                   letterSpacing: '0.08em',
-                  color: '#0A0E0A',
+                  color: '#F4EFE3',
                 }}
               >
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7.5" stroke="currentColor" strokeWidth="1.3" /><path d="M6 9l2.5 2.5L13 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>

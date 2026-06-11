@@ -3,16 +3,19 @@
 // Converts Tony's semantic relative_position zones to actual GeoJSON coordinates
 // using the property boundary bounding box — eliminates GPS coordinate hallucination.
 
+// Brand functional palette (BuckGridPro-Brand-Guide §3/§6):
+// Blaze is the signal color — stands only. Greens carry recommendations,
+// Steel carries environment (water), Antler/amber carry cover and caution.
 export const ZONE_COLORS: Record<string, string> = {
-  food_plot: '#4CAF50',
-  kill_plot: '#8BC34A',
-  access_route: '#FF9800',
-  bedding: '#795548',
-  stand_site: '#F44336',
-  water: '#2196F3',
-  staging_area: '#9C27B0',
-  sanctuary: '#607D8B',
-  default: '#6B7A57',
+  food_plot: '#3E7152',     // success green — plant here
+  kill_plot: '#7FB08F',     // sage — suggested placement
+  access_route: '#F2A14B',  // ember — the route in
+  bedding: '#C2AE8A',       // antler — cover, neutral warm
+  stand_site: '#E45A24',    // blaze — THE signal on the map
+  water: '#5E7C8A',         // steel — environment data
+  staging_area: '#E0A23B',  // caution amber
+  sanctuary: '#5E7464',     // moss — never-enter ground
+  default: '#7FB08F',
 };
 
 export const ZONE_FILL_OPACITY: Record<string, number> = {

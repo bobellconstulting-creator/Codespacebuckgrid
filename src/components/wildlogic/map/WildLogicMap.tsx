@@ -34,8 +34,9 @@ const TONY_ZONES_FILL_LAYER = 'tony-zones-fill'
 const TONY_ZONES_OUTLINE_LAYER = 'tony-zones-outline'
 const TONY_STANDS_LAYER = 'tony-stands-layer'
 
-const MOSS_FILL = 'rgba(107,122,87,0.2)'
-const MOSS_LINE = 'rgba(107,122,87,1)'
+// Brand: boundary draws in Sage (BuckGridPro-Brand-Guide §6)
+const MOSS_FILL = 'rgba(127,176,143,0.16)'
+const MOSS_LINE = 'rgba(127,176,143,0.95)'
 
 const US_CENTER: [number, number] = [-98.35, 39.5]
 const US_ZOOM = 4
@@ -217,7 +218,7 @@ const WildLogicMap = forwardRef<WildLogicMapHandle, WildLogicMapProps>(
             source: TONY_ZONES_SOURCE,
             filter: ['!=', ['geometry-type'], 'Point'],
             paint: {
-              'fill-color': ['coalesce', ['get', 'color'], '#6B7A57'],
+              'fill-color': ['coalesce', ['get', 'color'], '#7FB08F'],
               'fill-opacity': [
                 'case',
                 ['boolean', ['feature-state', 'hover'], false],
@@ -233,7 +234,7 @@ const WildLogicMap = forwardRef<WildLogicMapHandle, WildLogicMapProps>(
             source: TONY_ZONES_SOURCE,
             filter: ['!=', ['geometry-type'], 'Point'],
             paint: {
-              'line-color': ['coalesce', ['get', 'color'], '#6B7A57'],
+              'line-color': ['coalesce', ['get', 'color'], '#7FB08F'],
               'line-width': 2,
               'line-opacity': ZONE_OUTLINE_OPACITY,
               'line-dasharray': [4, 2],
@@ -246,7 +247,7 @@ const WildLogicMap = forwardRef<WildLogicMapHandle, WildLogicMapProps>(
             source: TONY_ZONES_SOURCE,
             filter: ['==', ['geometry-type'], 'Point'],
             paint: {
-              'circle-color': ['coalesce', ['get', 'color'], '#ef4444'],
+              'circle-color': ['coalesce', ['get', 'color'], '#E45A24'],
               'circle-radius': 7,
               'circle-stroke-color': '#fff',
               'circle-stroke-width': 2,
@@ -491,7 +492,7 @@ const WildLogicMap = forwardRef<WildLogicMapHandle, WildLogicMapProps>(
             'width:10px',
             'height:10px',
             'border-radius:50%',
-            'background:#6B7A57',
+            'background:#7FB08F',
             'border:2px solid #fff',
             'box-shadow:0 0 4px rgba(0,0,0,0.5)',
           ].join(';')
