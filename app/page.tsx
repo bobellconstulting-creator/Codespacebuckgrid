@@ -3,20 +3,33 @@
 import { motion, useInView, AnimatePresence } from 'framer-motion'
 import { useRef, useState, useEffect } from 'react'
 import Link from 'next/link'
-import WildLogicMark from '../components/WildLogicMark'
+import WaypointMark from '../components/WaypointMark'
 
-// ─── Color tokens ─────────────────────────────────────────────────────────────
-const C = {
-  bg: '#1E2122',
-  bgAlt: '#1E2122',
-  card: '#131710',
-  accent: '#6B7A57',
-  highlight: '#6B7A57',
-  text: '#D8D3C5',
-  muted: '#6E6A5C',
-  border: 'rgba(107,122,87,0.1)',
-  green: '#5A8A5F',
-  greenDim: 'rgba(90,138,95,0.15)',
+// ─── BuckGrid Pro brand tokens (confirmed brief) ─────────────────────────────
+// Ink bg / Card / Moss accent / Bone text, with the Gunmetal + Amber tactical
+// push. Amber is the signal color — reserved for the freemium CTA.
+const B = {
+  ink: '#1E2122', // page canvas
+  card: '#131710', // deepest surface
+  gunmetal: '#2C2F33', // raised chrome / secondary surfaces
+  moss: '#6B7A57', // brand accent
+  mossLight: '#8BAA72', // accent on dark text sizes
+  bone: '#D8D3C5', // primary text
+  muted: '#8A877B', // secondary text
+  amber: '#C8882A', // the one loud thing: First Map Free
+  amberLight: '#E0A84C',
+  steel: '#7C8B96', // cool data (wind, water)
+  tan: '#B89A6A', // bedding / warm zone
+  hairline: 'rgba(216,211,197,0.12)',
+  hairlineSoft: 'rgba(216,211,197,0.07)',
+  boneDim: 'rgba(216,211,197,0.68)',
+  boneFaint: 'rgba(216,211,197,0.45)',
+}
+
+const FONT = {
+  display: "'Big Shoulders Display','Oswald',sans-serif",
+  mono: "'JetBrains Mono','Roboto Mono',ui-monospace,monospace",
+  body: "'Inter',system-ui,sans-serif",
 }
 
 // ─── Animation helpers ────────────────────────────────────────────────────────
@@ -28,7 +41,7 @@ interface FadeInProps {
   y?: number
 }
 
-function FadeIn({ children, delay = 0, className = '', y = 32 }: FadeInProps) {
+function FadeIn({ children, delay = 0, className = '', y = 28 }: FadeInProps) {
   const ref = useRef<HTMLDivElement>(null)
   const inView = useInView(ref, { once: true, margin: '-60px' })
   return (
@@ -36,11 +49,230 @@ function FadeIn({ children, delay = 0, className = '', y = 32 }: FadeInProps) {
       ref={ref}
       initial={{ opacity: 0, y }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={{ duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] }}
+      transition={{ duration: 0.55, delay, ease: [0.16, 1, 0.3, 1] }}
       className={className}
     >
       {children}
     </motion.div>
+  )
+}
+
+// ─── Shared brand atoms ───────────────────────────────────────────────────────
+
+/** BUCKGRID wordmark + amber PRO badge */
+function Wordmark({ size = 22, withMark = true, markSize = 34 }: { size?: number; withMark?: boolean; markSize?: number }) {
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      {withMark && <WaypointMark size={markSize} />}
+      <span className="inline-flex items-baseline gap-1.5" style={{ fontFamily: FONT.display }}>
+        <span style={{ fontSize: size, fontWeight: 800, color: B.bone, letterSpacing: '0.02em', lineHeight: 1 }}>
+          BUCKGRID
+        </span>
+        <span
+          className="rounded-sm"
+          style={{
+            fontSize: size * 0.52,
+            fontWeight: 800,
+            letterSpacing: '0.08em',
+            background: B.amber,
+            color: B.card,
+            padding: '2px 5px',
+            lineHeight: 1,
+          }}
+        >
+          PRO
+        </span>
+      </span>
+    </span>
+  )
+}
+
+/** JetBrains Mono uppercase label — the data texture */
+function MonoLabel({
+  children,
+  color = B.mossLight,
+  className = '',
+  size = 11,
+}: {
+  children: React.ReactNode
+  color?: string
+  className?: string
+  size?: number
+}) {
+  return (
+    <span
+      className={`uppercase ${className}`}
+      style={{ fontFamily: FONT.mono, fontSize: size, letterSpacing: '0.12em', color }}
+    >
+      {children}
+    </span>
+  )
+}
+
+/** Section eyebrow: index number + label, mono */
+function SectionEyebrow({ index, label }: { index: string; label: string }) {
+  return (
+    <div className="flex items-center justify-center gap-3 mb-4">
+      <span className="h-px w-8" style={{ background: B.hairline }} />
+      <MonoLabel>
+        {index} / {label}
+      </MonoLabel>
+      <span className="h-px w-8" style={{ background: B.hairline }} />
+    </div>
+  )
+}
+
+const topoBg = {
+  backgroundImage:
+    "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600'><g fill='none' stroke='%236B7A57' stroke-width='1' opacity='0.16'><path d='M -50 120 Q 150 60 320 130 T 700 110'/><path d='M -50 170 Q 180 100 350 180 T 700 160'/><path d='M -50 220 Q 150 150 320 230 T 700 210'/><path d='M -50 270 Q 180 200 350 280 T 700 260'/><path d='M -50 320 Q 150 250 320 330 T 700 310'/><path d='M -50 370 Q 180 300 350 380 T 700 360'/><path d='M -50 420 Q 150 350 320 430 T 700 410'/><path d='M -50 470 Q 180 400 350 480 T 700 460'/><path d='M -50 520 Q 150 450 320 530 T 700 510'/></g></svg>\")",
+  backgroundSize: '720px 720px',
+}
+
+const gridBg = {
+  backgroundImage: `linear-gradient(rgba(107,122,87,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(107,122,87,0.04) 1px, transparent 1px)`,
+  backgroundSize: '72px 72px',
+}
+
+// ─── Buttons ──────────────────────────────────────────────────────────────────
+
+// Amber is reserved for one job: the freemium CTA. Loudest element on the page.
+const amberBtnStyle = {
+  background: `linear-gradient(135deg, ${B.amberLight} 0%, ${B.amber} 100%)`,
+  color: B.card,
+  fontFamily: FONT.display,
+  fontWeight: 800,
+  letterSpacing: '0.07em',
+  boxShadow: '0 12px 36px -10px rgba(200,136,42,0.5)',
+} as const
+
+const ghostBtnStyle = {
+  color: B.boneDim,
+  border: `1px solid ${B.hairline}`,
+  fontFamily: FONT.display,
+  fontWeight: 600,
+  letterSpacing: '0.08em',
+} as const
+
+// ─── Icons — 2px line, squared terminals ─────────────────────────────────────
+
+function iconProps(size = 22) {
+  return {
+    width: size,
+    height: size,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'square' as const,
+    strokeLinejoin: 'miter' as const,
+  }
+}
+
+function IconCrosshair() {
+  return (
+    <svg {...iconProps()}>
+      <circle cx="12" cy="12" r="8" />
+      <line x1="12" y1="1.5" x2="12" y2="6" />
+      <line x1="12" y1="18" x2="12" y2="22.5" />
+      <line x1="1.5" y1="12" x2="6" y2="12" />
+      <line x1="18" y1="12" x2="22.5" y2="12" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+function IconWind() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M3 8h11a3 3 0 1 0-3-3" />
+      <path d="M3 13h15a3 3 0 1 1-3 3" />
+      <path d="M3 18h7" />
+    </svg>
+  )
+}
+
+function IconFunnel() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M3 4h18l-7 8v7l-4 2v-9L3 4Z" />
+    </svg>
+  )
+}
+
+function IconPlot() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M4 4h7v7H4z" />
+      <path d="M11 11l9 9" />
+      <path d="M14 20h6v-6" />
+    </svg>
+  )
+}
+
+function IconRoute() {
+  return (
+    <svg {...iconProps()}>
+      <circle cx="6" cy="19" r="2.5" />
+      <circle cx="18" cy="5" r="2.5" />
+      <path d="M8.5 19H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5" />
+    </svg>
+  )
+}
+
+function IconChat() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M21 14a2 2 0 0 1-2 2H8l-5 5V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9Z" />
+      <line x1="8" y1="8" x2="16" y2="8" />
+      <line x1="8" y1="12" x2="13" y2="12" />
+    </svg>
+  )
+}
+
+function IconDraw() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M4 20 14.5 9.5" />
+      <path d="M14.5 9.5 18 6l-1-1-3.5 3.5" />
+      <path d="M18 6l1 1" />
+      <circle cx="4" cy="20" r="1.4" fill="currentColor" stroke="none" />
+      <path d="M3 4h5v5" />
+      <path d="M21 15v5h-5" />
+    </svg>
+  )
+}
+
+function IconCheck({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square" strokeLinejoin="miter">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
+function IconX({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="square">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  )
+}
+
+function IconChevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="square"
+      style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s ease' }}
+    >
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
   )
 }
 
@@ -59,227 +291,257 @@ function Nav() {
     <nav
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
       style={{
-        background: scrolled ? 'rgba(10,14,23,0.85)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(20px)' : 'none',
-        borderBottom: scrolled ? `1px solid ${C.border}` : '1px solid transparent',
+        background: scrolled ? 'rgba(30,33,34,0.9)' : 'transparent',
+        backdropFilter: scrolled ? 'blur(18px)' : 'none',
+        WebkitBackdropFilter: scrolled ? 'blur(18px)' : 'none',
+        borderBottom: scrolled ? `1px solid ${B.hairlineSoft}` : '1px solid transparent',
       }}
     >
-      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <WildLogicMark size={32} variant="full" />
+      <div className="max-w-6xl mx-auto px-6 py-3.5 flex items-center justify-between">
+        <Link href="/" aria-label="BuckGrid Pro home">
+          <Wordmark size={21} markSize={32} />
         </Link>
 
-        {/* Center links */}
         <div className="hidden md:flex items-center gap-8">
-          {['How It Works', 'Features', 'Pricing'].map((link) => (
+          {[
+            ['How It Works', '#how-it-works'],
+            ['Features', '#features'],
+            ['Pricing', '#pricing'],
+            ['FAQ', '#faq'],
+          ].map(([label, href]) => (
             <a
-              key={link}
-              href={`#${link.toLowerCase().replace(/\s+/g, '-')}`}
-              className="text-sm font-medium transition-colors hover:text-white"
-              style={{ color: C.muted }}
+              key={label}
+              href={href}
+              className="text-sm font-medium transition-colors"
+              style={{ color: B.muted, fontFamily: FONT.body }}
+              onMouseEnter={e => (e.currentTarget.style.color = B.bone)}
+              onMouseLeave={e => (e.currentTarget.style.color = B.muted)}
             >
-              {link}
+              {label}
             </a>
           ))}
         </div>
 
-        {/* CTA */}
         <Link
           href="/buckgrid"
-          className="px-5 py-2 rounded-lg text-sm font-bold transition-all hover:opacity-90 hover:scale-105 active:scale-100"
-          style={{ background: 'linear-gradient(135deg, #6B7A57, #4A543D)', color: '#0C0F0A' }}
+          className="px-5 py-2 rounded-lg text-sm uppercase transition-all hover:opacity-90"
+          style={{
+            color: B.bone,
+            border: `1px solid ${B.gunmetal}`,
+            background: 'rgba(44,47,51,0.6)',
+            fontFamily: FONT.display,
+            fontWeight: 700,
+            letterSpacing: '0.07em',
+          }}
         >
-          Start Mapping Free →
+          Open the Map
         </Link>
       </div>
     </nav>
   )
 }
 
-// ─── Icons ───────────────────────────────────────────────────────────────────
+// ─── Hero map instrument panel ────────────────────────────────────────────────
 
-function IconSatellite() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13 7 9 3 3 9l4 4" /><path d="m13 7 3 3" /><path d="M14 14c-1 2-2 3-3 3s-2-1-3-3 1-2 3-3 3 1 3 3Z" />
-      <path d="M20 4a2.828 2.828 0 0 1 0 4L14 14" /><path d="M18 9 9 18" />
-    </svg>
-  )
-}
-
-function IconPencil() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-    </svg>
-  )
-}
-
-function IconBrain() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.44-4.14z" />
-      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.44-4.14z" />
-    </svg>
-  )
-}
-
-function IconMap() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-      <line x1="9" y1="3" x2="9" y2="18" />
-      <line x1="15" y1="6" x2="15" y2="21" />
-    </svg>
-  )
-}
-
-function IconLeaf() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z" />
-      <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
-    </svg>
-  )
-}
-
-function IconTarget() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
-    </svg>
-  )
-}
-
-function IconShield() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  )
-}
-
-function IconCheck() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  )
-}
-
-function IconX() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  )
-}
-
-function IconChevron({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-      strokeLinecap="round" strokeLinejoin="round"
-      style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.25s ease' }}
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  )
-}
-
-// ─── Hero mock chat ───────────────────────────────────────────────────────────
-
-function HeroMockPanel() {
+function HeroMapPanel() {
   return (
     <div
-      className="relative w-full max-w-2xl mx-auto rounded-2xl overflow-hidden"
+      className="relative w-full rounded-2xl overflow-hidden"
       style={{
-        border: `1px solid ${C.border}`,
-        boxShadow: '0 40px 80px -20px rgba(0,0,0,0.8), 0 0 60px -10px rgba(107,122,87,0.1)',
+        border: `1px solid ${B.hairline}`,
+        boxShadow: '0 48px 100px -24px rgba(0,0,0,0.85), 0 0 80px -30px rgba(107,122,87,0.16)',
+        background: B.card,
       }}
     >
-      {/* Simulated satellite map bg */}
+      {/* Instrument header bar */}
       <div
-        className="relative w-full"
-        style={{
-          height: 240,
-          background: 'linear-gradient(145deg, #0a1a08 0%, #0f2409 25%, #142d0c 45%, #0c1e08 65%, #091608 80%, #0e2110 100%)',
-        }}
+        className="flex items-center justify-between px-4 py-2.5"
+        style={{ background: B.card, borderBottom: `1px solid ${B.hairlineSoft}` }}
       >
-        {/* Terrain texture overlay */}
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: 'radial-gradient(ellipse at 30% 60%, rgba(34,120,34,0.2) 0%, transparent 50%), radial-gradient(ellipse at 70% 30%, rgba(60,40,20,0.3) 0%, transparent 40%), radial-gradient(ellipse at 20% 20%, rgba(20,80,20,0.15) 0%, transparent 35%)',
-          }}
-        />
-        {/* Creek/water line */}
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 640 240" preserveAspectRatio="none">
-          <path d="M 80 60 Q 160 90 220 110 Q 300 130 360 120 Q 420 110 500 140 Q 560 158 620 150" stroke="rgba(59,130,246,0.4)" strokeWidth="3" fill="none" strokeLinecap="round" />
-        </svg>
-        {/* Drawn feature overlays */}
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 640 240" preserveAspectRatio="none">
-          {/* Food plot polygon */}
-          <polygon points="80,40 160,35 170,90 85,95" fill="rgba(34,197,94,0.25)" stroke="rgba(34,197,94,0.8)" strokeWidth="1.5" strokeDasharray="4 2" />
-          {/* Bedding area */}
-          <ellipse cx="400" cy="100" rx="55" ry="38" fill="rgba(180,120,60,0.2)" stroke="rgba(180,120,60,0.7)" strokeWidth="1.5" strokeDasharray="4 2" />
-          {/* Trail line */}
-          <path d="M 230 150 Q 310 140 370 125 Q 420 115 460 95" stroke="rgba(251,191,36,0.8)" strokeWidth="2" fill="none" strokeLinecap="round" strokeDasharray="6 3" />
-          {/* Stand marker — brass crosshair */}
-          <circle cx="340" cy="75" r="9" fill="rgba(107,122,87,0.9)" stroke="rgba(255,255,255,0.9)" strokeWidth="1.5" />
-          <line x1="340" y1="68" x2="340" y2="82" stroke="rgba(0,0,0,0.65)" strokeWidth="1.2" />
-          <line x1="333" y1="75" x2="347" y2="75" stroke="rgba(0,0,0,0.65)" strokeWidth="1.2" />
-          <circle cx="340" cy="75" r="2" fill="rgba(0,0,0,0.55)" />
-        </svg>
-        {/* Feature label badges on map */}
-        <div className="absolute" style={{ top: 28, left: 68 }}>
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.85)', color: '#000' }}>Food Plot</span>
-        </div>
-        <div className="absolute" style={{ top: 105, left: 360 }}>
-          <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(180,120,60,0.9)', color: '#fff' }}>Bedding</span>
-        </div>
-        {/* Coordinates HUD */}
-        <div className="absolute bottom-2 left-3 text-xs font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>38.8951° N · 96.3047° W</div>
-        <div className="absolute bottom-2 right-3 flex items-center gap-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-xs font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>LIVE</span>
+        <MonoLabel color={B.muted} size={10}>
+          BUCKGRID PRO / PARCEL VIEW
+        </MonoLabel>
+        <div className="flex items-center gap-4">
+          <MonoLabel color={B.steel} size={10} className="hidden sm:inline">
+            WIND NW · 8 MPH
+          </MonoLabel>
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: B.mossLight }} />
+            <MonoLabel size={10}>LIVE</MonoLabel>
+          </span>
         </div>
       </div>
 
-      {/* Tony chat response */}
-      <div style={{ background: C.card, borderTop: `1px solid ${C.border}` }} className="p-5">
-        <div className="flex items-start gap-3">
+      {/* Satellite map area */}
+      <div
+        className="relative w-full"
+        style={{
+          height: 280,
+          background:
+            'linear-gradient(150deg, #141a10 0%, #1a2414 22%, #1f2c17 40%, #172112 58%, #10180c 76%, #182013 100%)',
+        }}
+      >
+        {/* terrain shading */}
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              'radial-gradient(ellipse at 28% 64%, rgba(107,122,87,0.18) 0%, transparent 48%), radial-gradient(ellipse at 72% 28%, rgba(110,106,92,0.2) 0%, transparent 42%), radial-gradient(ellipse at 14% 18%, rgba(44,47,51,0.5) 0%, transparent 38%)',
+          }}
+        />
+        {/* topo contours */}
+        <div className="absolute inset-0 opacity-70" style={topoBg} />
+
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 640 280" preserveAspectRatio="none">
+          {/* creek — cool data */}
+          <path
+            d="M 60 76 Q 150 104 220 124 Q 300 146 370 136 Q 430 126 510 156 Q 570 176 640 168"
+            stroke="rgba(124,139,150,0.6)"
+            strokeWidth="3"
+            fill="none"
+            strokeLinecap="round"
+          />
+          {/* parcel boundary */}
+          <polygon
+            points="36,36 600,28 612,242 60,252"
+            fill="none"
+            stroke="rgba(216,211,197,0.35)"
+            strokeWidth="1.5"
+            strokeDasharray="8 5"
+          />
+          {/* food plot — moss */}
+          <polygon
+            points="92,52 196,46 206,116 100,122"
+            fill="rgba(139,170,114,0.16)"
+            stroke="rgba(139,170,114,0.8)"
+            strokeWidth="1.5"
+            strokeDasharray="5 3"
+          />
+          {/* bedding — tan */}
+          <ellipse
+            cx="430"
+            cy="118"
+            rx="62"
+            ry="40"
+            fill="rgba(184,154,106,0.12)"
+            stroke="rgba(184,154,106,0.65)"
+            strokeWidth="1.5"
+            strokeDasharray="5 3"
+          />
+          {/* travel corridor / funnel — bone dashed */}
+          <path
+            d="M 226 178 Q 300 162 352 142 Q 392 128 418 108"
+            stroke="rgba(216,211,197,0.55)"
+            strokeWidth="2"
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray="7 4"
+          />
+          {/* stand marker — the decision, Amber crosshair */}
+          <circle cx="330" cy="92" r="13" fill="none" stroke="#E0A84C" strokeWidth="2" />
+          <circle cx="330" cy="92" r="3" fill="#E0A84C" />
+          <line x1="330" y1="74" x2="330" y2="83" stroke="#E0A84C" strokeWidth="2" />
+          <line x1="330" y1="101" x2="330" y2="110" stroke="#E0A84C" strokeWidth="2" />
+          <line x1="312" y1="92" x2="321" y2="92" stroke="#E0A84C" strokeWidth="2" />
+          <line x1="339" y1="92" x2="348" y2="92" stroke="#E0A84C" strokeWidth="2" />
+        </svg>
+
+        {/* zone labels — mono chips */}
+        <div className="absolute" style={{ top: 26, left: 88 }}>
+          <span
+            className="px-1.5 py-0.5 rounded"
+            style={{ fontFamily: FONT.mono, fontSize: 9.5, letterSpacing: '0.1em', background: 'rgba(19,23,16,0.88)', color: B.mossLight, border: '1px solid rgba(139,170,114,0.4)' }}
+          >
+            FOOD PLOT · 1.8 AC
+          </span>
+        </div>
+        <div className="absolute" style={{ top: 128, left: 396 }}>
+          <span
+            className="px-1.5 py-0.5 rounded"
+            style={{ fontFamily: FONT.mono, fontSize: 9.5, letterSpacing: '0.1em', background: 'rgba(19,23,16,0.88)', color: B.tan, border: '1px solid rgba(184,154,106,0.4)' }}
+          >
+            BEDDING
+          </span>
+        </div>
+        <div className="absolute" style={{ top: 44, left: 348 }}>
+          <span
+            className="px-1.5 py-0.5 rounded"
+            style={{ fontFamily: FONT.mono, fontSize: 9.5, letterSpacing: '0.1em', background: 'rgba(19,23,16,0.92)', color: B.amberLight, border: '1px solid rgba(200,136,42,0.5)' }}
+          >
+            STAND 01 · NW WIND
+          </span>
+        </div>
+        <div className="absolute" style={{ top: 168, left: 240 }}>
+          <span
+            className="px-1.5 py-0.5 rounded"
+            style={{ fontFamily: FONT.mono, fontSize: 9.5, letterSpacing: '0.1em', background: 'rgba(19,23,16,0.88)', color: B.boneDim, border: `1px solid ${B.hairline}` }}
+          >
+            TRAVEL CORRIDOR
+          </span>
+        </div>
+
+        {/* coordinates HUD */}
+        <div className="absolute bottom-2.5 left-3.5">
+          <MonoLabel color="rgba(216,211,197,0.45)" size={10}>
+            38.8951 N · 96.3047 W
+          </MonoLabel>
+        </div>
+        <div className="absolute bottom-2.5 right-3.5">
+          <MonoLabel color="rgba(216,211,197,0.45)" size={10}>
+            247.3 AC
+          </MonoLabel>
+        </div>
+      </div>
+
+      {/* Tony recommendation card */}
+      <div className="p-5" style={{ background: B.card, borderTop: `1px solid ${B.hairlineSoft}` }}>
+        <div className="flex items-start gap-3.5">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 mt-0.5"
+            className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
             style={{
-              background: 'linear-gradient(135deg, #1e2a18, #2a3820)',
-              border: `1px solid rgba(107,122,87,0.4)`,
-              color: '#6B7A57',
+              background: B.ink,
+              border: '1px solid rgba(139,170,114,0.45)',
+              color: B.mossLight,
+              fontFamily: FONT.display,
+              fontWeight: 800,
+              fontSize: 17,
             }}
           >
             T
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-sm font-bold text-white">Tony AI</span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(34,197,94,0.15)', color: C.green }}>Wildlife Consultant</span>
+            <div className="flex items-center gap-2.5 mb-2">
+              <span style={{ fontFamily: FONT.display, fontWeight: 700, fontSize: 16, letterSpacing: '0.04em', color: B.bone }}>
+                TONY
+              </span>
+              <MonoLabel size={9.5} color={B.muted}>
+                HABITAT CONSULTANT
+              </MonoLabel>
             </div>
-            <p className="text-sm leading-relaxed mb-3" style={{ color: C.text }}>
-              I see 247 acres with creek bottoms running northeast. Your best stand location is on the ridge above the timber edge — 80 yards downwind of the bedding area. I&apos;ve drawn 4 features on your map.
+            <p className="text-sm leading-relaxed mb-3.5" style={{ color: B.boneDim, fontFamily: FONT.body }}>
+              I&apos;d hang Stand 01 on the bench, 40 yards off the bedding edge — it only hunts on a
+              northwest. Enter up the creek bottom so your scent stays out of the bedding. The plot
+              goes in the northwest opening: 6+ hours of sun, and the travel corridor feeds it from
+              the east. Your ground, your call — tell me what you&apos;re seeing and I&apos;ll adjust.
             </p>
             <div className="flex flex-wrap gap-2">
               {[
-                { label: 'Food Plot', color: C.green, bg: 'rgba(34,197,94,0.12)' },
-                { label: 'Bedding', color: '#c47830', bg: 'rgba(180,120,60,0.12)' },
-                { label: 'Trail', color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
-                { label: 'Stand', color: C.accent, bg: 'rgba(107,122,87,0.12)' },
-              ].map(({ label, color, bg }) => (
+                { label: 'STAND 01 · CONF 0.87', color: B.mossLight },
+                { label: 'WIND NW–N', color: B.steel },
+                { label: 'PLOT 1.8 AC', color: B.mossLight },
+                { label: 'ENTRY: CREEK S', color: B.tan },
+              ].map(({ label, color }) => (
                 <span
                   key={label}
-                  className="text-xs font-semibold px-3 py-1 rounded-full"
-                  style={{ color, background: bg, border: `1px solid ${color}30` }}
+                  className="px-2 py-1 rounded"
+                  style={{
+                    fontFamily: FONT.mono,
+                    fontSize: 9.5,
+                    letterSpacing: '0.1em',
+                    color,
+                    background: 'rgba(30,33,34,0.7)',
+                    border: `1px solid ${B.hairlineSoft}`,
+                  }}
                 >
                   {label}
                 </span>
@@ -296,68 +558,67 @@ function HeroMockPanel() {
 
 function Hero() {
   return (
-    <section
-      className="relative min-h-screen flex flex-col justify-center pt-24 pb-20 px-6 overflow-hidden"
-      style={{ background: C.bg }}
-    >
-      {/* Background: topographic grid + brass glow */}
+    <section className="relative min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 overflow-hidden" style={{ background: B.ink }}>
+      {/* topo + grid texture, moss glow */}
       <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 opacity-60" style={topoBg} />
+        <div className="absolute inset-0" style={gridBg} />
         <div
-          className="absolute inset-0"
+          className="absolute rounded-full"
           style={{
-            backgroundImage: 'linear-gradient(rgba(107,122,87,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(107,122,87,0.025) 1px, transparent 1px)',
-            backgroundSize: '80px 80px',
+            width: 1000,
+            height: 1000,
+            top: -340,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'radial-gradient(circle, rgba(107,122,87,0.07) 0%, transparent 62%)',
           }}
         />
         <div
           className="absolute rounded-full"
           style={{
-            width: 900, height: 900,
-            top: -280, left: '50%', transform: 'translateX(-50%)',
-            background: 'radial-gradient(circle, rgba(107,122,87,0.055) 0%, transparent 65%)',
-          }}
-        />
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: 500, height: 500,
-            bottom: 0, right: -80,
-            background: 'radial-gradient(circle, rgba(90,138,95,0.04) 0%, transparent 70%)',
+            width: 520,
+            height: 520,
+            bottom: -120,
+            right: -100,
+            background: 'radial-gradient(circle, rgba(200,136,42,0.04) 0%, transparent 70%)',
           }}
         />
       </div>
 
       <div className="relative max-w-6xl mx-auto w-full">
-        <div className="max-w-3xl mx-auto text-center mb-12">
-          {/* Eyebrow badge */}
+        <div className="max-w-3xl mx-auto text-center mb-14">
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest mb-8"
-            style={{ background: 'rgba(107,122,87,0.1)', color: C.accent, border: `1px solid rgba(107,122,87,0.2)` }}
+            className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full mb-8"
+            style={{ background: 'rgba(44,47,51,0.5)', border: `1px solid ${B.hairlineSoft}` }}
           >
-            {/* Topo line icon */}
-            <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
-              <path d="M1 9 C3 9 3 7 5 7 C7 7 7 5 9 5 C11 5 11 3 13 3" stroke="#6B7A57" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-              <path d="M1 6 C3 6 3 4 5 4 C7 4 7 2 9 2 C11 2 11 1 13 1" stroke="#6B7A57" strokeWidth="0.7" strokeLinecap="round" fill="none" opacity="0.5" />
-            </svg>
-            Satellite-Grade Habitat Intelligence
+            <span style={{ color: B.mossLight }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="square">
+                <circle cx="12" cy="12" r="7" />
+                <line x1="12" y1="2" x2="12" y2="6" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+                <line x1="2" y1="12" x2="6" y2="12" />
+                <line x1="18" y1="12" x2="22" y2="12" />
+              </svg>
+            </span>
+            <MonoLabel size={10.5}>DECISIONS, NOT MAPS</MonoLabel>
           </motion.div>
 
-          {/* Headline */}
           <motion.h1
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-            className="font-display text-7xl md:text-8xl lg:text-9xl leading-none mb-6 tracking-tight uppercase"
-            style={{ color: '#fff' }}
+            transition={{ duration: 0.6, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
+            className="text-6xl md:text-8xl lg:text-9xl leading-[0.92] mb-7 uppercase"
+            style={{ fontFamily: FONT.display, fontWeight: 800, letterSpacing: '0.015em', color: B.bone }}
           >
             You Know Your Land.
             <br />
             <span
               style={{
-                backgroundImage: `linear-gradient(135deg, ${C.accent} 0%, #6B7A57 100%)`,
+                backgroundImage: `linear-gradient(120deg, ${B.mossLight} 0%, ${B.moss} 80%)`,
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
@@ -367,89 +628,87 @@ function Hero() {
             </span>
           </motion.h1>
 
-          {/* Subheadline */}
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            className="text-lg md:text-xl leading-relaxed mb-10 max-w-xl mx-auto"
-            style={{ color: C.muted }}
+            transition={{ duration: 0.6, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
+            className="text-lg md:text-xl leading-relaxed mb-9 max-w-2xl mx-auto"
+            style={{ color: B.boneDim, fontFamily: FONT.body }}
           >
-            Tell Tony what you&apos;re seeing — where deer are bedding, how they&apos;re moving, what&apos;s working. Get a tactical game plan built around your actual terrain. BuckGrid Pro puts a habitat consultant in your pocket.
+            Every hunting app sells you another map. BuckGrid Pro sells the decision: Tony analyzes
+            your exact acreage from satellite imagery and tells you precisely where to hang a stand —
+            before the season opens. Tony suggests. You decide.
           </motion.p>
 
-          {/* CTAs */}
+          {/* Freemium CTA — the loudest element above the fold */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6"
+            transition={{ duration: 0.6, delay: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="flex flex-col items-center gap-4 mb-7"
           >
             <Link
               href="/buckgrid"
-              className="group flex items-center gap-2 px-8 py-4 rounded-xl font-bold text-white text-base transition-all hover:scale-105 hover:-translate-y-0.5 active:scale-100"
+              className="px-10 py-5 rounded-xl text-xl md:text-2xl uppercase transition-all hover:scale-[1.03] hover:-translate-y-0.5 active:scale-100"
+              style={amberBtnStyle}
+            >
+              Draw Your Land — First Map Free
+            </Link>
+            <span
+              className="px-3.5 py-1.5 rounded-full"
               style={{
-                background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
-                color: '#0C0F0A',
-                boxShadow: `0 8px 30px -8px rgba(107,122,87,0.5)`,
+                fontFamily: FONT.mono,
+                fontSize: 11,
+                letterSpacing: '0.14em',
+                color: B.amberLight,
+                border: '1px solid rgba(200,136,42,0.4)',
+                background: 'rgba(200,136,42,0.07)',
               }}
             >
-              Start Mapping Free →
-              <span className="group-hover:translate-x-1 transition-transform"></span>
-            </Link>
-            <a
-              href="#how-it-works"
-              className="flex items-center gap-2 px-8 py-4 rounded-xl font-semibold text-base transition-all hover:text-white"
-              style={{ color: C.muted, border: `1px solid ${C.border}` }}
-            >
+              FIRST MAP FREE / NO CARD REQUIRED
+            </span>
+            <a href="#how-it-works" className="px-7 py-3 rounded-xl text-base uppercase transition-all hover:text-white" style={ghostBtnStyle}>
               See How It Works
             </a>
           </motion.div>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.45 }}
-            className="text-xs"
-            style={{ color: C.muted }}
-          >
-            No account required · Free to start · No credit card
-          </motion.p>
         </div>
 
-        {/* Mock panel */}
-        <FadeIn delay={0.4} className="w-full max-w-2xl mx-auto">
-          <HeroMockPanel />
+        <FadeIn delay={0.35} className="w-full max-w-3xl mx-auto">
+          <HeroMapPanel />
         </FadeIn>
       </div>
     </section>
   )
 }
 
-// ─── Trust bar ────────────────────────────────────────────────────────────────
+// ─── Data strip ───────────────────────────────────────────────────────────────
 
-const STATS = [
-  { val: 'First Map Free', label: 'No Card Required' },
-  { val: 'Tony AI',        label: 'Wildlife Consultant' },
-  { val: 'Satellite Analysis', label: 'Real Imagery' },
-  { val: 'Zero Setup',    label: 'Start in Seconds' },
+const DATA_STRIP = [
+  { val: 'FREE', label: 'FIRST MAP — NO CARD REQUIRED', accent: true },
+  { val: '06', label: 'TERRAIN DATA LAYERS', accent: false },
+  { val: '<90s', label: 'SATELLITE TO DECISION', accent: false },
+  { val: '100%', label: 'TERRAIN-GROUNDED PLACEMENTS', accent: false },
 ]
 
-function TrustBar() {
+function DataStrip() {
   return (
-    <section style={{ borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, background: C.card }}>
-      <div className="max-w-5xl mx-auto px-6 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-0">
-          {STATS.map((s, i) => (
+    <section style={{ borderTop: `1px solid ${B.hairlineSoft}`, borderBottom: `1px solid ${B.hairlineSoft}`, background: B.card }}>
+      <div className="max-w-5xl mx-auto px-6 py-7">
+        <div className="grid grid-cols-2 md:grid-cols-4">
+          {DATA_STRIP.map((s, i) => (
             <div
-              key={s.val}
+              key={s.label}
               className="flex flex-col items-center py-4 text-center"
-              style={{
-                borderRight: i < STATS.length - 1 ? `1px solid rgba(107,122,87,0.15)` : 'none',
-              }}
+              style={{ borderRight: i < DATA_STRIP.length - 1 ? `1px solid ${B.hairlineSoft}` : 'none' }}
             >
-              <div className="text-2xl font-bold font-display tracking-wide leading-tight" style={{ color: C.accent }}>{s.val}</div>
-              <div className="text-xs mt-1.5 font-semibold uppercase tracking-widest" style={{ color: C.muted }}>{s.label}</div>
+              <div style={{ fontFamily: FONT.display, fontWeight: 800, fontSize: 34, lineHeight: 1, color: s.accent ? B.amberLight : B.bone }}>
+                {s.val}
+              </div>
+              <div className="mt-2 px-2">
+                <MonoLabel color={B.muted} size={9.5}>
+                  {s.label}
+                </MonoLabel>
+              </div>
             </div>
           ))}
         </div>
@@ -458,86 +717,75 @@ function TrustBar() {
   )
 }
 
-// ─── How It Works ─────────────────────────────────────────────────────────────
+// ─── How It Works — Draw Your Land. Talk To Tony. Kill Bigger Bucks. ─────────
 
 const HOW_STEPS = [
   {
     num: '01',
-    icon: <IconSatellite />,
-    title: 'Open Your Satellite Map',
-    desc: 'Pull up your property on a real-time satellite view. Every creek bottom, timber edge, and field comes into focus instantly.',
-    color: C.green,
+    icon: <IconDraw />,
+    title: 'Draw Your Land',
+    desc: 'Pull your property up on satellite and trace the boundary. The pinch points, saddles, and transition edges inside it are already in the data.',
+    tag: 'SATELLITE · BOUNDARY',
   },
   {
     num: '02',
-    icon: <IconPencil />,
-    title: 'Draw Your Features',
-    desc: 'Use the drawing tools to mark terrain features — food plots, timber blocks, travel corridors, water sources.',
-    color: '#fbbf24',
+    icon: <IconChat />,
+    title: 'Talk to Tony',
+    desc: 'Tony analyzes your exact acreage — elevation, cover, wind, water — and places stands, plots, bedding, and travel corridors on real ground, with the reasoning behind every call.',
+    tag: 'TERRAIN · WIND · COVER',
   },
   {
     num: '03',
-    icon: <IconBrain />,
-    title: 'Get Tony\'s Expert Plan',
-    desc: 'Tony reads your terrain data and field intel — then delivers a specific, actionable habitat strategy tailored to your property\'s actual conditions.',
-    color: C.accent,
+    icon: <IconCrosshair />,
+    title: 'Kill Bigger Bucks',
+    desc: 'Walk out with coordinates, the wind each stand hunts on, and an entry route that doesn’t blow out the bedding. Tony suggests. You decide. You hang the stand.',
+    tag: 'COORDS · WIND WINDOW',
   },
 ]
 
 function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-28 px-6" style={{ background: C.bg }}>
+    <section id="how-it-works" className="py-28 px-6 relative" style={{ background: B.ink }}>
       <div className="max-w-6xl mx-auto">
         <FadeIn className="text-center mb-16">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Simple Process</div>
-          <h2 className="font-display text-6xl md:text-7xl text-white uppercase tracking-tight">
-            From satellite to strategy
+          <SectionEyebrow index="01" label="HOW IT WORKS" />
+          <h2 className="text-5xl md:text-7xl uppercase" style={{ fontFamily: FONT.display, fontWeight: 800, letterSpacing: '0.015em', color: B.bone, lineHeight: 0.95 }}>
+            Draw Your Land. Talk to Tony.
             <br />
-            <span style={{ color: C.muted, fontSize: '0.85em' }}>in three steps</span>
+            <span style={{ color: B.mossLight }}>Kill Bigger Bucks.</span>
           </h2>
-          <div
-            className="inline-flex items-center gap-2 mt-6 px-4 py-1.5 rounded-full text-xs font-semibold"
-            style={{ background: C.greenDim, color: C.green, border: `1px solid rgba(34,197,94,0.2)` }}
-          >
-            Takes under 90 seconds
-          </div>
         </FadeIn>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {HOW_STEPS.map((step, i) => (
             <FadeIn key={step.num} delay={i * 0.1}>
               <div
-                className="relative p-8 rounded-2xl h-full"
-                style={{ background: C.card, border: `1px solid ${C.border}` }}
+                className="relative p-8 rounded-2xl h-full transition-transform hover:-translate-y-1"
+                style={{ background: B.card, border: `1px solid ${B.hairlineSoft}` }}
               >
-                {/* Big background number */}
                 <div
-                  className="absolute top-6 right-6 font-display text-7xl leading-none select-none pointer-events-none"
-                  style={{ color: `${step.color}10` }}
+                  className="absolute top-6 right-7 select-none pointer-events-none"
+                  style={{ fontFamily: FONT.display, fontWeight: 800, fontSize: 72, lineHeight: 1, color: 'rgba(107,122,87,0.12)' }}
                 >
                   {step.num}
                 </div>
-                {/* Brass step number circle */}
-                <div className="flex items-center gap-3 mb-6">
-                  <div
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold flex-shrink-0"
-                    style={{
-                      background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
-                      color: '#0C0F0A',
-                      boxShadow: '0 0 12px -4px rgba(107,122,87,0.5)',
-                    }}
-                  >
-                    {parseInt(step.num, 10)}
-                  </div>
-                  <div
-                    className="w-8 h-8 rounded-xl flex items-center justify-center"
-                    style={{ background: `${step.color}15`, color: step.color }}
-                  >
-                    {step.icon}
-                  </div>
+                <div
+                  className="w-11 h-11 rounded-xl flex items-center justify-center mb-6"
+                  style={{ background: 'rgba(107,122,87,0.12)', color: B.mossLight, border: '1px solid rgba(107,122,87,0.3)' }}
+                >
+                  {step.icon}
                 </div>
-                <h3 className="text-xl font-bold text-white mb-3">{step.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{step.desc}</p>
+                <div className="mb-2">
+                  <MonoLabel size={9.5} color={B.muted}>
+                    STEP {step.num} — {step.tag}
+                  </MonoLabel>
+                </div>
+                <h3 className="text-2xl uppercase mb-3" style={{ fontFamily: FONT.display, fontWeight: 700, letterSpacing: '0.03em', color: B.bone }}>
+                  {step.title}
+                </h3>
+                <p className="text-sm leading-relaxed" style={{ color: B.boneFaint, fontFamily: FONT.body }}>
+                  {step.desc}
+                </p>
               </div>
             </FadeIn>
           ))}
@@ -547,74 +795,165 @@ function HowItWorks() {
   )
 }
 
-// ─── Field Reports — what Tony actually found ─────────────────────────────────
+// ─── Features ─────────────────────────────────────────────────────────────────
 
-const FIELD_REPORTS = [
+const FEATURES = [
   {
-    state: 'Kansas',
-    acres: '160-acre',
-    terrain: 'Ag ground — CRP + soybeans',
-    finding: 'On a property like this, Tony would identify a staging area stand 140 yards from the CRP edge on the downwind side of the neighbor\'s corn — placed on a bench where thermals rise in the evening. It would recommend a 2-acre clover kill plot in the timber opening to the NE, confirming open ground with 6+ hours of sun via satellite.',
-    tags: ['Stand Placement', 'Kill Plot', 'Staging Area'],
+    icon: <IconCrosshair />,
+    title: 'Grounded Placement Engine',
+    desc: 'Stands, plots, and bedding snap to actual terrain. The engine computes candidate sites inside your boundary; Tony ranks them and shows his work. No pins in the middle of a pond.',
+    tag: 'ENGINE',
   },
   {
-    state: 'Missouri',
-    acres: '80-acre',
-    terrain: 'Ozark timber — heavy pressure',
-    finding: 'On tight Ozark timber, Tony would flag zero sanctuary — no block of 5+ acres away from the two-track. It would prescribe hinge-cut TSI on the south section first, then place a funnel stand on the corridor connecting two timber blocks. Entry trail designed for NW wind with a creek bottom approach.',
-    tags: ['Sanctuary', 'TSI', 'Funnel Stand'],
+    icon: <IconWind />,
+    title: 'Wind-Aware Stand Sites',
+    desc: 'Every stand comes with the wind it hunts on. Approach, thermal drift, and scent cone are factored before the pin drops — so you don’t burn a sit on the wrong wind.',
+    tag: 'WIND',
   },
   {
-    state: 'Illinois',
-    acres: '220-acre',
-    terrain: 'Row crop edges + timber',
-    finding: 'With adjacent corn confirmed by CropScape data, Tony would recommend staging area stands over destination food plots — deer are feeding off-property. It would place a 0.4-acre brassica kill plot at the timber fringe 80 yards from the field edge and identify the bedding block in the NW woodlot.',
-    tags: ['Staging Stand', 'Brassica Plot', 'Bedding'],
+    icon: <IconFunnel />,
+    title: 'Funnels & Pinch Points',
+    desc: 'Tony reads the travel corridors built into your terrain — saddles, transition edges, inside corners, creek crossings — and tells you which ones are actually huntable.',
+    tag: 'TERRAIN',
+  },
+  {
+    icon: <IconPlot />,
+    title: 'Food Plot Placement',
+    desc: 'Plot sites graded on sun hours, soil, and access — sized in acres and placed where they grow, draw, and stay huntable on your prevailing winds.',
+    tag: 'PLOTS',
+  },
+  {
+    icon: <IconRoute />,
+    title: 'Entry & Exit Routes',
+    desc: 'An invisible entry is worth more than a perfect stand. Tony routes you in and out using terrain and wind so the spot stays cold until you need it.',
+    tag: 'ACCESS',
+  },
+  {
+    icon: <IconChat />,
+    title: 'Talk to Tony',
+    desc: 'Ask why. Tony answers in plain hunter language — staging areas, pinch points, wind windows — and sharpens the plan when you tell him what you’re seeing on the ground.',
+    tag: 'CONSULTANT',
   },
 ]
 
-function Testimonials() {
+function Features() {
   return (
-    <section id="testimonials" className="py-28 px-6" style={{ background: '#1E2122' }}>
-      <div className="max-w-5xl mx-auto">
+    <section id="features" className="py-28 px-6" style={{ background: B.card }}>
+      <div className="max-w-6xl mx-auto">
         <FadeIn className="text-center mb-16">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Example Analyses</div>
-          <h2 className="font-display text-5xl md:text-6xl text-white uppercase tracking-tight">
-            This is what Tony finds.
+          <SectionEyebrow index="02" label="CAPABILITIES" />
+          <h2 className="text-5xl md:text-7xl uppercase" style={{ fontFamily: FONT.display, fontWeight: 800, letterSpacing: '0.015em', color: B.bone, lineHeight: 0.95 }}>
+            Every Acre Analyzed.
             <br />
-            <span style={{ color: C.muted, fontSize: '0.85em' }}>On ground like yours.</span>
+            <span style={{ color: B.mossLight }}>Every Stand Earned.</span>
           </h2>
-          <p className="mt-4 text-sm max-w-xl mx-auto" style={{ color: C.muted }}>
-            Not generic tips — specific terrain reads with stand locations, entry trails, and food plot specs drawn directly on the satellite map. This is the kind of output Tony delivers on every analysis.
+        </FadeIn>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {FEATURES.map((feat, i) => (
+            <FadeIn key={feat.title} delay={i * 0.06}>
+              <div
+                className="group p-7 rounded-2xl h-full transition-all hover:-translate-y-1"
+                style={{ background: B.ink, border: `1px solid ${B.hairlineSoft}` }}
+              >
+                <div className="flex items-start justify-between mb-5">
+                  <div
+                    className="w-11 h-11 rounded-xl flex items-center justify-center"
+                    style={{ background: 'rgba(107,122,87,0.1)', color: B.mossLight, border: '1px solid rgba(107,122,87,0.28)' }}
+                  >
+                    {feat.icon}
+                  </div>
+                  <MonoLabel size={9} color={B.muted}>
+                    {feat.tag}
+                  </MonoLabel>
+                </div>
+                <h3 className="text-base font-bold mb-2" style={{ color: B.bone, fontFamily: FONT.body }}>
+                  {feat.title}
+                </h3>
+                <p className="text-sm leading-relaxed" style={{ color: B.boneFaint, fontFamily: FONT.body }}>
+                  {feat.desc}
+                </p>
+              </div>
+            </FadeIn>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─── Field notes — example analyses + founder note ────────────────────────────
+
+const FIELD_NOTES = [
+  {
+    state: 'KANSAS',
+    meta: '160 AC · CRP + SOYBEANS',
+    finding:
+      'On ground like this, Tony flags a staging-area stand 140 yards off the CRP edge, downwind of the neighbor’s corn — set on a bench where evening thermals rise. The plot goes in the NE timber opening: 2 acres of clover, 6+ hours of sun confirmed from satellite.',
+    tags: ['STAND', 'FOOD PLOT', 'STAGING AREA'],
+  },
+  {
+    state: 'MISSOURI',
+    meta: '80 AC · OZARK TIMBER, HIGH PRESSURE',
+    finding:
+      'Tight timber with no sanctuary — no block of 5+ acres off the two-track. Tony prescribes hinge-cut TSI on the south section first, then a stand on the funnel connecting the two timber blocks. Entry runs the creek bottom and only hunts a northwest.',
+    tags: ['SANCTUARY', 'TSI', 'FUNNEL'],
+  },
+  {
+    state: 'ILLINOIS',
+    meta: '220 AC · ROW CROP + TIMBER',
+    finding:
+      'With adjacent corn confirmed by crop data, staging-area stands beat destination plots — the deer are feeding off-property. Tony places a 0.4-acre brassica plot at the timber fringe, 80 yards off the transition edge, and marks the bedding block in the NW woodlot.',
+    tags: ['STAGING AREA', 'BRASSICA', 'BEDDING'],
+  },
+]
+
+function FieldNotes() {
+  return (
+    <section id="field-notes" className="py-28 px-6" style={{ background: B.ink }}>
+      <div className="max-w-6xl mx-auto">
+        <FadeIn className="text-center mb-16">
+          <SectionEyebrow index="03" label="FIELD NOTES" />
+          <h2 className="text-5xl md:text-7xl uppercase" style={{ fontFamily: FONT.display, fontWeight: 800, letterSpacing: '0.015em', color: B.bone, lineHeight: 0.95 }}>
+            This Is What Tony Finds
+            <br />
+            <span style={{ color: B.mossLight }}>on Ground Like Yours</span>
+          </h2>
+          <p className="mt-5 text-sm max-w-xl mx-auto leading-relaxed" style={{ color: B.boneFaint, fontFamily: FONT.body }}>
+            Not generic tips — specific terrain reads with stand sites, entry routes, and plot specs
+            drawn on the satellite map. Example analyses of the kind Tony produces on every run.
           </p>
         </FadeIn>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
-          {FIELD_REPORTS.map((r, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+          {FIELD_NOTES.map((r, i) => (
             <FadeIn key={r.state} delay={i * 0.1}>
-              <div
-                className="p-7 rounded-2xl flex flex-col h-full"
-                style={{ background: C.card, border: `1px solid ${C.border}` }}
-              >
+              <div className="p-7 rounded-2xl flex flex-col h-full" style={{ background: B.card, border: `1px solid ${B.hairlineSoft}` }}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <div className="font-bold text-white text-base">{r.state}</div>
-                    <div className="text-xs mt-0.5" style={{ color: C.muted }}>{r.acres} · {r.terrain}</div>
+                    <div style={{ fontFamily: FONT.display, fontWeight: 700, fontSize: 20, letterSpacing: '0.04em', color: B.bone }}>{r.state}</div>
+                    <div className="mt-1">
+                      <MonoLabel size={9} color={B.muted}>
+                        {r.meta}
+                      </MonoLabel>
+                    </div>
                   </div>
                   <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0"
-                    style={{ background: 'rgba(107,122,87,0.15)', color: C.accent, border: `1px solid rgba(107,122,87,0.2)` }}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: B.ink, color: B.mossLight, border: '1px solid rgba(107,122,87,0.3)', fontFamily: FONT.display, fontWeight: 800, fontSize: 14 }}
                   >
                     T
                   </div>
                 </div>
-                <p className="text-sm leading-relaxed flex-1" style={{ color: C.text }}>{r.finding}</p>
-                <div className="flex flex-wrap gap-1.5 mt-4 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                <p className="text-sm leading-relaxed flex-1" style={{ color: B.boneDim, fontFamily: FONT.body }}>
+                  {r.finding}
+                </p>
+                <div className="flex flex-wrap gap-1.5 mt-5 pt-4" style={{ borderTop: `1px solid ${B.hairlineSoft}` }}>
                   {r.tags.map(tag => (
                     <span
                       key={tag}
-                      className="text-xs px-2 py-0.5 rounded-full font-semibold"
-                      style={{ background: 'rgba(107,122,87,0.1)', color: C.accent, border: `1px solid rgba(107,122,87,0.2)` }}
+                      className="px-2 py-0.5 rounded"
+                      style={{ fontFamily: FONT.mono, fontSize: 9, letterSpacing: '0.1em', color: B.mossLight, background: 'rgba(107,122,87,0.08)', border: '1px solid rgba(107,122,87,0.25)' }}
                     >
                       {tag}
                     </span>
@@ -625,46 +964,31 @@ function Testimonials() {
           ))}
         </div>
 
-        {/* $97 Report CTA */}
+        {/* Founder note — honest social proof */}
         <FadeIn>
           <div
-            className="relative p-10 rounded-2xl text-center"
-            style={{
-              background: `linear-gradient(135deg, rgba(107,122,87,0.08) 0%, ${C.card} 100%)`,
-              border: `1px solid rgba(107,122,87,0.25)`,
-              boxShadow: `0 0 60px -20px rgba(107,122,87,0.2)`,
-            }}
+            className="p-8 md:p-10 rounded-2xl flex flex-col md:flex-row items-start gap-6"
+            style={{ background: B.card, border: `1px solid ${B.hairline}` }}
           >
-            <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Get Your Property Report</div>
-            <h3 className="font-display text-4xl md:text-5xl text-white uppercase tracking-tight mb-4">
-              Want Tony on YOUR land?
-            </h3>
-            <p className="text-base leading-relaxed mb-8 max-w-xl mx-auto" style={{ color: C.text }}>
-              Send your property coordinates — Tony analyzes your satellite map and delivers a full habitat report: stand locations, food plot specs, entry trails, bedding corridors. Drawn on your actual land. Delivered in 48 hours.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-4">
-              <Link
-                href="/buckgrid"
-                className="px-8 py-4 rounded-xl font-bold text-base transition-all hover:scale-105 hover:-translate-y-0.5"
-                style={{
-                  background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
-                  color: '#0C0F0A',
-                  boxShadow: `0 8px 30px -8px rgba(107,122,87,0.5)`,
-                }}
-              >
-                Start Mapping Free →
-              </Link>
-              <button
-                onClick={() => startCheckout('/api/checkout/report')}
-                className="px-8 py-4 rounded-xl font-bold text-base transition-all hover:text-white cursor-pointer"
-                style={{ color: C.accent, border: `1px solid rgba(107,122,87,0.3)`, background: 'transparent' }}
-              >
-                Get Full Report — $97
-              </button>
+            <div className="flex-shrink-0">
+              <WaypointMark size={52} />
             </div>
-            <p className="text-xs" style={{ color: C.muted }}>
-              Full report includes: satellite analysis · top 3-5 stand locations · food plot specs · bedding corridors · entry trail recommendations
-            </p>
+            <div>
+              <div className="mb-3">
+                <MonoLabel size={10}>FOUNDER NOTE — DAY ONE BUILD</MonoLabel>
+              </div>
+              <p className="text-base leading-relaxed max-w-3xl" style={{ color: B.boneDim, fontFamily: FONT.body }}>
+                You won&apos;t find fake testimonials or &ldquo;trusted by 10,000 hunters&rdquo; on this page —
+                hunters smell that a mile off, and BuckGrid Pro is a founder build on day one. What you&apos;ll
+                find is the map, the engine, and Tony. Your first map is free: judge the output on your own
+                ground. Season-one field reports will land here this fall.
+              </p>
+              <div className="mt-4">
+                <MonoLabel size={10} color={B.tan}>
+                  — BO, FOUNDER
+                </MonoLabel>
+              </div>
+            </div>
           </div>
         </FadeIn>
       </div>
@@ -672,192 +996,105 @@ function Testimonials() {
   )
 }
 
-// ─── Features ─────────────────────────────────────────────────────────────────
-
-const FEATURES = [
-  {
-    icon: <IconSatellite />,
-    title: 'Satellite Habitat Mapping',
-    desc: 'Real-time satellite imagery of your exact property. Every timber edge, field, and creek visible at a glance.',
-    color: C.green,
-  },
-  {
-    icon: <IconPencil />,
-    title: 'Draw Your Land Features',
-    desc: 'Polygon, line, and point tools to mark food plots, bedding areas, water sources, and stand locations.',
-    color: '#60a5fa',
-  },
-  {
-    icon: <IconBrain />,
-    title: 'Tony AI Vision Analysis',
-    desc: 'Gemini Vision reads your satellite map like a trained wildlife biologist and generates a specific, drawn habitat plan.',
-    color: C.accent,
-  },
-  {
-    icon: <IconMap />,
-    title: 'Annotated Output Maps',
-    desc: 'Tony draws recommendations directly on your map — not a generic PDF, your actual property.',
-    color: '#fbbf24',
-  },
-  {
-    icon: <IconLeaf />,
-    title: 'Food Plot Optimization',
-    desc: 'Soil type, sun exposure, and deer movement paths combine to find your highest-yield planting locations.',
-    color: C.green,
-  },
-  {
-    icon: <IconTarget />,
-    title: 'Stand & Blind Placement',
-    desc: 'Wind analysis, funnel identification, and bedding proximity — Tony finds stands that produce season after season.',
-    color: C.accent,
-  },
-]
-
-function Features() {
-  return (
-    <section id="features" className="py-28 px-6" style={{ background: C.bg }}>
-      <div className="max-w-6xl mx-auto">
-        <FadeIn className="text-center mb-16">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Tony&apos;s Toolkit</div>
-          <h2 className="font-display text-6xl md:text-7xl text-white uppercase tracking-tight">
-            Everything a wildlife biologist
-            <br />
-            would tell you
-          </h2>
-        </FadeIn>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {FEATURES.map((feat, i) => (
-            <FadeIn key={feat.title} delay={i * 0.07}>
-              <div
-                className="group p-7 rounded-2xl h-full transition-all hover:-translate-y-1"
-                style={{
-                  background: C.card,
-                  border: `1px solid ${C.border}`,
-                }}
-              >
-                <div className="flex items-start justify-between mb-5">
-                  <div
-                    className="w-11 h-11 rounded-xl flex items-center justify-center"
-                    style={{
-                      background: `${feat.color}12`,
-                      color: feat.color,
-                      border: `1px solid ${feat.color}30`,
-                      boxShadow: '0 2px 8px -4px rgba(0,0,0,0.5)',
-                    }}
-                  >
-                    {feat.icon}
-                  </div>
-                  <span
-                    className="text-xs font-semibold px-2 py-1 rounded-full"
-                    style={{ background: 'rgba(107,122,87,0.08)', color: C.accent, border: `1px solid rgba(107,122,87,0.15)` }}
-                  >
-                    AI-powered
-                  </span>
-                </div>
-                <h3 className="text-base font-bold text-white mb-2">{feat.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{feat.desc}</p>
-              </div>
-            </FadeIn>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── Comparison Table ─────────────────────────────────────────────────────────
+// ─── Comparison — they sell maps, we sell decisions ───────────────────────────
 
 const COMPARE_ROWS = [
-  { label: 'Cost', vals: ['$36-108/yr', '$99/yr', 'Free to start'] },
+  { label: 'What you’re buying', vals: ['Maps', 'Maps', 'Decisions'] },
+  { label: 'Cost', vals: ['$36–108/yr', '$30–100/yr', 'Free to start'] },
   { label: 'Satellite layers + topo', vals: [true, true, true] },
-  { label: 'AI terrain analysis', vals: [false, false, true] },
-  { label: 'AI reads your terrain + builds game plan', vals: [false, false, true] },
-  { label: 'Tells you WHERE to hang your stand', vals: [false, false, true] },
+  { label: 'Analyzes your exact acreage', vals: [false, false, true] },
+  { label: 'Tells you where to hang the stand', vals: [false, false, true] },
+  { label: 'Wind factored into every placement', vals: [false, false, true] },
   { label: 'Explains the reasoning', vals: [false, false, true] },
   { label: 'No account required to try', vals: [false, false, true] },
 ]
 
 function ComparisonTable() {
   return (
-    <section id="comparison" className="py-28 px-6" style={{ background: '#1E2122' }}>
+    <section id="comparison" className="py-28 px-6" style={{ background: B.card }}>
       <div className="max-w-4xl mx-auto">
         <FadeIn className="text-center mb-16">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Head to Head</div>
-          <h2 className="font-display text-6xl md:text-7xl text-white uppercase tracking-tight">
-            Maps are not enough.
+          <SectionEyebrow index="04" label="HEAD TO HEAD" />
+          <h2 className="text-5xl md:text-7xl uppercase" style={{ fontFamily: FONT.display, fontWeight: 800, letterSpacing: '0.015em', color: B.bone, lineHeight: 0.95 }}>
+            They Sell Maps.
             <br />
-            <span style={{ color: C.muted, fontSize: '0.85em' }}>You need answers.</span>
+            <span style={{ color: B.mossLight }}>We Sell Decisions.</span>
           </h2>
-          <p className="mt-5 text-sm max-w-lg mx-auto" style={{ color: C.muted }}>
-            BuckGrid Pro AI reads your terrain and builds your game plan — they don&apos;t.
+          <p className="mt-5 text-sm max-w-lg mx-auto" style={{ color: B.boneFaint, fontFamily: FONT.body }}>
+            HuntStand, onX, BaseMap, Spartan Forge — good maps, all of them. None of them analyze
+            your acreage and hand you a placement with the reasoning attached.
           </p>
         </FadeIn>
 
         <FadeIn>
           <div className="overflow-x-auto">
-          <div className="rounded-2xl overflow-hidden min-w-[520px]" style={{ border: `1px solid ${C.border}` }}>
-            {/* Header */}
-            <div className="grid grid-cols-4" style={{ background: C.card, borderBottom: `1px solid ${C.border}` }}>
-              <div className="p-5" />
-              {['HuntStand', 'Tactacam Habitat IQ', 'BuckGrid Pro'].map((col, i) => (
-                <div
-                  key={col}
-                  className="p-5 text-center"
-                  style={{
-                    borderLeft: `1px solid ${C.border}`,
-                    background: i === 2 ? 'rgba(107,122,87,0.05)' : 'transparent',
-                    borderTop: i === 2 ? `2px solid ${C.accent}` : 'none',
-                  }}
-                >
+            <div className="rounded-2xl overflow-hidden min-w-[560px]" style={{ border: `1px solid ${B.hairlineSoft}` }}>
+              <div className="grid grid-cols-4" style={{ background: B.ink, borderBottom: `1px solid ${B.hairlineSoft}` }}>
+                <div className="p-5" />
+                {['HuntStand', 'onX Hunt', 'BuckGrid Pro'].map((col, i) => (
                   <div
-                    className="text-sm font-bold"
-                    style={{ color: i === 2 ? C.accent : '#fff' }}
-                  >
-                    {col}
-                  </div>
-                  {i === 2 && (
-                    <div className="text-xs mt-1 font-semibold" style={{ color: C.green }}>Recommended</div>
-                  )}
-                </div>
-              ))}
-            </div>
-            {/* Rows */}
-            {COMPARE_ROWS.map((row, ri) => (
-              <div
-                key={row.label}
-                className="grid grid-cols-4"
-                style={{
-                  borderBottom: ri < COMPARE_ROWS.length - 1 ? `1px solid ${C.border}` : 'none',
-                  background: ri % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
-                }}
-              >
-                <div className="p-4 pl-5 text-sm font-medium" style={{ color: C.text }}>{row.label}</div>
-                {row.vals.map((val, vi) => (
-                  <div
-                    key={vi}
-                    className="p-4 flex items-center justify-center text-sm text-center"
+                    key={col}
+                    className="p-5 text-center"
                     style={{
-                      borderLeft: `1px solid ${C.border}`,
-                      background: vi === 2 ? 'rgba(107,122,87,0.03)' : 'transparent',
+                      borderLeft: `1px solid ${B.hairlineSoft}`,
+                      background: i === 2 ? 'rgba(200,136,42,0.06)' : 'transparent',
+                      borderTop: i === 2 ? `2px solid ${B.amber}` : '2px solid transparent',
                     }}
                   >
-                    {typeof val === 'boolean' ? (
-                      val ? (
-                        <span style={{ color: vi === 2 ? C.accent : C.green }}><IconCheck /></span>
-                      ) : (
-                        <span style={{ color: '#3a3a3a' }}><IconX /></span>
-                      )
-                    ) : (
-                      <span style={{ color: vi === 2 ? C.accent : C.muted, fontWeight: vi === 2 ? 700 : 400 }}>
-                        {val}
-                      </span>
+                    <div style={{ fontFamily: FONT.display, fontWeight: 700, fontSize: 17, letterSpacing: '0.04em', color: i === 2 ? B.amberLight : B.bone, textTransform: 'uppercase' }}>
+                      {col}
+                    </div>
+                    {i === 2 && (
+                      <div className="mt-1">
+                        <MonoLabel size={8.5} color={B.amberLight}>
+                          THIS ONE
+                        </MonoLabel>
+                      </div>
                     )}
                   </div>
                 ))}
               </div>
-            ))}
-          </div>
+              {COMPARE_ROWS.map((row, ri) => (
+                <div
+                  key={row.label}
+                  className="grid grid-cols-4"
+                  style={{
+                    borderBottom: ri < COMPARE_ROWS.length - 1 ? `1px solid ${B.hairlineSoft}` : 'none',
+                    background: ri % 2 === 0 ? 'transparent' : 'rgba(216,211,197,0.015)',
+                  }}
+                >
+                  <div className="p-4 pl-5 text-sm font-medium flex items-center" style={{ color: B.boneDim, fontFamily: FONT.body }}>
+                    {row.label}
+                  </div>
+                  {row.vals.map((val, vi) => (
+                    <div
+                      key={vi}
+                      className="p-4 flex items-center justify-center text-sm text-center"
+                      style={{
+                        borderLeft: `1px solid ${B.hairlineSoft}`,
+                        background: vi === 2 ? 'rgba(200,136,42,0.03)' : 'transparent',
+                      }}
+                    >
+                      {typeof val === 'boolean' ? (
+                        val ? (
+                          <span style={{ color: B.mossLight }}>
+                            <IconCheck />
+                          </span>
+                        ) : (
+                          <span style={{ color: 'rgba(216,211,197,0.18)' }}>
+                            <IconX />
+                          </span>
+                        )
+                      ) : (
+                        <span style={{ fontFamily: FONT.mono, fontSize: 12, color: vi === 2 ? B.amberLight : B.muted, fontWeight: vi === 2 ? 700 : 400 }}>
+                          {val}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </FadeIn>
       </div>
@@ -880,104 +1117,141 @@ async function startCheckout(endpoint: string) {
 
 function Pricing() {
   return (
-    <section id="pricing" className="py-28 px-6" style={{ background: C.bg }}>
+    <section id="pricing" className="py-28 px-6" style={{ background: B.ink }}>
       <div className="max-w-5xl mx-auto">
         <FadeIn className="text-center mb-16">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>Pricing</div>
-          <h2 className="font-display text-5xl md:text-6xl text-white uppercase tracking-tight">
-            Less than a bag of seed.
-            <br />
-            <span style={{ color: C.muted, fontSize: '0.85em' }}>More valuable than a consultant.</span>
+          <SectionEyebrow index="05" label="PRICING" />
+          <h2 className="text-5xl md:text-7xl uppercase" style={{ fontFamily: FONT.display, fontWeight: 800, letterSpacing: '0.015em', color: B.bone, lineHeight: 0.95 }}>
+            Less Than a Bag of Seed.
           </h2>
         </FadeIn>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Free */}
           <FadeIn delay={0}>
-            <div className="relative p-8 rounded-2xl flex flex-col h-full" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+            <div className="relative p-8 rounded-2xl flex flex-col h-full" style={{ background: B.card, border: `1px solid ${B.hairlineSoft}` }}>
               <div className="mb-6">
-                <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Free</div>
-                <div className="flex items-end gap-1">
-                  <span className="font-display text-5xl text-white">$0</span>
-                  <span className="text-sm mb-2" style={{ color: C.muted }}>/forever</span>
+                <MonoLabel size={10} color={B.muted}>
+                  SCOUT — FREE
+                </MonoLabel>
+                <div className="flex items-end gap-1.5 mt-2">
+                  <span style={{ fontFamily: FONT.display, fontWeight: 800, fontSize: 52, lineHeight: 1, color: B.bone }}>$0</span>
+                  <span className="text-sm mb-1.5" style={{ color: B.muted }}>forever</span>
                 </div>
               </div>
               <ul className="flex-1 space-y-3 mb-8">
-                {['1 property analysis', 'Satellite map view', 'Basic drawing tools', 'Tony AI response'].map(f => (
-                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: C.text }}>
-                    <span className="mt-0.5 flex-shrink-0" style={{ color: C.green }}><IconCheck /></span>{f}
+                {['1 full property analysis', 'Satellite map + drawing tools', 'Tony’s placements & reasoning', 'No account, no card'].map(f => (
+                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: B.boneDim, fontFamily: FONT.body }}>
+                    <span className="mt-0.5 flex-shrink-0" style={{ color: B.mossLight }}>
+                      <IconCheck />
+                    </span>
+                    {f}
                   </li>
                 ))}
               </ul>
-              <Link href="/buckgrid" className="block text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90" style={{ background: 'transparent', color: C.text, border: `1px solid ${C.border}` }}>
-                Start Mapping Free →
+              <Link
+                href="/buckgrid"
+                className="block text-center py-3.5 px-6 rounded-xl text-sm uppercase transition-all hover:opacity-90"
+                style={{ ...ghostBtnStyle, fontSize: 14 }}
+              >
+                Draw Your Land Free
               </Link>
             </div>
           </FadeIn>
 
           {/* Pro Annual */}
           <FadeIn delay={0.1}>
-            <div className="relative p-8 rounded-2xl flex flex-col h-full" style={{ background: `linear-gradient(160deg, rgba(107,122,87,0.08) 0%, ${C.card} 100%)`, border: `1px solid ${C.accent}`, boxShadow: `0 0 50px -15px rgba(107,122,87,0.25)` }}>
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold text-white" style={{ background: C.accent }}>
-                Best Value
+            <div
+              className="relative p-8 rounded-2xl flex flex-col h-full"
+              style={{
+                background: `linear-gradient(165deg, rgba(200,136,42,0.07) 0%, ${B.card} 45%)`,
+                border: '1px solid rgba(200,136,42,0.45)',
+                boxShadow: '0 0 60px -18px rgba(200,136,42,0.25)',
+              }}
+            >
+              <div
+                className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full"
+                style={{ background: B.amber, fontFamily: FONT.mono, fontSize: 9.5, letterSpacing: '0.12em', color: B.card }}
+              >
+                BEST VALUE
               </div>
               <div className="mb-6">
-                <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.accent }}>Pro Annual</div>
-                <div className="flex items-end gap-1">
-                  <span className="font-display text-5xl text-white">$79</span>
-                  <span className="text-sm mb-2" style={{ color: C.muted }}>/year</span>
+                <MonoLabel size={10} color={B.amberLight}>
+                  PRO — ANNUAL
+                </MonoLabel>
+                <div className="flex items-end gap-1.5 mt-2">
+                  <span style={{ fontFamily: FONT.display, fontWeight: 800, fontSize: 52, lineHeight: 1, color: B.bone }}>$79</span>
+                  <span className="text-sm mb-1.5" style={{ color: B.muted }}>/year</span>
                 </div>
-                <div className="text-xs mt-1" style={{ color: C.muted }}>Flat rate — no acreage limits</div>
+                <div className="mt-1.5">
+                  <MonoLabel size={9} color={B.muted}>
+                    FLAT RATE · NO ACREAGE LIMITS
+                  </MonoLabel>
+                </div>
               </div>
               <ul className="flex-1 space-y-3 mb-8">
-                {['Unlimited analyses', 'All drawing tools', 'Seasonal strategy updates', 'Save & export maps', 'Priority Tony AI', 'Email support'].map(f => (
-                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: C.text }}>
-                    <span className="mt-0.5 flex-shrink-0" style={{ color: C.green }}><IconCheck /></span>{f}
+                {['Unlimited analyses', 'All drawing tools', 'Seasonal strategy updates', 'Save & export maps', 'Priority Tony responses', 'Email support'].map(f => (
+                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: B.boneDim, fontFamily: FONT.body }}>
+                    <span className="mt-0.5 flex-shrink-0" style={{ color: B.mossLight }}>
+                      <IconCheck />
+                    </span>
+                    {f}
                   </li>
                 ))}
               </ul>
               <button
                 onClick={() => startCheckout('/api/checkout/pro')}
-                className="block w-full text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90 hover:scale-105 active:scale-100 cursor-pointer"
-                style={{ background: 'linear-gradient(135deg, #6B7A57, #4A543D)', color: '#0C0F0A', border: 'none' }}
+                className="block w-full text-center py-3.5 px-6 rounded-xl text-sm uppercase transition-all hover:scale-[1.02] active:scale-100 cursor-pointer"
+                style={{ ...amberBtnStyle, fontSize: 15, border: 'none' }}
               >
-                Get Pro — $79/yr →
+                Get Pro — $79/yr
               </button>
             </div>
           </FadeIn>
 
           {/* Field Report */}
           <FadeIn delay={0.2}>
-            <div className="relative p-8 rounded-2xl flex flex-col h-full" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+            <div className="relative p-8 rounded-2xl flex flex-col h-full" style={{ background: B.card, border: `1px solid ${B.hairlineSoft}` }}>
               <div className="mb-6">
-                <div className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: C.muted }}>Field Report</div>
-                <div className="flex items-end gap-1">
-                  <span className="font-display text-5xl text-white">$97</span>
-                  <span className="text-sm mb-2" style={{ color: C.muted }}>/one-time</span>
+                <MonoLabel size={10} color={B.muted}>
+                  FIELD REPORT — ONE-TIME
+                </MonoLabel>
+                <div className="flex items-end gap-1.5 mt-2">
+                  <span style={{ fontFamily: FONT.display, fontWeight: 800, fontSize: 52, lineHeight: 1, color: B.bone }}>$97</span>
+                  <span className="text-sm mb-1.5" style={{ color: B.muted }}>once</span>
                 </div>
-                <div className="text-xs mt-1" style={{ color: C.muted }}>No subscription required</div>
+                <div className="mt-1.5">
+                  <MonoLabel size={9} color={B.muted}>
+                    NO SUBSCRIPTION
+                  </MonoLabel>
+                </div>
               </div>
               <ul className="flex-1 space-y-3 mb-8">
-                {['Tony analyzes your land', 'Top 3-5 stand priorities', 'Food plot specs + sizing', 'Entry trail recommendations', 'Bedding corridor mapping', 'Zone strategy ready in seconds'].map(f => (
-                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: C.text }}>
-                    <span className="mt-0.5 flex-shrink-0" style={{ color: C.green }}><IconCheck /></span>{f}
+                {['Full analysis of your parcel', 'Top 3–5 stand priorities', 'Plot specs + sizing', 'Entry/exit route recommendations', 'Bedding corridor mapping', 'Drawn on your actual land'].map(f => (
+                  <li key={f} className="flex items-start gap-3 text-sm" style={{ color: B.boneDim, fontFamily: FONT.body }}>
+                    <span className="mt-0.5 flex-shrink-0" style={{ color: B.mossLight }}>
+                      <IconCheck />
+                    </span>
+                    {f}
                   </li>
                 ))}
               </ul>
               <button
                 onClick={() => startCheckout('/api/checkout/report')}
-                className="block w-full text-center py-3.5 px-6 rounded-xl font-bold text-sm transition-all hover:opacity-90 hover:scale-105 active:scale-100 cursor-pointer"
-                style={{ background: 'transparent', color: C.text, border: `1px solid ${C.border}` }}
+                className="block w-full text-center py-3.5 px-6 rounded-xl text-sm uppercase transition-all hover:opacity-90 cursor-pointer"
+                style={{ ...ghostBtnStyle, fontSize: 14, background: 'transparent' }}
               >
-                Order Your Report →
+                Order Your Report
               </button>
             </div>
           </FadeIn>
         </div>
 
         <FadeIn>
-          <p className="text-center text-sm" style={{ color: C.muted }}>
-            Free tier available forever. Pro annual plan — flat rate, no acreage limits. Tony&apos;s analysis ready in seconds.
+          <p className="text-center">
+            <MonoLabel size={10} color={B.muted}>
+              FREE TIER FOREVER · FLAT RATE · ANALYSIS IN SECONDS
+            </MonoLabel>
           </p>
         </FadeIn>
       </div>
@@ -990,23 +1264,23 @@ function Pricing() {
 const FAQS = [
   {
     q: 'How does Tony know about my specific land?',
-    a: 'Tony reads your terrain data — elevation, soil type, land cover, OSM features — and reasons about habitat the way a consultant would. The more you tell him about what you\'re seeing on the ground, the sharper his game plan gets.',
+    a: 'Tony analyzes your exact acreage — elevation, land cover, soil, water, wind — inside the boundary you draw. The placement engine computes candidate sites on real terrain; Tony ranks them and explains why. The more you tell him about what you’re seeing in the field, the sharper the plan gets.',
   },
   {
-    q: 'Does Tony replace a real habitat consultant?',
-    a: 'Tony gives you a real consultant\'s reasoning — zone priorities, wind strategy, seasonal timing — available 24/7 at a fraction of the cost. He\'s most valuable when you combine his terrain analysis with your own field observations. Your eyes on the ground plus Tony\'s pattern recognition is a hard combo to beat.',
+    q: 'Does Tony replace a habitat consultant?',
+    a: 'Tony gives you a consultant’s reasoning — stand priorities, wind strategy, seasonal timing — available 24/7 at a fraction of the cost. Tony suggests; you decide. Your eyes on the ground plus his terrain analysis is a hard combo to beat.',
   },
   {
-    q: 'What\'s the difference between Free and Pro?',
-    a: 'Free gives you one complete analysis so you can see exactly what Tony does. Pro unlocks unlimited analyses, seasonal updates, the ability to save and export your maps, and priority Tony AI responses.',
+    q: 'What’s the difference between Free and Pro?',
+    a: 'Free gives you one complete analysis so you can judge the output on your own ground. Pro unlocks unlimited analyses, seasonal updates, saving and exporting maps, and priority Tony responses.',
   },
   {
     q: 'Is my property data private?',
     a: 'Yes. Your maps and property data are stored securely and never shared with third parties. Your land layout is not used to train any AI models.',
   },
   {
-    q: 'What if I don\'t know what I\'m doing with habitat?',
-    a: 'That\'s exactly who Tony is built for. You don\'t need any habitat knowledge — just draw what you see on your map and Tony explains everything in plain English with clear, specific steps.',
+    q: 'What if I don’t know anything about habitat work?',
+    a: 'That’s exactly who Tony is built for. Draw your boundary and talk to Tony — he explains everything in plain hunter language: what to do, where, and why, with clear, specific steps.',
   },
 ]
 
@@ -1014,12 +1288,12 @@ function FAQ() {
   const [openIdx, setOpenIdx] = useState<number | null>(null)
 
   return (
-    <section id="faq" className="py-28 px-6" style={{ background: '#1E2122' }}>
+    <section id="faq" className="py-28 px-6" style={{ background: B.card }}>
       <div className="max-w-2xl mx-auto">
         <FadeIn className="text-center mb-14">
-          <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.accent }}>FAQ</div>
-          <h2 className="font-display text-5xl md:text-6xl text-white uppercase tracking-tight">
-            Questions answered
+          <SectionEyebrow index="06" label="FAQ" />
+          <h2 className="text-5xl md:text-7xl uppercase" style={{ fontFamily: FONT.display, fontWeight: 800, letterSpacing: '0.015em', color: B.bone, lineHeight: 0.95 }}>
+            Straight Answers
           </h2>
         </FadeIn>
 
@@ -1032,16 +1306,28 @@ function FAQ() {
                 aria-expanded={openIdx === i}
                 className="w-full text-left p-6 rounded-2xl transition-all cursor-pointer"
                 style={{
-                  background: openIdx === i ? C.card : 'rgba(26,30,41,0.5)',
-                  border: `1px solid ${openIdx === i ? 'rgba(107,122,87,0.2)' : C.border}`,
-                  borderLeft: openIdx === i ? '3px solid #6B7A57' : `1px solid ${C.border}`,
+                  background: openIdx === i ? B.ink : 'rgba(30,33,34,0.5)',
+                  border: `1px solid ${openIdx === i ? 'rgba(107,122,87,0.35)' : B.hairlineSoft}`,
+                  borderLeft: openIdx === i ? `3px solid ${B.moss}` : `1px solid ${B.hairlineSoft}`,
                 }}
                 onClick={() => setOpenIdx(openIdx === i ? null : i)}
-                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpenIdx(openIdx === i ? null : i) } }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setOpenIdx(openIdx === i ? null : i)
+                  }
+                }}
               >
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-base font-semibold text-white">{faq.q}</span>
-                  <span style={{ color: C.muted, flexShrink: 0 }}>
+                  <span className="flex items-baseline gap-3">
+                    <MonoLabel size={10} color={B.muted}>
+                      {String(i + 1).padStart(2, '0')}
+                    </MonoLabel>
+                    <span className="text-base font-semibold" style={{ color: B.bone, fontFamily: FONT.body }}>
+                      {faq.q}
+                    </span>
+                  </span>
+                  <span style={{ color: B.muted, flexShrink: 0 }}>
                     <IconChevron open={openIdx === i} />
                   </span>
                 </div>
@@ -1054,7 +1340,7 @@ function FAQ() {
                       transition={{ duration: 0.25, ease: 'easeInOut' }}
                       className="overflow-hidden"
                     >
-                      <p className="text-sm leading-relaxed pt-4" style={{ color: C.muted }}>
+                      <p className="text-sm leading-relaxed pt-4" style={{ color: B.boneFaint, fontFamily: FONT.body }}>
                         {faq.a}
                       </p>
                     </motion.div>
@@ -1073,47 +1359,49 @@ function FAQ() {
 
 function FinalCTA() {
   return (
-    <section className="py-32 px-6 relative overflow-hidden" style={{ background: C.bg }}>
+    <section className="py-32 px-6 relative overflow-hidden" style={{ background: B.ink }}>
       <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 opacity-70" style={topoBg} />
+        <div className="absolute inset-0" style={gridBg} />
         <div
           className="absolute inset-0"
-          style={{
-            background: 'radial-gradient(ellipse at center, rgba(107,122,87,0.07) 0%, transparent 70%)',
-          }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: 'linear-gradient(rgba(107,122,87,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(107,122,87,0.03) 1px, transparent 1px)',
-            backgroundSize: '60px 60px',
-          }}
+          style={{ background: 'radial-gradient(ellipse at center, rgba(200,136,42,0.05) 0%, transparent 65%)' }}
         />
       </div>
-      <div className="relative max-w-3xl mx-auto text-center">
+      <div className="relative max-w-4xl mx-auto text-center">
         <FadeIn>
-          <div className="text-xs font-bold uppercase tracking-widest mb-6" style={{ color: C.accent }}>Ready?</div>
-          <h2 className="font-display text-6xl md:text-8xl text-white uppercase tracking-tight leading-none mb-6">
-            Your best hunting spots are on your map
+          <div className="mb-6 flex justify-center">
+            <WaypointMark size={64} />
+          </div>
+          <h2 className="text-6xl md:text-8xl uppercase mb-7" style={{ fontFamily: FONT.display, fontWeight: 800, letterSpacing: '0.015em', color: B.bone, lineHeight: 0.92 }}>
+            Stop Guessing.
             <br />
-            <span style={{ color: C.accent }}>right now.</span>
+            <span
+              style={{
+                backgroundImage: `linear-gradient(120deg, ${B.amberLight} 0%, ${B.amber} 70%)`,
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+            >
+              Start Placing.
+            </span>
           </h2>
-          <p className="text-lg mb-10" style={{ color: C.muted }}>
-            Tony will find them in under 90 seconds. Start free — no credit card required.
+          <p className="text-lg mb-10 max-w-xl mx-auto" style={{ color: B.boneDim, fontFamily: FONT.body }}>
+            Draw your land and talk to Tony before the season opens. Tony suggests. You decide.
           </p>
           <Link
             href="/buckgrid"
-            className="inline-flex items-center gap-3 px-10 py-5 rounded-xl font-bold text-white text-lg transition-all hover:scale-105 hover:-translate-y-1 active:scale-100"
-            style={{
-              background: 'linear-gradient(135deg, #6B7A57, #4A543D)',
-              color: '#0C0F0A',
-              boxShadow: `0 16px 40px -8px rgba(107,122,87,0.45)`,
-            }}
+            className="inline-flex items-center gap-3 px-11 py-5 rounded-xl text-xl uppercase transition-all hover:scale-[1.03] hover:-translate-y-1 active:scale-100"
+            style={amberBtnStyle}
           >
-            Start Mapping Free →
+            Draw Your Land — First Map Free
           </Link>
-          <p className="text-xs mt-6" style={{ color: C.muted }}>
-            No account required · No credit card · Tony starts analyzing in seconds
-          </p>
+          <div className="mt-7">
+            <MonoLabel size={10} color={B.amberLight}>
+              FIRST MAP FREE / NO CARD REQUIRED
+            </MonoLabel>
+          </div>
         </FadeIn>
       </div>
     </section>
@@ -1124,39 +1412,34 @@ function FinalCTA() {
 
 function Footer() {
   return (
-    <footer style={{ background: C.card, borderTop: `1px solid ${C.border}` }}>
+    <footer style={{ background: B.card, borderTop: `1px solid ${B.hairlineSoft}` }}>
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="flex flex-col md:flex-row items-start justify-between gap-8">
-          {/* Brand */}
           <div>
-            <div className="flex items-center gap-2.5 mb-3">
-              <WildLogicMark size={28} variant="mark" />
-              <span className="font-bold text-white">
-                Buck<span style={{ color: C.accent }}>Grid Pro</span>
-              </span>
+            <div className="mb-3">
+              <Wordmark size={19} markSize={30} />
             </div>
-            <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: C.muted }}>
-              Habitat intelligence for serious hunters.
-            </p>
-            <p className="text-sm max-w-xs" style={{ color: C.muted }}>
-              Expert AI advice 24/7 for less than a tank of gas.
+            <MonoLabel size={9.5} color={B.muted}>
+              DECISIONS, NOT MAPS
+            </MonoLabel>
+            <p className="text-sm max-w-xs mt-3" style={{ color: B.boneFaint, fontFamily: FONT.body }}>
+              You know your land. Tony knows deer.
             </p>
           </div>
 
-          {/* Links */}
           <div className="flex flex-wrap gap-x-8 gap-y-3">
             {[
-              { label: 'App', href: '/buckgrid' },
-              { label: 'Pricing', href: '#pricing' },
+              { label: 'Open the Map', href: '/buckgrid' },
               { label: 'How It Works', href: '#how-it-works' },
-              { label: 'Privacy', href: '#' },
-              { label: 'Terms', href: '#' },
-            ].map((link) => (
+              { label: 'Features', href: '#features' },
+              { label: 'Pricing', href: '#pricing' },
+              { label: 'FAQ', href: '#faq' },
+            ].map(link => (
               <a
                 key={link.label}
                 href={link.href}
                 className="text-sm transition-colors hover:text-white"
-                style={{ color: C.muted }}
+                style={{ color: B.muted, fontFamily: FONT.body }}
               >
                 {link.label}
               </a>
@@ -1164,13 +1447,13 @@ function Footer() {
           </div>
         </div>
 
-        <div style={{ borderTop: `1px solid ${C.border}` }} className="mt-10 pt-6 flex flex-col md:flex-row items-center justify-between gap-3">
-          <p className="text-xs" style={{ color: C.muted }}>
-            &copy; {new Date().getFullYear()} BuckGrid Pro. All rights reserved.
-          </p>
-          <p className="text-xs" style={{ color: C.muted }}>
-            Powered by <span style={{ color: C.accent }}>Tony AI</span> · Built by Neuradex AI
-          </p>
+        <div style={{ borderTop: `1px solid ${B.hairlineSoft}` }} className="mt-10 pt-6 flex flex-col md:flex-row items-center justify-between gap-3">
+          <MonoLabel size={9.5} color={B.muted}>
+            © {new Date().getFullYear()} BUCKGRID PRO
+          </MonoLabel>
+          <MonoLabel size={9.5} color={B.muted}>
+            POWERED BY <span style={{ color: B.mossLight }}>TONY</span> · BUILT BY NEURADEX AI
+          </MonoLabel>
         </div>
       </div>
     </footer>
@@ -1181,13 +1464,13 @@ function Footer() {
 
 export default function Home() {
   return (
-    <div className="min-h-screen font-sans" style={{ background: C.bg, color: C.text }}>
+    <div className="min-h-screen" style={{ background: B.ink, color: B.bone, fontFamily: FONT.body }}>
       <Nav />
       <Hero />
-      <TrustBar />
+      <DataStrip />
       <HowItWorks />
-      <Testimonials />
       <Features />
+      <FieldNotes />
       <ComparisonTable />
       <Pricing />
       <FAQ />
