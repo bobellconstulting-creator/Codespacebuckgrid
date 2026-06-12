@@ -147,6 +147,7 @@ export default function BuckGridProPage() {
 
   // Stable refs for TonyChat props — prevents React.memo bailout on every render
   const getBoundsAndFeatures = useCallback(() => mapRef.current?.getBoundsAndFeatures() ?? null, [])
+  const getMapElement = useCallback(() => mapRef.current?.getCaptureElement() ?? null, [])
   const drawAnnotations = useCallback((annotations: TonyAnnotation[]) => mapRef.current?.drawTonyAnnotations(annotations), [])
   const handleScanComplete = useCallback(() => { setIsAnalyzing(false); setIsAdvising(false) }, [])
 
@@ -485,6 +486,8 @@ export default function BuckGridProPage() {
         ref={chatRef}
         getBoundsAndFeatures={getBoundsAndFeatures}
         drawAnnotations={drawAnnotations}
+        getMapElement={getMapElement}
+        propertyAcres={propertyAcres}
         flyTo={(lat, lng, zoom) => mapRef.current?.flyTo(lat, lng, zoom ?? 17)}
         propertyName={propertyName}
         seasonBanner={season}

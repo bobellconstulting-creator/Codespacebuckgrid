@@ -1,6 +1,8 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, useCallback } from 'react'
+import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import ShareReportButton from '../report/ShareReportButton'
+import type { ReportZone } from '../report/reportRenderer'
 
 export type TonyChatHandle = {
   addTonyMessage: (text: string) => void
@@ -18,6 +20,8 @@ type TonyChatProps = {
   getBoundsAndFeatures: () => MapData | null
   drawAnnotations?: (annotations: any[]) => void
   flyTo?: (lat: number, lng: number, zoom?: number) => void
+  getMapElement?: () => HTMLElement | null
+  propertyAcres?: number
   propertyName?: string
   seasonBanner?: { label: string; tip: string; color: string }
   isMobile?: boolean
@@ -100,7 +104,7 @@ function isErrorMessage(text: string): boolean {
 const PANEL_W = 310
 
 const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
-  ({ getBoundsAndFeatures, drawAnnotations, flyTo, propertyName, seasonBanner, isMobile, topOffset = 12, panelWidth = 310, onScanComplete }, ref) => {
+  ({ getBoundsAndFeatures, drawAnnotations, flyTo, getMapElement, propertyAcres, propertyName, seasonBanner, isMobile, topOffset = 12, panelWidth = 310, onScanComplete }, ref) => {
     const [chat, setChat] = useState<ChatMessage[]>([{ role: 'tony', text: ONBOARDING_MESSAGE }])
     const [input, setInput] = useState('')
     const [isOpen, setIsOpen] = useState(true)
@@ -230,43 +234,34 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
       setChat([{ role: 'tony', text: ONBOARDING_MESSAGE }])
     }, [])
 
-    const exportReport = useCallback(() => {
-      const lines: string[] = [
-        `BUCKGRID PRO — TONY AI FIELD REPORT`,
-        `Property: ${propertyName || 'Unnamed'}`,
-        `Date: ${new Date().toLocaleDateString()}`,
-        `Season: ${seasonBanner?.label ?? 'Unknown'}`,
-        '',
-        '─────────────────────────────────────',
-        '',
-      ]
-      const tonyMessages = chat.filter(m => m.role === 'tony' && m.text !== '__thinking__' && m.text !== ONBOARDING_MESSAGE)
-      tonyMessages.forEach((m, i) => {
-        lines.push(`[ANALYSIS ${i + 1}]`)
-        lines.push(m.text)
-        if (m.annotations && m.annotations.length > 0) {
-          lines.push('')
-          lines.push('RECOMMENDATIONS:')
-          m.annotations.forEach(a => {
-            const conf = a.confidence !== undefined ? ` (${a.confidence}% confidence)` : ''
-            const pri = a.priority !== undefined ? ` — Priority ${a.priority}` : ''
-            lines.push(`  • [${a.type.replace(/_/g, ' ').toUpperCase()}]${pri}${conf}: ${a.label}`)
-            if (a.why) lines.push(`    ${a.why}`)
-            if (a.conflictWarning) lines.push(`    ⚠ CONFLICT: ${a.conflictWarning}`)
-          })
-        }
-        lines.push('')
-        lines.push('─────────────────────────────────────')
-        lines.push('')
-      })
-      const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `tony-report-${(propertyName || 'property').replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.txt`
-      a.click()
-      URL.revokeObjectURL(url)
-    }, [chat, propertyName, seasonBanner])
+    // The branded report exports whatever Tony last drew on the map —
+    // drawAnnotations clears previous layers, so the newest annotated
+    // message is exactly what the satellite capture shows.
+    const reportSource = useMemo(() => {
+      for (let i = chat.length - 1; i >= 0; i--) {
+        const m = chat[i]
+        if (m.role === 'tony' && m.annotations && m.annotations.length > 0) return m
+      }
+      return null
+    }, [chat])
+
+    const reportZones = useMemo<ReportZone[]>(
+      () =>
+        (reportSource?.annotations ?? []).map(a => ({
+          type: a.type,
+          label: a.label,
+          why: a.conflictWarning ? `${a.why} Terrain conflict: ${a.conflictWarning}`.trim() : a.why,
+          confidence: a.confidence,
+          priority: a.priority,
+        })),
+      [reportSource]
+    )
+
+    const reportNotes = useMemo(() => {
+      if (!reportSource || isErrorMessage(reportSource.text)) return undefined
+      const plain = reportSource.text.replace(/\*\*/g, '').trim()
+      return plain.length > 0 ? plain.slice(0, 420) : undefined
+    }, [reportSource])
 
     const openSheet = useCallback(() => {
       setIsOpen(true)
@@ -431,6 +426,18 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           )}
         </div>
 
+        {/* Share / Export — branded PNG + PDF field report */}
+        {getMapElement && (
+          <ShareReportButton
+            getMapElement={getMapElement}
+            propertyName={propertyName}
+            acres={propertyAcres}
+            season={seasonBanner?.label}
+            zones={reportZones}
+            fieldNotes={reportNotes}
+          />
+        )}
+
         {/* Input */}
         <div style={{ padding: '8px 12px', paddingBottom: 'env(safe-area-inset-bottom, 16px)', borderTop: '1px solid rgba(107,122,87,0.15)', background: '#3A4042', display: 'flex', gap: '8px', flexShrink: 0 }}>
           <input
@@ -477,13 +484,6 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             }}
           >
             ➤
-          </button>
-          <button
-            onClick={exportReport}
-            title="Download report"
-            style={{ color: '#5A8A5F', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', padding: '10px 6px', flexShrink: 0 }}
-          >
-            ↓
           </button>
           <button
             onClick={clearChat}
