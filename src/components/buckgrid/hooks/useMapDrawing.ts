@@ -1,10 +1,10 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
-import L from 'leaflet'
+import maplibregl from 'maplibre-gl'
 import { polygonToCells } from 'h3-js'
 import buffer from '@turf/buffer'
 import simplify from '@turf/simplify'
 import { lineString } from '@turf/helpers'
-import 'leaflet/dist/leaflet.css'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 export type LayerType = 'boundary' | 'bedding' | 'food' | 'water' | 'path' | 'structure'
 
@@ -42,6 +42,10 @@ interface UseMapDrawingProps {
 }
 
 const FOOD_TOOLS = new Set(['food', 'clover', 'brassicas', 'corn', 'soybeans', 'milo', 'egyptian', 'switchgrass'])
+// Tools that place a single point on click instead of painting a blob
+const POINT_TOOLS = new Set(['stand', 'mineral', 'focus'])
+// Tools whose stroke stays a line (trails) instead of being buffered to a polygon
+const LINE_TOOLS = new Set(['path', 'scrape_line', 'travel_corridor'])
 
 const TOOL_COLORS: Record<string, string> = {
   boundary: '#FF6B00',
@@ -88,310 +92,601 @@ function colorForTool(tool: string): string {
   return TOOL_COLORS[tool] ?? '#FFD700'
 }
 
+// ── Geometry helpers (renderer-independent) ──────────────────────────────
+
+function haversineMeters(a: [number, number], b: [number, number]): number {
+  const R = 6371000
+  const dLat = (b[1] - a[1]) * Math.PI / 180
+  const dLng = (b[0] - a[0]) * Math.PI / 180
+  const la1 = a[1] * Math.PI / 180
+  const la2 = b[1] * Math.PI / 180
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+function polygonAreaAcres(coords: [number, number][]): number {
+  // Shoelace formula with WGS84 correction — coords are [lng, lat] (GeoJSON order)
+  let area = 0
+  const n = coords.length
+  for (let i = 0; i < n; i++) {
+    const [lng1, lat1] = coords[i]
+    const [lng2, lat2] = coords[(i + 1) % n]
+    const latRad = ((lat1 + lat2) / 2) * Math.PI / 180
+    const metersPerLng = 111320 * Math.cos(latRad)
+    const metersPerLat = 111320
+    area += (lng2 - lng1) * metersPerLng * (lat1 + lat2) / 2 * metersPerLat
+  }
+  return Math.abs(area) / 2 / 4047
+}
+
+function fc(features: any[]): GeoJSON.FeatureCollection {
+  return { type: 'FeatureCollection', features }
+}
+
+// ── Map style: free Esri imagery + free AWS terrain. No tokens, ever. ────
+
+const MAP_STYLE: any = {
+  version: 8,
+  sources: {
+    satellite: {
+      type: 'raster',
+      tiles: ['https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: 'Esri World Imagery',
+    },
+    'dem-terrain': {
+      type: 'raster-dem',
+      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+      encoding: 'terrarium',
+      tileSize: 256,
+      maxzoom: 15,
+    },
+    'dem-hillshade': {
+      type: 'raster-dem',
+      tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
+      encoding: 'terrarium',
+      tileSize: 256,
+      maxzoom: 15,
+    },
+  },
+  layers: [
+    { id: 'satellite', type: 'raster', source: 'satellite' },
+    {
+      id: 'hillshade',
+      type: 'hillshade',
+      source: 'dem-hillshade',
+      paint: {
+        'hillshade-exaggeration': 0.35,
+        'hillshade-shadow-color': '#0a0f09',
+        'hillshade-highlight-color': '#d8d3c5',
+        'hillshade-accent-color': '#1E2122',
+      },
+    },
+  ],
+  sky: {
+    'sky-color': '#0b1118',
+    'horizon-color': '#26323b',
+    'fog-color': '#161a16',
+    'sky-horizon-blend': 0.6,
+    'horizon-fog-blend': 0.6,
+    'fog-ground-blend': 0.85,
+  },
+}
+
+const GLOBAL_CSS = `
+.maplibregl-popup-content { background: #1E2122 !important; border: 1px solid rgba(107,122,87,0.35) !important; border-radius: 3px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 20px rgba(107,122,87,0.15) !important; color: #D8D3C5 !important; padding: 10px 12px !important; }
+.maplibregl-popup-tip { border-top-color: #1E2122 !important; border-bottom-color: #1E2122 !important; }
+.maplibregl-popup-close-button { color: #6E6A5C !important; font-size: 16px !important; }
+.maplibregl-ctrl-group { background: #1E2122 !important; border: 1px solid rgba(107,122,87,0.35) !important; box-shadow: 0 2px 12px rgba(0,0,0,0.5) !important; }
+.maplibregl-ctrl-group button { background: transparent !important; border-color: rgba(107,122,87,0.2) !important; }
+.maplibregl-ctrl-group button span { filter: invert(0.8) sepia(0.2) !important; }
+.bg-3d-btn { font-family: 'Teko','Oswald',sans-serif; font-weight: 800; font-size: 13px; letter-spacing: 0.08em; color: #6B7A57 !important; width: 100%; height: 29px; cursor: pointer; }
+.bg-3d-btn.on { color: #1E2122 !important; background: #6B7A57 !important; }
+.bg-draw-hud { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 50; background: rgba(10,15,9,0.85); border: 1px solid rgba(255,107,0,0.5); border-radius: 3px; padding: 6px 14px; font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #FFB273; text-transform: uppercase; pointer-events: none; white-space: nowrap; box-shadow: 0 0 16px rgba(255,107,0,0.2); }
+.bg-brush-cursor { position: absolute; border: 1.5px solid rgba(255,255,255,0.9); border-radius: 50%; pointer-events: none; z-index: 49; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,0,0,0.25); display: none; }
+.bg-acres-pop { font-family: 'Teko','Oswald',sans-serif; }
+`
+
+let cssInjected = false
+function injectCss() {
+  if (cssInjected || typeof document === 'undefined') return
+  const style = document.createElement('style')
+  style.id = 'bg-maplibre-css'
+  style.textContent = GLOBAL_CSS
+  document.head.appendChild(style)
+  cssInjected = true
+}
+
+// Custom 3D terrain toggle control
+class TerrainToggle {
+  _map: maplibregl.Map | null = null
+  _container: HTMLDivElement | null = null
+  _btn: HTMLButtonElement | null = null
+  _on = false
+
+  onAdd(map: maplibregl.Map) {
+    this._map = map
+    const div = document.createElement('div')
+    div.className = 'maplibregl-ctrl maplibregl-ctrl-group'
+    const btn = document.createElement('button')
+    btn.className = 'bg-3d-btn'
+    btn.type = 'button'
+    btn.textContent = '3D'
+    btn.title = 'Toggle 3D terrain'
+    btn.onclick = () => this.toggle()
+    div.appendChild(btn)
+    this._container = div
+    this._btn = btn
+    return div
+  }
+
+  toggle() {
+    const map = this._map
+    if (!map) return
+    this._on = !this._on
+    if (this._on) {
+      try { map.setTerrain({ source: 'dem-terrain', exaggeration: 1.5 }) } catch { /* terrain unavailable */ }
+      map.easeTo({ pitch: 62, duration: 1200 })
+      this._btn?.classList.add('on')
+      if (this._btn) this._btn.textContent = '2D'
+    } else {
+      map.easeTo({ pitch: 0, bearing: 0, duration: 800 })
+      try { map.setTerrain(null) } catch { /* noop */ }
+      this._btn?.classList.remove('on')
+      if (this._btn) this._btn.textContent = '3D'
+    }
+  }
+
+  onRemove() {
+    this._container?.remove()
+    this._map = null
+  }
+}
+
 export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDrawingProps) {
-  const mapRef = useRef<L.Map | null>(null)
-  const drawnItemsRef = useRef<L.FeatureGroup | null>(null)
-  const tonyAnnotationsRef = useRef<L.FeatureGroup | null>(null)
-  const currentDrawRef = useRef<L.Polyline | null>(null)
+  const mapRef = useRef<maplibregl.Map | null>(null)
+  const mapReadyRef = useRef(false)
+  // User-drawn features live here as plain GeoJSON — single source of truth
+  const drawnRef = useRef<any[]>([])
+  // Tony annotation features + their DOM label markers
+  const tonyFeaturesRef = useRef<any[]>([])
+  const tonyMarkersRef = useRef<maplibregl.Marker[]>([])
+  const hudRef = useRef<HTMLDivElement | null>(null)
+  const brushCursorRef = useRef<HTMLDivElement | null>(null)
+
+  const refreshDrawn = useCallback(() => {
+    const src = mapRef.current?.getSource('drawn') as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc(drawnRef.current) as any)
+  }, [])
+
+  const refreshTony = useCallback(() => {
+    const src = mapRef.current?.getSource('tony') as maplibregl.GeoJSONSource | undefined
+    src?.setData(fc(tonyFeaturesRef.current) as any)
+  }, [])
 
   // 1. INITIALIZE MAP
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
-    const map = L.map(containerRef.current, { zoomControl: false, attributionControl: false }).setView([38.5, -98.0], 7)
+    injectCss()
 
-    L.tileLayer(
-      'https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19, attribution: 'Esri World Imagery', crossOrigin: 'anonymous' }
-    ).addTo(map)
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: MAP_STYLE,
+      center: [-98.0, 38.5],
+      zoom: 7,
+      maxPitch: 70,
+      canvasContextAttributes: { antialias: true, preserveDrawingBuffer: true }, // preserveDrawingBuffer required for html2canvas report capture
+      attributionControl: { compact: true, customAttribution: 'Terrain: AWS Open Data' } as any,
+    })
 
-    const drawnItems = new L.FeatureGroup()
-    map.addLayer(drawnItems)
-    drawnItemsRef.current = drawnItems
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right')
+    map.addControl(new TerrainToggle() as any, 'bottom-right')
 
-    const tonyAnnotations = new L.FeatureGroup()
-    map.addLayer(tonyAnnotations)
-    tonyAnnotationsRef.current = tonyAnnotations
+    map.on('load', () => {
+      // User-drawn features
+      map.addSource('drawn', { type: 'geojson', data: fc([]) as any })
+      map.addLayer({
+        id: 'drawn-fill', type: 'fill', source: 'drawn',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['coalesce', ['get', 'fillOpacity'], 0.3] },
+      })
+      map.addLayer({
+        id: 'drawn-line', type: 'line', source: 'drawn',
+        filter: ['!=', ['geometry-type'], 'Point'],
+        paint: { 'line-color': ['get', 'color'], 'line-width': ['coalesce', ['get', 'lineWidth'], 2], 'line-opacity': 0.95 },
+      })
+      map.addLayer({
+        id: 'drawn-glow', type: 'line', source: 'drawn',
+        filter: ['==', ['get', 'layerType'], 'boundary'],
+        paint: { 'line-color': '#FF6B00', 'line-width': 9, 'line-blur': 7, 'line-opacity': 0.45 },
+      })
+      map.addLayer({
+        id: 'drawn-point', type: 'circle', source: 'drawn',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 9, 'circle-color': ['get', 'color'], 'circle-opacity': 0.9,
+          'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff',
+        },
+      })
 
-    L.control.zoom({ position: 'bottomright' }).addTo(map)
+      // Tony annotations
+      map.addSource('tony', { type: 'geojson', data: fc([]) as any })
+      map.addLayer({
+        id: 'tony-fill', type: 'fill', source: 'tony',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.32 },
+      })
+      map.addLayer({
+        id: 'tony-line', type: 'line', source: 'tony',
+        filter: ['!=', ['geometry-type'], 'Point'],
+        paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['geometry-type'], 'LineString'], 3, 2], 'line-dasharray': [2, 1], 'line-opacity': 0.9 },
+      })
+      map.addLayer({
+        id: 'tony-point', type: 'circle', source: 'tony',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 10, 'circle-color': ['get', 'color'], 'circle-opacity': 0.9,
+          'circle-stroke-width': 2, 'circle-stroke-color': ['get', 'color'],
+        },
+      })
+
+      // Draft layers for in-progress boundary / freehand strokes
+      map.addSource('draft', { type: 'geojson', data: fc([]) as any })
+      map.addLayer({
+        id: 'draft-fill', type: 'fill', source: 'draft',
+        filter: ['==', ['geometry-type'], 'Polygon'],
+        paint: { 'fill-color': '#FF6B00', 'fill-opacity': 0.12 },
+      })
+      map.addLayer({
+        id: 'draft-line', type: 'line', source: 'draft',
+        filter: ['==', ['geometry-type'], 'LineString'],
+        paint: { 'line-color': ['coalesce', ['get', 'color'], '#FF6B00'], 'line-width': ['coalesce', ['get', 'width'], 2], 'line-dasharray': [2, 1.4], 'line-opacity': 0.9 },
+      })
+      map.addLayer({
+        id: 'draft-vertex', type: 'circle', source: 'draft',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': ['coalesce', ['get', 'r'], 5], 'circle-color': '#ffffff',
+          'circle-stroke-width': 2, 'circle-stroke-color': '#FF6B00',
+        },
+      })
+
+      // Tony popups on click
+      const popupFor = (e: maplibregl.MapLayerMouseEvent) => {
+        const f = e.features?.[0]
+        if (!f) return
+        const p = f.properties ?? {}
+        new maplibregl.Popup({ maxWidth: '260px', closeButton: true })
+          .setLngLat(e.lngLat)
+          .setHTML(String(p.popupHtml ?? ''))
+          .addTo(map)
+      }
+      for (const layerId of ['tony-fill', 'tony-line', 'tony-point']) {
+        map.on('click', layerId, popupFor)
+        map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer' })
+        map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = '' })
+      }
+
+      mapReadyRef.current = true
+      refreshDrawn()
+      refreshTony()
+    })
+
+    // Floating HUD for live acreage while drawing the boundary
+    const hud = document.createElement('div')
+    hud.className = 'bg-draw-hud'
+    hud.style.display = 'none'
+    containerRef.current.appendChild(hud)
+    hudRef.current = hud
+
+    // Brush-size cursor ring for paint tools
+    const ring = document.createElement('div')
+    ring.className = 'bg-brush-cursor'
+    containerRef.current.appendChild(ring)
+    brushCursorRef.current = ring
 
     mapRef.current = map
 
-    const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize()
-    })
-    resizeObserver.observe(containerRef.current)
-
     return () => {
-      resizeObserver.disconnect()
+      tonyMarkersRef.current.forEach(m => m.remove())
+      tonyMarkersRef.current = []
+      hud.remove()
+      ring.remove()
       map.remove()
       mapRef.current = null
+      mapReadyRef.current = false
     }
-  }, [containerRef])
+  }, [containerRef, refreshDrawn, refreshTony])
 
-  // 2. DRAW HANDLERS
+  // 2. TOOL INTERACTION — nav / boundary / point tools / paint tools
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
-    // Lock/unlock map drag and zoom based on tool mode
+    const canvas = map.getCanvas()
+    const setDraft = (features: any[]) => {
+      const src = map.getSource('draft') as maplibregl.GeoJSONSource | undefined
+      src?.setData(fc(features) as any)
+    }
+    const hud = hudRef.current
+    const ring = brushCursorRef.current
+    const hideHud = () => { if (hud) hud.style.display = 'none' }
+    const showHud = (text: string) => { if (hud) { hud.style.display = 'block'; hud.textContent = text } }
+
+    // The map is NEVER fully locked anymore: zoom, rotate and two-finger
+    // gestures stay live in every mode. Only left-drag changes meaning.
+    map.scrollZoom.enable()
+    map.touchZoomRotate.enable()
+    map.doubleClickZoom.enable()
+
+    const isPaint = activeTool !== 'nav' && activeTool !== 'boundary' && !POINT_TOOLS.has(activeTool)
+    const isLine = LINE_TOOLS.has(activeTool)
+
     if (activeTool === 'nav') {
-      map.dragging.enable()
-      if (map.touchZoom) map.touchZoom.enable()
-      if (map.scrollWheelZoom) map.scrollWheelZoom.enable()
-      map.getContainer().style.cursor = 'grab'
-    } else {
-      map.dragging.disable()
-      if (map.touchZoom) map.touchZoom.disable()
-      if (map.scrollWheelZoom) map.scrollWheelZoom.disable()
-      map.getContainer().style.cursor = 'crosshair'
+      map.dragPan.enable()
+      canvas.style.cursor = ''
+      if (ring) ring.style.display = 'none'
+      return () => { /* nothing to detach */ }
     }
 
-    let lastMoveTime = 0
-    const MOVE_THROTTLE_MS = 33 // ~30Hz
-
-    const onMouseDown = (e: L.LeafletMouseEvent) => {
-      if (activeTool === 'nav' || activeTool === 'boundary') return
-      const { lat, lng } = e.latlng
+    // ── POINT TOOLS: one click = one feature ─────────────────────────────
+    if (POINT_TOOLS.has(activeTool)) {
+      map.dragPan.enable() // panning still works; a clean click drops the point
+      canvas.style.cursor = 'crosshair'
+      if (ring) ring.style.display = 'none'
       const color = colorForTool(activeTool)
-      const polyline = L.polyline([[lat, lng]], { color, weight: brushSize || 4, opacity: 0.8 })
-      ;(polyline as any).options.layerType = activeTool
-      polyline.addTo(drawnItemsRef.current!)
-      currentDrawRef.current = polyline
+      const onClick = (e: maplibregl.MapMouseEvent) => {
+        drawnRef.current.push({
+          type: 'Feature',
+          properties: { layerType: activeTool, color },
+          geometry: { type: 'Point', coordinates: [e.lngLat.lng, e.lngLat.lat] },
+        })
+        refreshDrawn()
+      }
+      map.on('click', onClick)
+      return () => { map.off('click', onClick) }
     }
 
-    const onMouseMove = (e: L.LeafletMouseEvent) => {
-      if (!currentDrawRef.current) return
-      const now = Date.now()
-      if (now - lastMoveTime < MOVE_THROTTLE_MS) return
-      lastMoveTime = now
-      currentDrawRef.current.addLatLng(e.latlng)
+    // ── BOUNDARY: click-to-corner with live acreage + snap-to-close ──────
+    if (activeTool === 'boundary') {
+      map.dragPan.enable() // pan freely between corner clicks — this is the fix
+      map.doubleClickZoom.disable()
+      canvas.style.cursor = 'crosshair'
+      if (ring) ring.style.display = 'none'
+
+      const color = '#FF6B00'
+      const points: [number, number][] = []
+
+      const draftFeatures = (cursor?: [number, number]) => {
+        const feats: any[] = points.map((c, i) => ({
+          type: 'Feature',
+          properties: { r: i === 0 && points.length >= 3 ? 8 : 5 },
+          geometry: { type: 'Point', coordinates: c },
+        }))
+        const all = cursor ? [...points, cursor] : points
+        if (all.length >= 2) {
+          feats.push({ type: 'Feature', properties: { color, width: 2 }, geometry: { type: 'LineString', coordinates: all } })
+        }
+        if (all.length >= 3) {
+          feats.push({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[...all, all[0]]] } })
+        }
+        return feats
+      }
+
+      const updateHud = (cursor?: [number, number]) => {
+        if (points.length === 0) { showHud('BOUNDARY — CLICK YOUR FIRST CORNER'); return }
+        const all = cursor ? [...points, cursor] : points
+        const parts: string[] = [`${points.length} PT${points.length > 1 ? 'S' : ''}`]
+        if (cursor && points.length >= 1) {
+          const legYds = Math.round(haversineMeters(points[points.length - 1], cursor) * 1.09361)
+          parts.push(`LEG ${legYds} YDS`)
+        }
+        if (all.length >= 3) parts.push(`${polygonAreaAcres(all).toFixed(1)} AC`)
+        parts.push(points.length >= 3 ? 'CLICK FIRST PT / ENTER TO CLOSE' : 'KEEP CLICKING CORNERS')
+        showHud(parts.join('  ·  '))
+      }
+
+      const reset = () => { points.length = 0; setDraft([]); hideHud() }
+
+      const closePolygon = () => {
+        if (points.length < 3) return
+        drawnRef.current.push({
+          type: 'Feature',
+          properties: { layerType: 'boundary', color, fillOpacity: 0.07, lineWidth: 3 },
+          geometry: { type: 'Polygon', coordinates: [[...points, points[0]]] },
+        })
+        reset()
+        refreshDrawn()
+      }
+
+      const onClick = (e: maplibregl.MapMouseEvent) => {
+        if (points.length >= 3) {
+          const a = map.project(e.lngLat)
+          const b = map.project({ lng: points[0][0], lat: points[0][1] })
+          if (Math.hypot(a.x - b.x, a.y - b.y) < 28) { closePolygon(); return }
+        }
+        points.push([e.lngLat.lng, e.lngLat.lat])
+        setDraft(draftFeatures())
+        updateHud()
+      }
+
+      const onMove = (e: maplibregl.MapMouseEvent) => {
+        if (points.length === 0) { updateHud(); return }
+        const cursor: [number, number] = [e.lngLat.lng, e.lngLat.lat]
+        setDraft(draftFeatures(cursor))
+        updateHud(cursor)
+      }
+
+      const onDblClick = (e: maplibregl.MapMouseEvent) => {
+        e.preventDefault()
+        // remove the duplicate point the preceding click added
+        if (points.length > 0) points.pop()
+        closePolygon()
+      }
+
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter') { closePolygon(); return }
+        if (e.key === 'Escape') { reset(); return }
+        if (e.key === 'Backspace' && points.length > 0) {
+          points.pop()
+          setDraft(draftFeatures())
+          updateHud()
+        }
+      }
+
+      map.on('click', onClick)
+      map.on('mousemove', onMove)
+      map.on('dblclick', onDblClick)
+      document.addEventListener('keydown', onKeyDown)
+      updateHud()
+
+      return () => {
+        map.off('click', onClick)
+        map.off('mousemove', onMove)
+        map.off('dblclick', onDblClick)
+        document.removeEventListener('keydown', onKeyDown)
+        // Auto-close if user switches away mid-draw with 3+ points
+        if (points.length >= 3) closePolygon()
+        else reset()
+        map.doubleClickZoom.enable()
+      }
     }
 
-    const onMouseUp = () => {
-      if (!currentDrawRef.current) return
-      const shape = currentDrawRef.current
-      const coords = shape.getLatLngs() as L.LatLng[]
-      const layerType = (shape as any).options.layerType
-      const color = shape.options.color as string
+    // ── PAINT / LINE TOOLS: hold left mouse (or finger) and stroke ────────
+    map.dragPan.disable() // left-drag paints; wheel + two-finger gestures still navigate
+    canvas.style.cursor = 'none'
+    const color = colorForTool(activeTool)
+    if (ring) {
+      ring.style.display = 'block'
+      ring.style.width = `${brushSize}px`
+      ring.style.height = `${brushSize}px`
+      ring.style.borderColor = color
+      ring.style.left = '-9999px'
+    }
 
-      currentDrawRef.current = null
+    let stroke: [number, number][] | null = null
+    let lastMove = 0
 
-      if (layerType === 'path' || layerType === 'nav' || coords.length < 3) return
+    const finishStroke = () => {
+      if (!stroke) return
+      const coords = stroke
+      stroke = null
+      setDraft([])
+      if (coords.length < 3) return
 
-      // Try turf buffer to create a fat filled polygon (paint brush effect)
+      if (isLine) {
+        drawnRef.current.push({
+          type: 'Feature',
+          properties: { layerType: activeTool, color, lineWidth: 3 },
+          geometry: { type: 'LineString', coordinates: coords },
+        })
+        refreshDrawn()
+        return
+      }
+
+      // Buffer the stroke into a filled blob sized to the brush (paint feel)
       try {
-        const mapBounds = map.getBounds()
-        const metersPerPixel = (mapBounds.getNorth() - mapBounds.getSouth()) * 111000 / map.getSize().y
+        const bounds = map.getBounds()
+        const metersPerPixel = (bounds.getNorth() - bounds.getSouth()) * 111000 / map.getContainer().clientHeight
         const radiusKm = Math.max(0.005, (brushSize / 2) * metersPerPixel / 1000)
-
-        // turf uses [lng, lat]; Leaflet LatLng is {lat, lng}
-        const turfCoords = coords.map(ll => [ll.lng, ll.lat] as [number, number])
-        const line = lineString(turfCoords)
+        const line = lineString(coords)
         const simplified = simplify(line, { tolerance: 0.00005, highQuality: false })
         const buffered = buffer(simplified, radiusKm, { units: 'kilometers' })
-
         if (buffered && buffered.geometry) {
           let ringCoords: number[][] | null = null
-          if (buffered.geometry.type === 'Polygon') {
-            ringCoords = buffered.geometry.coordinates[0]
-          } else if (buffered.geometry.type === 'MultiPolygon') {
-            ringCoords = buffered.geometry.coordinates[0][0]
-          }
-
+          if (buffered.geometry.type === 'Polygon') ringCoords = buffered.geometry.coordinates[0]
+          else if (buffered.geometry.type === 'MultiPolygon') ringCoords = buffered.geometry.coordinates[0][0]
           if (ringCoords && ringCoords.length >= 3) {
-            // Convert back to Leaflet [lat, lng]
-            const latlngs = ringCoords.map(([lng, lat]) => [lat, lng] as [number, number])
-            const polygon = L.polygon(latlngs, {
-              color,
-              fillColor: color,
-              fillOpacity: 0.3,
-              weight: 2,
+            drawnRef.current.push({
+              type: 'Feature',
+              properties: { layerType: activeTool, color },
+              geometry: { type: 'Polygon', coordinates: [ringCoords] },
             })
-            ;(polygon as any).options.layerType = layerType
-            drawnItemsRef.current?.removeLayer(shape)
-            drawnItemsRef.current?.addLayer(polygon)
+            refreshDrawn()
             return
           }
         }
-      } catch {
-        // fall through to simple close-and-polygon
-      }
+      } catch { /* fall through to plain close */ }
 
-      // Fallback: close the polyline and convert to a plain polygon
-      const start = coords[0]
-      const end = coords[coords.length - 1]
-      if (start.distanceTo(end) > 0.5) shape.addLatLng(start)
-      const polygon = L.polygon(shape.getLatLngs() as L.LatLng[], {
-        color,
-        fillColor: color,
-        fillOpacity: 0.3,
-        weight: 2,
+      drawnRef.current.push({
+        type: 'Feature',
+        properties: { layerType: activeTool, color },
+        geometry: { type: 'Polygon', coordinates: [[...coords, coords[0]]] },
       })
-      ;(polygon as any).options.layerType = layerType
-      drawnItemsRef.current?.removeLayer(shape)
-      drawnItemsRef.current?.addLayer(polygon)
+      refreshDrawn()
     }
 
-    const onTouchDown = (e: any) => onMouseDown(e)
-    const onTouchMove = (e: any) => onMouseMove(e)
-    const onTouchUp = () => onMouseUp()
+    const strokeDraft = () => {
+      if (!stroke || stroke.length < 2) return
+      setDraft([{ type: 'Feature', properties: { color, width: Math.max(3, brushSize / 3) }, geometry: { type: 'LineString', coordinates: stroke } }])
+    }
 
-    // Native touchmove with passive:false so preventDefault() works during drawing
-    const container = map.getContainer()
-    const nativeTouchMove = (e: TouchEvent) => {
-      if (activeTool === 'nav') return
+    const onMouseDown = (e: maplibregl.MapMouseEvent) => {
+      if ((e.originalEvent as MouseEvent).button !== 0) return
+      stroke = [[e.lngLat.lng, e.lngLat.lat]]
+    }
+    const onMouseMove = (e: maplibregl.MapMouseEvent) => {
+      if (ring) {
+        ring.style.left = `${e.point.x}px`
+        ring.style.top = `${e.point.y}px`
+      }
+      if (!stroke) return
+      const now = Date.now()
+      if (now - lastMove < 33) return // ~30Hz
+      lastMove = now
+      stroke.push([e.lngLat.lng, e.lngLat.lat])
+      strokeDraft()
+    }
+    const onMouseUp = () => finishStroke()
+
+    const onTouchStart = (e: maplibregl.MapTouchEvent) => {
+      if (e.originalEvent.touches.length > 1) { stroke = null; setDraft([]); return } // two fingers = navigate
       e.preventDefault()
+      stroke = [[e.lngLat.lng, e.lngLat.lat]]
     }
-    container.addEventListener('touchmove', nativeTouchMove, { passive: false })
+    const onTouchMove = (e: maplibregl.MapTouchEvent) => {
+      if (!stroke || e.originalEvent.touches.length > 1) return
+      e.preventDefault()
+      stroke.push([e.lngLat.lng, e.lngLat.lat])
+      strokeDraft()
+    }
+    const onTouchEnd = () => finishStroke()
 
     map.on('mousedown', onMouseDown)
     map.on('mousemove', onMouseMove)
     map.on('mouseup', onMouseUp)
-    map.on('touchstart', onTouchDown)
+    map.on('touchstart', onTouchStart)
     map.on('touchmove', onTouchMove)
-    map.on('touchend', onTouchUp)
+    map.on('touchend', onTouchEnd)
 
     return () => {
       map.off('mousedown', onMouseDown)
       map.off('mousemove', onMouseMove)
       map.off('mouseup', onMouseUp)
-      map.off('touchstart', onTouchDown)
+      map.off('touchstart', onTouchStart)
       map.off('touchmove', onTouchMove)
-      map.off('touchend', onTouchUp)
-      container.removeEventListener('touchmove', nativeTouchMove)
+      map.off('touchend', onTouchEnd)
+      finishStroke()
+      if (ring) ring.style.display = 'none'
+      canvas.style.cursor = ''
+      map.dragPan.enable()
     }
-  }, [activeTool, brushSize])
+  }, [activeTool, brushSize, refreshDrawn])
 
-  // 2b. BOUNDARY CLICK-TO-CORNER MODE
-  useEffect(() => {
-    const map = mapRef.current
-    if (!map || activeTool !== 'boundary') return
-
-    const color = '#FF6B00'
-    const points: L.LatLng[] = []
-    const vertexMarkers: L.CircleMarker[] = []
-    let previewLine: L.Polyline | null = null
-    let previewPoly: L.Polygon | null = null
-
-    const clearPreview = () => {
-      if (previewLine) { previewLine.remove(); previewLine = null }
-      if (previewPoly) { previewPoly.remove(); previewPoly = null }
-    }
-
-    const updatePreview = (mouseLatlng?: L.LatLng) => {
-      clearPreview()
-      if (points.length === 0) return
-      const allPts = mouseLatlng ? [...points, mouseLatlng] : points
-      if (allPts.length >= 2) {
-        previewLine = L.polyline(allPts, { color, weight: 2, opacity: 0.8, dashArray: '6 4' }).addTo(map)
-      }
-      if (points.length >= 3) {
-        previewPoly = L.polygon([...points], { color, fillColor: color, fillOpacity: 0.12, weight: 2, opacity: 0.5 }).addTo(map)
-      }
-    }
-
-    const closePolygon = () => {
-      if (points.length < 3) return
-      clearPreview()
-      vertexMarkers.forEach(m => map.removeLayer(m))
-      vertexMarkers.length = 0
-      const polygon = L.polygon([...points], { color, fillColor: color, fillOpacity: 0.07, weight: 3 })
-      ;(polygon as any).options.layerType = 'boundary'
-      drawnItemsRef.current?.addLayer(polygon)
-      points.length = 0
-    }
-
-    const onClick = (e: L.LeafletMouseEvent) => {
-      // Snap to first point if close enough
-      if (points.length >= 3) {
-        const screenDist = map.latLngToContainerPoint(e.latlng)
-          .distanceTo(map.latLngToContainerPoint(points[0]))
-        if (screenDist < 28) { closePolygon(); return }
-      }
-      points.push(e.latlng)
-      const m = L.circleMarker(e.latlng, { radius: 5, color, fillColor: '#fff', fillOpacity: 1, weight: 2 }).addTo(map)
-      vertexMarkers.push(m)
-      updatePreview()
-    }
-
-    const onMouseMove = (e: L.LeafletMouseEvent) => { updatePreview(e.latlng) }
-
-    const onDblClick = (e: L.LeafletMouseEvent) => {
-      L.DomEvent.stop(e)
-      // Remove the duplicate click point that fired before dblclick
-      if (points.length > 0) {
-        points.pop()
-        const last = vertexMarkers.pop()
-        if (last) map.removeLayer(last)
-      }
-      closePolygon()
-    }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') { closePolygon(); return }
-      if (e.key === 'Escape') {
-        clearPreview()
-        vertexMarkers.forEach(m => map.removeLayer(m))
-        vertexMarkers.length = 0
-        points.length = 0
-      }
-      if (e.key === 'Backspace' && points.length > 0) {
-        points.pop()
-        const last = vertexMarkers.pop()
-        if (last) map.removeLayer(last)
-        updatePreview()
-      }
-    }
-
-    map.on('click', onClick)
-    map.on('mousemove', onMouseMove)
-    map.on('dblclick', onDblClick)
-    document.addEventListener('keydown', onKeyDown)
-
-    return () => {
-      map.off('click', onClick)
-      map.off('mousemove', onMouseMove)
-      map.off('dblclick', onDblClick)
-      document.removeEventListener('keydown', onKeyDown)
-      // Auto-close if user switches away mid-draw with 3+ points
-      if (points.length >= 3) closePolygon()
-      clearPreview()
-      vertexMarkers.forEach(m => map.removeLayer(m))
-    }
-  }, [activeTool])
-
-  // 3. SPATIAL RECOGNITION
-  function polygonAreaAcres(coords: [number, number][]): number {
-    // Shoelace formula with WGS84 correction — coords are [lng, lat] (GeoJSON order)
-    let area = 0
-    const n = coords.length
-    for (let i = 0; i < n; i++) {
-      const [lng1, lat1] = coords[i]
-      const [lng2, lat2] = coords[(i + 1) % n]
-      const latRad = ((lat1 + lat2) / 2) * Math.PI / 180
-      const metersPerLng = 111320 * Math.cos(latRad)
-      const metersPerLat = 111320
-      area += (lng2 - lng1) * metersPerLng * (lat1 + lat2) / 2 * metersPerLat
-    }
-    return Math.abs(area) / 2 / 4047
-  }
-
+  // 3. SPATIAL RECOGNITION (same math as before — engine-independent)
   const lockAndBake = useCallback(() => {
     const empty = { count: 0, acres: 0, pathYards: 0, layers: [], summary: { boundary: 0, food: 0, bedding: 0, water: 0, stand: 0, other: 0 } }
-    if (!drawnItemsRef.current) return empty
+    const features = drawnRef.current
+    if (features.length === 0) return empty
 
-    const layers = drawnItemsRef.current.getLayers()
     let boundaryGeo: any = null
     const allFeatures: any[] = []
     let totalPathDistanceMeters = 0
     const summary: LayerSummary = { boundary: 0, food: 0, bedding: 0, water: 0, stand: 0, other: 0 }
 
-    for (const layer of layers) {
-      // @ts-ignore
-      if (!layer.toGeoJSON) continue
-      // @ts-ignore
-      const geo = layer.toGeoJSON()
-      const layerType: string = (layer as any).options?.layerType ?? 'other'
+    for (const geo of features) {
+      const layerType: string = geo.properties?.layerType ?? 'other'
 
       if (FOOD_TOOLS.has(layerType)) {
         summary.food++
@@ -402,22 +697,16 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       }
 
       if (geo.geometry.type === 'LineString') {
-        // @ts-ignore
-        const latlngs: L.LatLng[] = layer.getLatLngs?.() ?? []
-        for (let i = 0; i < latlngs.length - 1; i++) {
-          totalPathDistanceMeters += latlngs[i].distanceTo(latlngs[i + 1])
+        const coords = geo.geometry.coordinates as [number, number][]
+        for (let i = 0; i < coords.length - 1; i++) {
+          totalPathDistanceMeters += haversineMeters(coords[i], coords[i + 1])
         }
       }
 
-      geo.properties = { ...(geo.properties ?? {}), layerType }
       allFeatures.push(geo)
 
-      if (geo.geometry.type === 'Polygon' && layerType === 'boundary') {
-        boundaryGeo = geo
-      }
-      if (!boundaryGeo && geo.geometry.type === 'Polygon') {
-        boundaryGeo = geo
-      }
+      if (geo.geometry.type === 'Polygon' && layerType === 'boundary') boundaryGeo = geo
+      if (!boundaryGeo && geo.geometry.type === 'Polygon') boundaryGeo = geo
     }
 
     if (!boundaryGeo) return empty
@@ -430,27 +719,13 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
         .map(([lng, lat]) => [lat, lng] as [number, number])
       const hexIds = polygonToCells([ring], 10)
       hexCount = hexIds.length
-      if (hexCount > 0) {
-        acres = parseFloat((hexCount * 0.0344).toFixed(1))
-        if (mapRef.current) {
-          // @ts-ignore
-          mapRef.current.options.hexGrid = hexIds
-        }
-      }
-    } catch {
-      // fall through to bounding-box fallback below
-    }
+      if (hexCount > 0) acres = parseFloat((hexCount * 0.0344).toFixed(1))
+    } catch { /* fall through to shoelace below */ }
 
     if (acres === 0) {
-      // Fallback: Shoelace formula for polygon area
       const coords = boundaryGeo.geometry.coordinates[0] as [number, number][]
       acres = parseFloat(polygonAreaAcres(coords).toFixed(2))
       hexCount = Math.max(1, Math.round(acres / 0.0344))
-    }
-
-    if (mapRef.current) {
-      // @ts-ignore
-      mapRef.current.options.drawnFeatures = allFeatures
     }
 
     return {
@@ -464,19 +739,20 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
 
   // 4. TONY ANNOTATION DRAWING — handles Polygon, LineString, Point
   const drawAnnotations = useCallback((annotations: TonyAnnotation[]) => {
-    const layer = tonyAnnotationsRef.current
-    if (!layer) return
-    layer.clearLayers()
+    const map = mapRef.current
+    tonyMarkersRef.current.forEach(m => m.remove())
+    tonyMarkersRef.current = []
+    tonyFeaturesRef.current = []
 
-    const esc = (s: string) => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     const popupContent = (ann: TonyAnnotation) => {
       const why = esc((ann as any).why ?? '')
       const label = esc(ann.label ?? '')
-      const typeName = esc(ann.type.replace(/_/g,' '))
+      const typeName = esc(ann.type.replace(/_/g, ' '))
       const conf = (ann as any).confidence
       const pri = (ann as any).priority
       const confBar = typeof conf === 'number'
-        ? `<div style="height:3px;background:#1a2a1a;border-radius:2px;margin:4px 0 6px"><div style="height:100%;width:${Math.max(0,Math.min(100,conf))}%;background:${conf >= 75 ? '#4ade80' : conf >= 50 ? '#facc15' : '#ef4444'};border-radius:2px"></div></div>`
+        ? `<div style="height:3px;background:#1a2a1a;border-radius:2px;margin:4px 0 6px"><div style="height:100%;width:${Math.max(0, Math.min(100, conf))}%;background:${conf >= 75 ? '#4ade80' : conf >= 50 ? '#facc15' : '#ef4444'};border-radius:2px"></div></div>`
         : ''
       return `<div style="font-family:'Barlow Condensed',sans-serif;min-width:180px;max-width:240px;padding:2px 0">
         <div style="font-family:'Teko',sans-serif;font-weight:700;font-size:13px;color:#6B7A57;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">${typeName}</div>
@@ -487,88 +763,107 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       </div>`
     }
 
+    const addLabel = (lngLat: [number, number], text: string) => {
+      if (!map) return
+      const el = document.createElement('div')
+      el.className = 'tony-label'
+      el.textContent = text
+      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -10] })
+        .setLngLat(lngLat)
+        .addTo(map)
+      tonyMarkersRef.current.push(marker)
+    }
+
     for (const ann of annotations) {
       const geometry = ann.geojson?.geometry
       if (!geometry) continue
       const color = ANNOTATION_COLORS[ann.type] ?? '#FF6B00'
+      const feature = {
+        type: 'Feature',
+        properties: { color, popupHtml: popupContent(ann), annType: ann.type, label: ann.label },
+        geometry,
+      }
+      tonyFeaturesRef.current.push(feature)
 
       if (geometry.type === 'Polygon') {
         const ring = geometry.coordinates[0] as [number, number][]
-        const latlngs = ring.map(([lng, lat]) => [lat, lng] as [number, number])
-        L.polygon(latlngs, { color, weight: 2, fillColor: color, fillOpacity: 0.32 })
-          .bindPopup(popupContent(ann), { maxWidth: 260 }).addTo(layer)
-        // Permanent centroid label so food plots/bedding show their name without hovering
-        const centLat = ring.reduce((s, c) => s + c[1], 0) / ring.length
         const centLng = ring.reduce((s, c) => s + c[0], 0) / ring.length
-        L.circleMarker([centLat, centLng], { radius: 0, color: 'transparent', fillColor: 'transparent', fillOpacity: 0 })
-          .bindTooltip(ann.label, { permanent: true, direction: 'center', className: 'tony-label' }).addTo(layer)
+        const centLat = ring.reduce((s, c) => s + c[1], 0) / ring.length
+        addLabel([centLng, centLat], ann.label)
       } else if (geometry.type === 'LineString') {
         const coords = geometry.coordinates as [number, number][]
-        const latlngs = coords.map(([lng, lat]) => [lat, lng] as [number, number])
-        L.polyline(latlngs, { color, weight: 3, dashArray: '8 4', opacity: 0.9 })
-          .bindPopup(popupContent(ann), { maxWidth: 260 }).addTo(layer)
-        // Label at midpoint of trail
-        const mid = latlngs[Math.floor(latlngs.length / 2)]
-        if (mid) {
-          L.circleMarker(mid, { radius: 4, color, weight: 2, fillColor: color, fillOpacity: 0.9 })
-            .bindTooltip(ann.label, { permanent: true, direction: 'top', offset: [0, -8], className: 'tony-label' }).addTo(layer)
-        }
+        const mid = coords[Math.floor(coords.length / 2)]
+        if (mid) addLabel([mid[0], mid[1]], ann.label)
       } else if (geometry.type === 'Point') {
         const [lng, lat] = geometry.coordinates as [number, number]
-        L.circleMarker([lat, lng], { radius: 10, color, weight: 2, fillColor: color, fillOpacity: 0.9 })
-          .bindTooltip(ann.label, { permanent: true, direction: 'top', offset: [0, -13], className: 'tony-label' })
-          .bindPopup(popupContent(ann), { maxWidth: 260 }).addTo(layer)
+        addLabel([lng, lat], ann.label)
       }
     }
-  }, [])
+
+    refreshTony()
+  }, [refreshTony])
 
   const api = useMemo<MapApi>(() => ({
-    flyTo: (center, zoom) => mapRef.current?.flyTo(center, zoom, { duration: 1.5 }),
+    flyTo: (center, zoom) => {
+      // center arrives as [lat, lng] (legacy Leaflet order)
+      mapRef.current?.flyTo({ center: [center[1], center[0]], zoom, duration: 1800, essential: true })
+    },
     clearAll: () => {
-      drawnItemsRef.current?.clearLayers()
-      if (mapRef.current) (mapRef.current as any).options.drawnFeatures = []
+      drawnRef.current = []
+      refreshDrawn()
     },
     undoLast: () => {
-      if (drawnItemsRef.current) {
-        const l = drawnItemsRef.current.getLayers()
-        if (l.length > 0) drawnItemsRef.current.removeLayer(l[l.length - 1])
-      }
+      drawnRef.current.pop()
+      refreshDrawn()
     },
     setDrawMode: () => {},
     addSmartFeature: (geojson, type, label) => {
-      const layer = tonyAnnotationsRef.current
-      if (!layer) return
+      const map = mapRef.current
+      if (!map) return
       const color = ANNOTATION_COLORS[type] ?? '#FF6B00'
-      L.geoJSON(geojson, {
-        pointToLayer: (_f, latlng) => L.circleMarker(latlng, {
-          radius: 10, color, weight: 2, fillColor: color, fillOpacity: 0.75,
-        }),
-        style: { color, fillColor: color, fillOpacity: 0.3, weight: 2 }
-      }).bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -12] }).addTo(layer)
+      const features = geojson.type === 'FeatureCollection' ? geojson.features : [geojson]
+      for (const f of features) {
+        tonyFeaturesRef.current.push({
+          type: 'Feature',
+          properties: { ...(f.properties ?? {}), color, label },
+          geometry: f.geometry,
+        })
+        const g = f.geometry
+        if (g?.type === 'Point') {
+          const [lng, lat] = g.coordinates
+          const el = document.createElement('div')
+          el.className = 'tony-label'
+          el.textContent = label
+          tonyMarkersRef.current.push(
+            new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -12] }).setLngLat([lng, lat]).addTo(map)
+          )
+        }
+      }
+      refreshTony()
     },
     lockAndBake,
     drawAnnotations,
-    clearAnnotations: () => tonyAnnotationsRef.current?.clearLayers(),
+    clearAnnotations: () => {
+      tonyFeaturesRef.current = []
+      tonyMarkersRef.current.forEach(m => m.remove())
+      tonyMarkersRef.current = []
+      refreshTony()
+    },
     getBoundsAndFeatures: () => {
-      if (!mapRef.current) return null
-      const b = mapRef.current.getBounds()
-      // Read live from drawn layers — don't wait for lockAndBake
-      const features: any[] = []
-      drawnItemsRef.current?.getLayers().forEach(layer => {
-        if ((layer as any).toGeoJSON) {
-          const geo = (layer as any).toGeoJSON()
-          const layerType = (layer as any).options?.layerType ?? 'other'
-          geo.properties = { ...(geo.properties ?? {}), layerType }
-          features.push(geo)
-        }
-      })
+      const map = mapRef.current
+      if (!map) return null
+      const b = map.getBounds()
+      const features = drawnRef.current.map(f => ({
+        ...f,
+        properties: { ...(f.properties ?? {}), layerType: f.properties?.layerType ?? 'other' },
+      }))
       return {
         bounds: { north: b.getNorth(), south: b.getSouth(), east: b.getEast(), west: b.getWest() },
-        zoom: mapRef.current.getZoom(),
+        zoom: map.getZoom(),
         features,
       }
     },
-  }), [lockAndBake, drawAnnotations])
+  }), [lockAndBake, drawAnnotations, refreshDrawn, refreshTony])
 
   return { api }
 }

@@ -7,29 +7,15 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-const WildLogicApp = dynamic(
-  () => import('@/components/wildlogic/WildLogicAppV2'),
+const BuckGridProPage = dynamic(
+  () => import('@/components/buckgrid/BuckGridProPage'),
   {
     ssr: false,
     loading: () => (
-      <div className="fixed inset-0 bg-ink-800 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <svg
-            viewBox="0 0 40 40"
-            className="w-11 h-11 text-moss-500"
-            fill="none"
-            aria-label="WildLogic"
-          >
-            <path
-              d="M20 36 L20 20 M20 20 L11 9 M20 20 L29 9 M11 9 L9 5 M11 9 L15 7 M29 9 L31 5 M29 9 L25 7"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <circle cx="20" cy="36" r="2" fill="currentColor" opacity="0.5" />
-          </svg>
-          <span className="font-mono text-xs tracking-[0.3em] text-moss-600 uppercase animate-pulse">
+      <div style={{ position: 'fixed', inset: 0, background: '#1E2122', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: '120px', width: 'auto', objectFit: 'contain' }} />
+          <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '11px', letterSpacing: '0.3em', color: '#6B7A57', textTransform: 'uppercase', animation: 'pulse 1.5s infinite' }}>
             Loading BuckGrid Pro
           </span>
         </div>
@@ -38,6 +24,6 @@ const WildLogicApp = dynamic(
   }
 )
 
-export default function WildLogicPage() {
-  return <WildLogicApp />
+export default function BuckGridPage() {
+  return <BuckGridProPage />
 }

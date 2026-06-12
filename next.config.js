@@ -10,10 +10,11 @@ const securityHeaders = [
     value: [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+      "worker-src 'self' blob:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://services.arcgisonline.com https://*.arcgisonline.com https://*.tile.openstreetmap.org",
-      "connect-src 'self' https://api.open-meteo.com https://overpass-api.de https://nominatim.openstreetmap.org https://api.anthropic.com https://api.openai.com https://integrate.api.nvidia.com https://generativelanguage.googleapis.com https://services.arcgisonline.com https://epqs.nationalmap.gov https://nassgeodata.gmu.edu https://www.fws.gov",
+      "img-src 'self' data: blob: https://services.arcgisonline.com https://*.arcgisonline.com https://*.tile.openstreetmap.org https://s3.amazonaws.com",
+      "connect-src 'self' https://api.open-meteo.com https://overpass-api.de https://nominatim.openstreetmap.org https://api.anthropic.com https://api.openai.com https://integrate.api.nvidia.com https://generativelanguage.googleapis.com https://services.arcgisonline.com https://epqs.nationalmap.gov https://nassgeodata.gmu.edu https://www.fws.gov https://s3.amazonaws.com",
       "frame-ancestors 'self'",
     ].join('; ')
   },
