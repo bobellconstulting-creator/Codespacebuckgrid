@@ -41,7 +41,7 @@ const MAX_FEATURES = 50
 const ESRI_TIMEOUT_MS = 12000
 const HAIKU_TIMEOUT_MS = 25000
 const ANTHROPIC_TIMEOUT_MS = 50000
-const GEMINI_TIMEOUT_MS = 55000
+const GEMINI_TIMEOUT_MS = 20000 // fail fast — the deterministic engine guarantees output, so don't make the user wait a minute for a slow model
 const OPENAI_TIMEOUT_MS = 25000
 const OLLAMA_TIMEOUT_MS = 45000
 // Global deadline — ensures we always respond before Vercel's 120s hard kill
@@ -912,6 +912,47 @@ function deterministicFallback(placement: PlacementResult): {
   }
 }
 
+// ─── Frontend annotation contract ─────────────────────────────────────────────
+// TonyChat draws `data.annotations` (geojson Feature + label/why/confidence).
+// Convert grounded zones/stands into that shape so every response renders.
+const ANN_TYPE_FOR_ZONE: Record<string, string> = {
+  food_plot: 'food_plot', kill_plot: 'food_plot', bedding: 'bedding',
+  stand_site: 'stand', staging_area: 'staging_area', sanctuary: 'sanctuary',
+  access_route: 'access_trail', water: 'water',
+}
+
+function confidenceToNumber(c?: ConfidenceLevel): number {
+  return c === 'high' ? 85 : c === 'medium' ? 60 : 35
+}
+
+function toAnnotations(zones: TonyZone[], stands: StandSite[]): Array<Record<string, unknown>> {
+  const anns: Array<Record<string, unknown>> = []
+  let priority = 1
+  for (const s of stands) {
+    if (!s.geometry) continue
+    anns.push({
+      type: 'stand',
+      label: s.name,
+      why: s.description,
+      confidence: typeof s.rating === 'number' ? Math.max(0, Math.min(100, s.rating * 10)) : 70,
+      priority: priority++,
+      geojson: { type: 'Feature', properties: {}, geometry: s.geometry },
+    })
+  }
+  for (const z of zones) {
+    if (!z.geometry) continue
+    anns.push({
+      type: ANN_TYPE_FOR_ZONE[z.type] ?? z.type,
+      label: z.name,
+      why: z.description,
+      confidence: confidenceToNumber(z.confidence),
+      priority: priority++,
+      geojson: { type: 'Feature', properties: {}, geometry: z.geometry },
+    })
+  }
+  return anns
+}
+
 export async function POST(req: NextRequest) {
   // Global deadline — ensures we always respond before Vercel's hard kill
   const globalAbort = new AbortController()
@@ -944,7 +985,11 @@ export async function POST(req: NextRequest) {
     // Validate and sanitize inputs
     const rawMsg = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE_LENGTH).replace(/["""]/g, "'") : ''
     if (!rawMsg) return NextResponse.json({ error: 'Message required' }, { status: 400 })
-    const trimmedMsg = rawMsg.length < 20
+    // Only expand terse first messages into a full-analysis request. Mid-conversation,
+    // short replies ("ok do it", "yes") must stay as-is — rewriting them forced Tony
+    // to restart the whole analysis script every turn and repeat himself.
+    const hasHistory = Array.isArray(chatHistory) && chatHistory.length > 0
+    const trimmedMsg = rawMsg.length < 20 && !hasHistory
       ? `Analyze this hunting property and ${rawMsg}. Recommend stand locations, food plots, and bedding areas based on what you see.`
       : rawMsg
     if (!isValidBounds(bounds)) return NextResponse.json({ error: 'Valid map bounds required' }, { status: 400 })
@@ -1302,6 +1347,7 @@ export async function POST(req: NextRequest) {
           reply: fallback.message,
           zones: fallback.zones,
           stand_sites: fallback.stands,
+          annotations: toAnnotations(fallback.zones, fallback.stands),
           grounded: true,
           engineOnly: true,
         })
@@ -1336,6 +1382,7 @@ export async function POST(req: NextRequest) {
         reply: tonyMessage,
         zones: groundedZones,
         stand_sites: groundedStands,
+        annotations: toAnnotations(groundedZones, groundedStands),
         grounded: true,
       })
     }
