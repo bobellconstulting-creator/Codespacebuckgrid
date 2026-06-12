@@ -3,6 +3,7 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import ShareReportButton from '../report/ShareReportButton'
 import type { ReportZone } from '../report/reportRenderer'
+import TonightsSit, { type SitInputs } from '../wind/TonightsSit'
 
 export type TonyChatHandle = {
   addTonyMessage: (text: string) => void
@@ -263,6 +264,39 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
       return plain.length > 0 ? plain.slice(0, 420) : undefined
     }, [reportSource])
 
+    const [windLabel, setWindLabel] = useState<string | null>(null)
+
+    // Stands + bedding cover for the wind call: Tony's annotations (centroids
+    // already computed) merged with hand-drawn stand/bedding layers.
+    const getSitInputs = useCallback((): SitInputs | null => {
+      const mapData = getBoundsAndFeatures()
+      if (!mapData) return null
+      const stands: SitInputs['stands'] = []
+      const cover: SitInputs['cover'] = []
+      const COVER_TYPES = new Set(['bedding', 'sanctuary', 'tall_standing_cover'])
+      for (const a of reportSource?.annotations ?? []) {
+        if (!a.centroid) continue
+        const [lat, lng] = a.centroid
+        if (a.type === 'stand') stands.push({ name: a.label || 'Tony stand', lat, lng })
+        else if (COVER_TYPES.has(a.type)) cover.push({ name: a.label || a.type.replace(/_/g, ' '), lat, lng })
+      }
+      let drawnN = 0
+      for (const f of mapData.features) {
+        const t = f?.properties?.layerType
+        if (t !== 'stand' && t !== 'bedding') continue
+        const c = computeCentroid(f)
+        if (!c) continue
+        if (t === 'stand') stands.push({ name: `Drawn stand ${++drawnN}`, lat: c[0], lng: c[1] })
+        else cover.push({ name: 'Drawn bedding', lat: c[0], lng: c[1] })
+      }
+      const { bounds } = mapData
+      return {
+        stands,
+        cover,
+        center: { lat: (bounds.north + bounds.south) / 2, lng: (bounds.east + bounds.west) / 2 },
+      }
+    }, [getBoundsAndFeatures, reportSource])
+
     const openSheet = useCallback(() => {
       setIsOpen(true)
       setHasUnread(false)
@@ -426,6 +460,9 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           )}
         </div>
 
+        {/* Tonight's sit — live wind vs Tony's stands, pure geometry */}
+        <TonightsSit getInputs={getSitInputs} onWind={setWindLabel} />
+
         {/* Share / Export — branded PNG + PDF field report */}
         {getMapElement && (
           <ShareReportButton
@@ -435,6 +472,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             season={seasonBanner?.label}
             zones={reportZones}
             fieldNotes={reportNotes}
+            wind={windLabel ?? undefined}
           />
         )}
 

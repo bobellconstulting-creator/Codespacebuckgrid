@@ -23,6 +23,7 @@ export type ShareReportButtonProps = {
   season?: string
   zones: ReportZone[]
   fieldNotes?: string
+  wind?: string
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -67,6 +68,7 @@ export default function ShareReportButton({
   season,
   zones,
   fieldNotes,
+  wind,
 }: ShareReportButtonProps) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState<'png' | 'pdf' | null>(null)
@@ -92,6 +94,7 @@ export default function ShareReportButton({
           dateLabel: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
           zones,
           fieldNotes,
+          wind,
         }
         const assets: ReportAssets = { mapImage, logo }
         const slug =

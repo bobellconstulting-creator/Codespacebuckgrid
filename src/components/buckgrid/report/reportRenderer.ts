@@ -17,6 +17,7 @@ export type ReportData = {
   dateLabel: string
   zones: ReportZone[]
   fieldNotes?: string
+  wind?: string
 }
 
 export type ReportAssets = {
@@ -167,6 +168,7 @@ function headerBlock(data: ReportData, assets: ReportAssets, w: number): Block {
       const meta: string[] = []
       if (data.acres > 0) meta.push(`${data.acres.toLocaleString()} ACRES`)
       if (data.season) meta.push(data.season.toUpperCase())
+      if (data.wind) meta.push(`WIND ${data.wind.toUpperCase()}`)
       meta.push(`${data.zones.length} TONY CALL${data.zones.length === 1 ? '' : 'S'}`)
       ctx.fillStyle = MOSS
       ctx.font = `13px ${MONO}`
