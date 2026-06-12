@@ -5,7 +5,7 @@
 // after one cached /api/wind call; re-rank is free.
 
 import React, { useCallback, useState } from 'react'
-import { rankStands, type CoverZone, type SitCall, type SitTarget, type WindInfo } from './windCall'
+import { bestWindows, rankStands, type CoverZone, type HuntWindow, type HourlyWind, type SitCall, type SitTarget, type WindInfo } from './windCall'
 
 export type SitInputs = {
   stands: SitTarget[]
@@ -22,7 +22,7 @@ type State =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; wind: WindInfo; calls: SitCall[] }
+  | { kind: 'ready'; wind: WindInfo; calls: SitCall[]; windows: HuntWindow[] }
 
 const MONO = "'Share Tech Mono', monospace"
 const DISPLAY = "'Teko', 'Oswald', sans-serif"
@@ -42,16 +42,19 @@ export default function TonightsSit({ getInputs, onWind }: Props) {
       const timer = setTimeout(() => ctrl.abort(), 10_000)
       let res: Response
       try {
-        res = await fetch(`/api/wind?lat=${inputs.center.lat.toFixed(4)}&lng=${inputs.center.lng.toFixed(4)}`, {
-          signal: ctrl.signal,
-        })
+        res = await fetch(
+          `/api/wind?lat=${inputs.center.lat.toFixed(4)}&lng=${inputs.center.lng.toFixed(4)}&hours=72`,
+          { signal: ctrl.signal }
+        )
       } finally {
         clearTimeout(timer)
       }
       if (!res.ok) throw new Error('bad status')
-      const wind = (await res.json()) as WindInfo
+      const payload = (await res.json()) as WindInfo & { hourly?: HourlyWind[] }
+      const wind: WindInfo = { speedMph: payload.speedMph, directionDeg: payload.directionDeg, compass: payload.compass }
       const calls = rankStands(inputs.stands, inputs.cover, wind)
-      setState({ kind: 'ready', wind, calls })
+      const windows = bestWindows(inputs.stands, inputs.cover, payload.hourly ?? [])
+      setState({ kind: 'ready', wind, calls, windows })
       onWind?.(`${wind.compass} ${wind.speedMph} MPH`)
     } catch {
       setState({ kind: 'error', message: "Couldn't read the wind. Try again." })
@@ -113,6 +116,29 @@ export default function TonightsSit({ getInputs, onWind }: Props) {
             </div>
             <div style={{ fontSize: '11px', color: '#9A9588', lineHeight: 1.4 }}>{hero.reason}</div>
           </div>
+          {state.windows.length > 0 && (
+            <>
+              <div style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.12em', color: '#6B7A57', marginTop: '3px' }}>
+                NEXT 72 HRS — BEST WINDOWS
+              </div>
+              {state.windows.map((w, i) => (
+                <div
+                  key={`${w.dayLabel}-${w.period}-${i}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: '7px', background: '#1E2122', border: '1px solid rgba(107,122,87,0.18)', borderLeft: `2px solid ${w.score >= 60 ? '#6B7A57' : '#facc15'}`, padding: '4px 8px' }}
+                >
+                  <span style={{ fontFamily: MONO, fontSize: '9px', color: '#D8D3C5', minWidth: '78px' }}>
+                    {w.dayLabel} {w.period}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#9A9588', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.standName}</span>
+                  <span style={{ fontFamily: MONO, fontSize: '9px', color: '#6B7A57' }}>{w.windLabel}</span>
+                  <span style={{ fontFamily: MONO, fontSize: '9px', color: '#8A8578', minWidth: '22px', textAlign: 'right' }}>{w.score}</span>
+                </div>
+              ))}
+              <div style={{ fontFamily: MONO, fontSize: '9px', letterSpacing: '0.12em', color: '#6B7A57', marginTop: '3px' }}>
+                RIGHT NOW
+              </div>
+            </>
+          )}
           {state.calls.slice(0, 4).map((c, i) => (
             <div
               key={`${c.name}-${i}`}

@@ -55,6 +55,59 @@ function angleDiff(a: number, b: number): number {
 const CONE_DEG = 55
 const RANGE_YDS = 900
 
+export type HourlyWind = { time: string; speedMph: number; directionDeg: number }
+
+export type HuntWindow = {
+  dayLabel: string
+  period: 'AM' | 'PM'
+  standName: string
+  score: number
+  windLabel: string
+}
+
+// Dawn and dusk blocks over the forecast — the hours deer actually move.
+// Each block is scored by ranking every stand against the block's wind;
+// the best three windows across 72 hours become "when to hunt".
+export function bestWindows(stands: SitTarget[], cover: CoverZone[], hourly: HourlyWind[]): HuntWindow[] {
+  if (stands.length === 0 || hourly.length === 0) return []
+  const blocks = new Map<string, HourlyWind[]>()
+  for (const h of hourly) {
+    if (h.time.length < 13) continue
+    const hr = parseInt(h.time.slice(11, 13))
+    const period = hr >= 5 && hr <= 9 ? 'AM' : hr >= 15 && hr <= 19 ? 'PM' : null
+    if (!period) continue
+    const key = `${h.time.slice(0, 10)}|${period}`
+    const list = blocks.get(key)
+    if (list) list.push(h)
+    else blocks.set(key, [h])
+  }
+  const today = hourly[0].time.slice(0, 10)
+  const windows: HuntWindow[] = []
+  blocks.forEach((hrs, key) => {
+    const mid = hrs[Math.floor(hrs.length / 2)]
+    const wind: WindInfo = { speedMph: mid.speedMph, directionDeg: mid.directionDeg, compass: compassLabel(mid.directionDeg) }
+    const best = rankStands(stands, cover, wind)[0]
+    const [day, period] = key.split('|')
+    windows.push({
+      dayLabel: dayLabel(day, today),
+      period: period as 'AM' | 'PM',
+      standName: best.name,
+      score: best.score,
+      windLabel: `${wind.compass} ${wind.speedMph}`,
+    })
+  })
+  return windows.sort((a, b) => b.score - a.score).slice(0, 3)
+}
+
+function dayLabel(day: string, today: string): string {
+  if (day === today) return 'Today'
+  const d = new Date(`${day}T12:00:00`)
+  const t = new Date(`${today}T12:00:00`)
+  const diff = Math.round((d.getTime() - t.getTime()) / 86400000)
+  if (diff === 1) return 'Tomorrow'
+  return d.toLocaleDateString('en-US', { weekday: 'long' })
+}
+
 export function rankStands(stands: SitTarget[], cover: CoverZone[], wind: WindInfo): SitCall[] {
   const scentTo = (wind.directionDeg + 180) % 360
   return stands
