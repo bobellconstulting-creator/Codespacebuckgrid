@@ -5,6 +5,32 @@ import { fetchSpatialData } from '../../../lib/spatial'
 import { fetchNlcdPoint } from '../../../lib/nlcd'
 import type { PlacementCandidate, PlacementResult } from '../../../lib/placement/engine'
 import { generatePlacements, candidateGeometry } from '../../../lib/placement/engine'
+import { parseTonyV2 } from '../../../lib/tonyJson'
+import { get as httpsGet } from 'node:https'
+
+// Raw HTTPS download — bypasses Next's patched fetch, whose internal response
+// clone deadlocks on binary bodies in dev and stalls the Esri image pull.
+function fetchBinary(url: string, timeoutMs: number): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const req = httpsGet(url, res => {
+      if (res.statusCode !== 200) {
+        res.resume()
+        reject(new Error(`HTTP ${res.statusCode}`))
+        return
+      }
+      const chunks: Buffer[] = []
+      res.on('data', c => chunks.push(c))
+      res.on('end', () => resolve(Buffer.concat(chunks)))
+      res.on('error', reject)
+    })
+    req.setTimeout(timeoutMs, () => {
+      const err = new Error('TimeoutError')
+      err.name = 'TimeoutError'
+      req.destroy(err)
+    })
+    req.on('error', reject)
+  })
+}
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -606,60 +632,6 @@ Exact JSON format:
 Return 4-8 zones and 2-4 stand_sites ranked by seasonal priority. A complete plan includes: at least 1 sanctuary zone, 1-2 staging_area zones, food plots on open ground only, and stand_sites with wind direction specified.`}`
 }
 
-function tryCloseJson(candidate: string): string | null {
-  const closers = [']}', '}]}', ']}}}', '}}']
-  for (const suffix of closers) {
-    let pos = candidate.length - 1
-    while (pos > 0) {
-      const lastBrace = candidate.lastIndexOf('}', pos)
-      if (lastBrace < 0) break
-      const attempt = candidate.slice(0, lastBrace + 1) + suffix.slice(1)
-      try { JSON.parse(attempt); return attempt } catch {}
-      try { JSON.parse(candidate.slice(0, lastBrace + 1)); return candidate.slice(0, lastBrace + 1) } catch {}
-      pos = lastBrace - 1
-      if (pos < candidate.length * 0.5) break
-    }
-  }
-  return null
-}
-
-function extractJsonFromText(text: string): string {
-  // Try markdown fences first
-  const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenceMatch) {
-    const candidate = fenceMatch[1].trim()
-    try { JSON.parse(candidate); return candidate } catch {}
-  }
-  // Try raw JSON object (exact match)
-  const objMatch = text.match(/\{[\s\S]*\}/)
-  if (objMatch) {
-    const candidate = objMatch[0]
-    try { JSON.parse(candidate); return candidate } catch {
-      const salvaged = tryCloseJson(candidate)
-      if (salvaged) return salvaged
-    }
-  }
-  // Try raw JSON array
-  const arrMatch = text.match(/\[[\s\S]*\]/)
-  if (arrMatch) {
-    const candidate = arrMatch[0]
-    try { JSON.parse(candidate); return candidate } catch {
-      const lastBracket = candidate.lastIndexOf(']')
-      if (lastBracket > 0) {
-        const truncated = candidate.slice(0, lastBracket + 1)
-        try { JSON.parse(truncated); return truncated } catch {}
-      }
-    }
-  }
-  // Last resort: salvage truncated object
-  const firstBrace = text.indexOf('{')
-  if (firstBrace >= 0) {
-    const salvaged = tryCloseJson(text.slice(firstBrace))
-    if (salvaged) return salvaged
-  }
-  return text.trim()
-}
-
 // ─── Validate and normalize a relative_position value ────────────────────────
 const VALID_POSITIONS: RelativePosition[] = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'center']
 function normalizePosition(val: unknown): RelativePosition {
@@ -698,66 +670,10 @@ function normalizeSize(val: unknown): RelativeSize {
 }
 
 // ─── Parse and sanitize Tony v2 response → typed zones + stand_sites ─────────
+// Delegates to the hardened scanner in lib/tonyJson (markdown fences, prose
+// wrappers, raw newlines in strings, trailing commas, mid-token truncation).
 function parseV2Response(rawText: string): { message: string; zones: TonyZone[]; stand_sites: StandSite[] } {
-  let message = ''
-  let zones: TonyZone[] = []
-  let stand_sites: StandSite[] = []
-
-  try {
-    const jsonStr = extractJsonFromText(rawText)
-    const parsed = JSON.parse(jsonStr)
-
-    message = typeof parsed.message === 'string' ? parsed.message : typeof parsed.reply === 'string' ? parsed.reply : ''
-
-    // Parse zones
-    if (Array.isArray(parsed.zones)) {
-      zones = parsed.zones
-        .filter((z: any) => z && typeof z === 'object')
-        .map((z: any, i: number): TonyZone => ({
-          id: typeof z.id === 'string' ? z.id : `z${i + 1}`,
-          name: typeof z.name === 'string' ? z.name.slice(0, 100) : `Zone ${i + 1}`,
-          type: normalizeZoneType(z.type),
-          relative_position: normalizePosition(z.relative_position),
-          relative_size: normalizeSize(z.relative_size),
-          description: typeof z.description === 'string' ? z.description.slice(0, 300) : '',
-          confidence: normalizeConfidence(z.confidence),
-          season: normalizeSeason(z.season),
-          candidate_id: typeof z.candidate_id === 'string' ? z.candidate_id : undefined,
-        }))
-        .slice(0, 12)
-    }
-
-    // Parse stand_sites
-    if (Array.isArray(parsed.stand_sites)) {
-      stand_sites = parsed.stand_sites
-        .filter((s: any) => s && typeof s === 'object')
-        .map((s: any, i: number): StandSite => ({
-          id: typeof s.id === 'string' ? s.id : `s${i + 1}`,
-          name: typeof s.name === 'string' ? s.name.slice(0, 100) : `Stand ${i + 1}`,
-          relative_position: normalizePosition(s.relative_position),
-          wind_direction: typeof s.wind_direction === 'string' ? s.wind_direction.slice(0, 50) : '',
-          rating: typeof s.rating === 'number' ? Math.max(1, Math.min(10, Math.round(s.rating))) : 7,
-          description: typeof s.description === 'string' ? s.description.slice(0, 300) : '',
-          candidate_id: typeof s.candidate_id === 'string' ? s.candidate_id : undefined,
-        }))
-        .slice(0, 6)
-    }
-
-    // Fallback: if old v1 format with features array, extract a message at minimum
-    if (!message && typeof parsed.reply === 'string') {
-      message = parsed.reply
-    }
-    if (!message && Array.isArray(parsed.features) && parsed.features.length > 0) {
-      message = `Identified ${parsed.features.length} habitat features on the map.`
-    }
-
-  } catch {
-    // Raw text fallback — Tony returned prose, not JSON
-    message = rawText.trim() || 'No response from Tony.'
-  }
-
-  if (!message) message = 'No response from Tony.'
-
+  const { message, zones, stand_sites } = parseTonyV2(rawText)
   return { message, zones, stand_sites }
 }
 
@@ -1071,15 +987,15 @@ export async function POST(req: NextRequest) {
     const SPATIAL_TIMEOUT_MS = 12_000
 
     const [imgResult, spatialResult] = await Promise.allSettled([
-      fetch(esriUrl, { signal: AbortSignal.any([AbortSignal.timeout(ESRI_TIMEOUT_MS), globalAbort.signal]) }),
+      fetchBinary(esriUrl, ESRI_TIMEOUT_MS),
       Promise.race([
         fetchSpatialData(effBounds),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('SpatialTimeout')), SPATIAL_TIMEOUT_MS)),
       ]).catch((): SpatialContext | undefined => undefined),
     ])
 
-    if (imgResult.status === 'rejected' || !imgResult.value.ok) {
-      const isTimeout = imgResult.status === 'rejected' && imgResult.reason instanceof Error && imgResult.reason.name === 'TimeoutError'
+    if (imgResult.status === 'rejected') {
+      const isTimeout = imgResult.reason instanceof Error && imgResult.reason.name === 'TimeoutError'
       return NextResponse.json({
         error: 'Map image unavailable',
         reply: isTimeout
@@ -1088,15 +1004,7 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
 
-    let imgBase64: string
-    try {
-      imgBase64 = Buffer.from(await imgResult.value.arrayBuffer()).toString('base64')
-    } catch {
-      return NextResponse.json({
-        error: 'Map image unavailable',
-        reply: 'Satellite image timed out while downloading. Move the map slightly and try again.',
-      }, { status: 500 })
-    }
+    const imgBase64 = imgResult.value.toString('base64')
 
     const resolvedSpatial = spatialResult.status === 'fulfilled' ? spatialResult.value : undefined
 
