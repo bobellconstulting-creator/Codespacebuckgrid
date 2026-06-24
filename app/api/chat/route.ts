@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import type { OsmFeature, SpatialContext } from '../../../lib/spatial'
 import { fetchSpatialData } from '../../../lib/spatial'
 import { fetchNlcdPoint } from '../../../lib/nlcd'
-import type { PlacementCandidate, PlacementResult } from '../../../lib/placement/engine'
+import type { PlacementCandidate, PlacementResult, PlacementObservation } from '../../../lib/placement/engine'
 import { generatePlacements, candidateGeometry } from '../../../lib/placement/engine'
 import { parseTonyV2 } from '../../../lib/tonyJson'
 import { get as httpsGet } from 'node:https'
@@ -1056,6 +1056,35 @@ export async function POST(req: NextRequest) {
     // ── Deterministic placement engine — the source of truth for WHERE ───────
     // Runs whenever a real boundary polygon exists. Tony then ranks/explains
     // these candidates instead of inventing positions.
+    // Extract the hunter's drawn features as confirmed observations — ground
+    // truth the engine anchors the plan to (real bedding, food, water, stands).
+    const FOOD_LAYERS = new Set(['clover', 'brassicas', 'corn', 'soybeans', 'milo', 'egyptian', 'switchgrass', 'food_plot', 'kill_plot'])
+    const observations: PlacementObservation[] = []
+    for (const f of safeFeatures as any[]) {
+      const lt = f?.properties?.layerType ?? f?.type
+      if (!lt || lt === 'boundary' || lt === 'nav') continue
+      let type: PlacementObservation['type'] | null = null
+      if (lt === 'bedding') type = 'bedding'
+      else if (lt === 'stand') type = 'stand_site'
+      else if (lt === 'water') type = 'water'
+      else if (FOOD_LAYERS.has(lt)) type = 'food_plot'
+      if (!type) continue // focus/scrape/mineral/corridor: Tony still sees them via features
+      const g = f?.geometry
+      let center: [number, number] | null = null
+      let ring: [number, number][] | undefined
+      if (g?.type === 'Polygon' && Array.isArray(g.coordinates?.[0]) && g.coordinates[0].length >= 4) {
+        ring = g.coordinates[0] as [number, number][]
+        let sx = 0, sy = 0
+        for (const [x, y] of ring) { sx += x; sy += y }
+        center = [sx / ring.length, sy / ring.length]
+      } else if (g?.type === 'Point' && Array.isArray(g.coordinates)) {
+        center = g.coordinates as [number, number]
+      }
+      if (center && typeof center[0] === 'number' && typeof center[1] === 'number') {
+        observations.push({ type, center, ring })
+      }
+    }
+
     let placement: PlacementResult | null = null
     if (boundaryRing && boundaryRing.length >= 4 && resolvedSpatial) {
       try {
@@ -1063,6 +1092,7 @@ export async function POST(req: NextRequest) {
           boundaryRing: boundaryRing as [number, number][],
           spatial: resolvedSpatial,
           season: typeof season === 'string' ? season : '',
+          observations,
         })
         if (placement) {
           console.log(`[chat] placement engine: ${placement.candidates.length} candidates, grid ${placement.gridInfo.rows}x${placement.gridInfo.cols} (${placement.gridInfo.cellM}m cells, ~${placement.gridInfo.acres} ac)`)
@@ -1098,11 +1128,21 @@ export async function POST(req: NextRequest) {
       const paidFallbackEnabled = process.env.ENABLE_PAID_FALLBACK === '1'
       let geminiRateLimited = false
 
+      const geminiContents = [{ parts: [
+        { inline_data: { mime_type: 'image/png', data: imgBase64 } },
+        { text: tonyPrompt }
+      ]}]
+      // 2.5 Flash runs "thinking" by default, which pushed this heavy vision +
+      // JSON request to ~23s — past GEMINI_TIMEOUT_MS — so it silently fell to
+      // the (rate-limited) 2.0 fallback. Disabling thinking drops it to ~7s.
+      // 2.5 only ranks/explains the engine's candidates; the deterministic
+      // engine is the source of truth, so extended reasoning isn't needed here.
+      const geminiBody25 = JSON.stringify({
+        contents: geminiContents,
+        generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
+      })
       const geminiBody = JSON.stringify({
-        contents: [{ parts: [
-          { inline_data: { mime_type: 'image/png', data: imgBase64 } },
-          { text: tonyPrompt }
-        ]}],
+        contents: geminiContents,
         generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json' },
       })
 
@@ -1113,7 +1153,7 @@ export async function POST(req: NextRequest) {
             fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'x-goog-api-key': googleKey },
-              body: geminiBody,
+              body: geminiBody25,
             }),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)),
           ])

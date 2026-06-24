@@ -1,5 +1,7 @@
 // Shared spatial logic — used by /api/spatial and /api/chat server-side
 import { fetchSoilData, summarizeSoilForTony, type SoilMapUnit } from './soil-sda'
+import { fetchElevationGridDEM } from './elevation-dem'
+import { fetchCanopyGrid, type CanopyGrid } from './satellite-cover'
 import { fetchNlcdGrid, summarizeNlcdForTony, type NlcdSample } from './nlcd'
 import { fetchWindRose, type WindRoseSummary } from './wind-rose'
 import { fetchDeerPressure, type DeerPressureSummary } from './deer-pressure'
@@ -57,10 +59,12 @@ export interface SpatialContext {
   // Phase 5 enrichments
   windRose?: WindRoseSummary
   deerPressure?: DeerPressureSummary
+  // Sub-meter canopy/open grid from satellite imagery (fine cover refinement)
+  canopyGrid?: CanopyGrid
 }
 
-// Re-export new types so route.ts can use them without direct imports
-export type { WindRoseSummary, DeerPressureSummary }
+// Re-export new types so route.ts + engine can use them without direct imports
+export type { WindRoseSummary, DeerPressureSummary, CanopyGrid }
 
 export function isValidBounds(b: unknown): b is Bounds {
   if (!b || typeof b !== 'object') return false
@@ -180,10 +184,15 @@ const GRID_N = 16   // 256 points — LiDAR-derived 10m resolution via USGS EPQS
 const GRID_N_FALLBACK = 8  // Open-Meteo fallback if EPQS times out
 
 async function fetchElevationGrid(bounds: Bounds): Promise<ElevationSample[]> {
-  // Primary: USGS EPQS 3DEP (LiDAR-derived, ~10m, US only, free)
+  // Primary: USGS 3DEP batched getSamples — 1,936-point grid in ONE request
+  // (1m LiDAR-derived, US, free). Fast + dense, so the placement engine
+  // reliably runs with sharp terrain instead of timing out.
+  const dem = await fetchElevationGridDEM(bounds).catch(() => [] as ElevationSample[])
+  if (dem.length >= 50) return dem
+  // Fallback 1: legacy EPQS point grid (slower, per-point queries)
   const epqs = await fetchElevationGridEPQS(bounds).catch(() => null)
   if (epqs && epqs.length >= 50) return epqs
-  // Fallback: Open-Meteo batch API (30m, global)
+  // Fallback 2: Open-Meteo batch API (30m, global)
   return fetchElevationGridOpenMeteo(bounds, GRID_N_FALLBACK)
 }
 
@@ -448,7 +457,7 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
   const centerLng = (bounds.east + bounds.west) / 2
 
   // Fetch all data in parallel — all enrichments are optional, fail gracefully
-  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure] = await Promise.all([
+  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure, canopyGrid] = await Promise.all([
     fetchOsmFeatures(bounds).catch((): OsmFeature[] => []),
     fetchElevationGrid(bounds).catch((): ElevationSample[] => []),
     fetchPrevailingWind(bounds).catch((): undefined => undefined),
@@ -458,6 +467,7 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
     fetchNeighboringCrops(bounds).catch((): string[] => []),
     fetchWindRose(centerLat, centerLng).catch((): WindRoseSummary | null => null),
     fetchDeerPressure(centerLat, centerLng).catch((): DeerPressureSummary | null => null),
+    fetchCanopyGrid(bounds).catch((): CanopyGrid | null => null),
   ])
 
   const { summary: elevationSummary, highGroundPoints, lowGroundPoints } = summarizeElevation(elevationSamples)
@@ -477,6 +487,7 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
     terrainDerivatives,
     windRose: windRose ?? undefined,
     deerPressure: deerPressure ?? undefined,
+    canopyGrid: canopyGrid ?? undefined,
   }
   pruneCache()
   cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS })

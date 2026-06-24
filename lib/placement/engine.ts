@@ -68,6 +68,14 @@ export interface PlacementResult {
   gridInfo: { rows: number; cols: number; cellM: number; insideCells: number; acres: number }
 }
 
+/** A confirmed ground-truth feature the hunter drew — seeded as top-priority truth. */
+export interface PlacementObservation {
+  type: 'bedding' | 'food_plot' | 'water' | 'stand_site'
+  center: LngLat
+  /** Optional drawn polygon ring [lng,lat][] (closed) */
+  ring?: LngLat[]
+}
+
 type Cover = 'water' | 'wetland' | 'forest' | 'scrub' | 'open' | 'developed' | 'unknown'
 
 interface Cell {
@@ -156,6 +164,7 @@ export function generatePlacements(opts: {
   boundaryRing: LngLat[]
   spatial: SpatialContext
   season?: string
+  observations?: PlacementObservation[]
 }): PlacementResult | null {
   const { boundaryRing, spatial } = opts
   const season = (opts.season ?? '').toLowerCase()
@@ -261,6 +270,19 @@ export function generatePlacements(opts: {
   const elevAt = buildElevationLookup(spatial.elevationSamples)
   const hasElevation = spatial.elevationSamples.length >= 9
 
+  // Sub-meter canopy refinement from satellite imagery: 1 = vegetation/canopy,
+  // 0 = open ground, -1 = no data / outside grid.
+  const cg = spatial.canopyGrid
+  const sampleCanopy = (pt: LngLat): number => {
+    if (!cg || cg.east === cg.west || cg.north === cg.south) return -1
+    if (pt[0] < cg.west || pt[0] > cg.east || pt[1] < cg.south || pt[1] > cg.north) return -1
+    const cFrac = (pt[0] - cg.west) / (cg.east - cg.west)
+    const rFrac = (pt[1] - cg.south) / (cg.north - cg.south) // row 0 = south
+    const c = Math.min(cg.cols - 1, Math.max(0, Math.round(cFrac * (cg.cols - 1))))
+    const r = Math.min(cg.rows - 1, Math.max(0, Math.round(rFrac * (cg.rows - 1))))
+    return cg.canopy[r * cg.cols + c] ? 1 : 0
+  }
+
   // ── Build cells ─────────────────────────────────────────────────────────────
   const cells: Cell[] = []
   const cellAt = (r: number, c: number): Cell | null =>
@@ -291,11 +313,13 @@ export function generatePlacements(opts: {
         // Cover from OSM polygons (priority: water > wetland > forest > scrub > farm)
         // bbox test first — full point-in-ring only when the bbox contains the cell
         const hit = (polys: Boxed[]) => polys.some(p => inBox(center, p.box) && pointInRing(center, p.pts))
+        let osmConfirmed = true
         if (hit(waterPolys)) cover = 'water'
         else if (hit(wetlandPolys)) cover = 'wetland'
         else if (hit(forestPolys)) cover = 'forest'
         else if (hit(scrubPolys)) cover = 'scrub'
         else if (hit(farmPolys)) cover = 'open'
+        else osmConfirmed = false
 
         // NLCD fallback (nearest sample)
         if (cover === 'unknown' && nlcdSamples.length > 0) {
@@ -309,6 +333,17 @@ export function generatePlacements(opts: {
             }
           }
           if (bestCode > 0) cover = nlcdToCover(bestCode)
+        }
+
+        // Sub-meter canopy refinement — only where coarse layers are weak.
+        // Never overrides OSM-confirmed cover, water, or wetland.
+        if (!osmConfirmed && cover !== 'water' && cover !== 'wetland') {
+          const cv = sampleCanopy(center)
+          if (cv === 1 && (cover === 'unknown' || cover === 'open')) {
+            cover = 'forest' // satellite shows canopy the coarse layer missed
+          } else if (cv === 0 && (cover === 'unknown' || cover === 'forest')) {
+            cover = 'open' // real opening inside NLCD-classed timber (food-plot ground)
+          }
         }
 
         // Distance loops: skip any feature whose bbox is already further than
@@ -583,6 +618,44 @@ export function generatePlacements(opts: {
         compass: compass(p.cell.center), factors,
       })
     })
+  }
+
+  // ── USER OBSERVATIONS: confirmed ground truth, seeded as top candidates ──────
+  // The hunter's drawn bedding/food/water/stands become FIXED inputs, so every
+  // downstream decision (stands downwind of bedding, staging on the bed→food
+  // line, access avoiding beds) is computed from real truth, not inference.
+  const ringAcresM = (ring: LngLat[]): number => {
+    let a = 0
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      a += ring[j][0] * scale.mLng * (ring[i][1] * scale.mLat) - ring[i][0] * scale.mLng * (ring[j][1] * scale.mLat)
+    }
+    return Math.abs(a / 2) / 4046.86
+  }
+  let obsN = 0
+  for (const obs of opts.observations ?? []) {
+    if (!obs.center || !pointInRing(obs.center, boundaryRing)) continue
+    const ring = obs.ring && obs.ring.length >= 4 ? obs.ring : null
+    const polygon = ring ? [ring.map(p => [p[0], p[1]])] : undefined
+    const acres = ring ? Math.round(ringAcresM(ring) * 10) / 10 : undefined
+    const prefix = obs.type === 'bedding' ? 'ubd' : obs.type === 'food_plot' ? 'ufp' : obs.type === 'water' ? 'uwt' : 'ust'
+    candidates.push({
+      id: `${prefix}${++obsN}`, type: obs.type,
+      center: { lat: obs.center[1], lng: obs.center[0] },
+      polygon, acres, score: 95, compass: compass(obs.center),
+      factors: ['confirmed by you on the ground — the plan is anchored to this'],
+    })
+  }
+  // Drop derived bedding/food guesses within 60 m of a same-type confirmed observation
+  if (obsN > 0) {
+    const confirmed = candidates.filter(c => c.id.startsWith('u'))
+    for (let i = candidates.length - 1; i >= 0; i--) {
+      const c = candidates[i]
+      if (c.id.startsWith('u') || (c.type !== 'bedding' && c.type !== 'food_plot')) continue
+      if (confirmed.some(cf => cf.type === c.type &&
+        haversineM([c.center.lng, c.center.lat], [cf.center.lng, cf.center.lat]) < 60)) {
+        candidates.splice(i, 1)
+      }
+    }
   }
 
   const beddingCandidates = candidates.filter(cd => cd.type === 'bedding')
