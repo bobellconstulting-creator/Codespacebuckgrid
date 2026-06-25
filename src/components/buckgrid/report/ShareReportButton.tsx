@@ -60,6 +60,11 @@ async function captureMap(el: HTMLElement): Promise<HTMLCanvasElement> {
 
 const MONO = "'Share Tech Mono', monospace"
 const DISPLAY = "'Teko', 'Oswald', sans-serif"
+const GOLD = '#C9A227'
+const GOLD_HI = '#E0B43A'
+const BONE = '#E8E4D8'
+const HAIRLINE = 'rgba(255,255,255,0.08)'
+const INNER_HI = 'inset 0 1px 0 rgba(255,255,255,0.07)'
 
 export default function ShareReportButton({
   getMapElement,
@@ -139,46 +144,53 @@ export default function ShareReportButton({
 
   const optionStyle = (disabled: boolean): React.CSSProperties => ({
     flex: 1,
-    minHeight: '38px',
-    background: '#1E2122',
-    border: '1px solid rgba(107,122,87,0.35)',
-    borderRadius: '2px',
-    color: '#D8D3C5',
+    minHeight: '40px',
+    background: 'rgba(10,20,14,0.55)',
+    border: `1px solid ${HAIRLINE}`,
+    borderRadius: '10px',
+    color: BONE,
     fontFamily: MONO,
     fontSize: '10px',
-    letterSpacing: '0.08em',
+    letterSpacing: '0.1em',
     textTransform: 'uppercase',
     cursor: disabled ? 'wait' : 'pointer',
     opacity: disabled ? 0.6 : 1,
-    padding: '6px 8px',
+    padding: '7px 9px',
+    boxShadow: INNER_HI,
+    backdropFilter: 'blur(18px)',
+    WebkitBackdropFilter: 'blur(18px)',
+    transition: 'background 0.3s ease, border-color 0.3s ease',
   })
 
   return (
-    <div style={{ padding: '8px 12px 0', background: '#3A4042' }}>
+    <div style={{ padding: '10px 14px 4px' }}>
       <button
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
+        className="bg-share-btn"
         style={{
           width: '100%',
-          minHeight: '40px',
-          background: open ? '#7A8A66' : '#6B7A57',
-          border: '1px solid rgba(107,122,87,0.6)',
-          borderRadius: '3px',
-          color: '#fff',
+          minHeight: '46px',
+          background: `linear-gradient(180deg, ${GOLD_HI}, ${GOLD})`,
+          border: '1px solid rgba(255,235,170,0.5)',
+          borderRadius: '12px',
+          color: '#1B1405',
           fontFamily: DISPLAY,
-          fontWeight: 700,
-          fontSize: '14px',
-          letterSpacing: '0.12em',
+          fontWeight: 600,
+          fontSize: '16px',
+          letterSpacing: '0.14em',
           textTransform: 'uppercase',
           cursor: 'pointer',
-          boxShadow: '0 0 14px rgba(107,122,87,0.35)',
-          transition: 'background 0.15s ease',
+          textShadow: '0 1px 0 rgba(255,255,255,0.25)',
+          boxShadow: open
+            ? '0 10px 30px rgba(0,0,0,0.5), 0 0 28px rgba(201,162,39,0.45), ' + INNER_HI
+            : '0 8px 24px rgba(0,0,0,0.45), 0 0 18px rgba(201,162,39,0.28), ' + INNER_HI,
         }}
       >
         ⇪ Share / Export Report
       </button>
       {open && (
-        <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+        <div style={{ display: 'flex', gap: '7px', marginTop: '8px' }}>
           <button onClick={() => run('png')} disabled={busy !== null} style={optionStyle(busy === 'png')}>
             {busy === 'png' ? 'Building…' : 'PNG — text it'}
           </button>
@@ -188,7 +200,7 @@ export default function ShareReportButton({
         </div>
       )}
       {error && (
-        <div style={{ marginTop: '5px', fontFamily: MONO, fontSize: '9px', letterSpacing: '0.08em', color: '#ef4444' }}>
+        <div style={{ marginTop: '6px', fontFamily: MONO, fontSize: '9px', letterSpacing: '0.1em', color: '#ef4444' }}>
           {error}
         </div>
       )}

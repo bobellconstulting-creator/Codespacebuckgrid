@@ -22,17 +22,38 @@ import type { ReportZone } from './report/reportRenderer'
 
 const NAV_TOOL = TOOLS[0] // 'nav' — non-drawing
 
-// Brand palette (task spec)
-const INK = '#1E2122'
-const MOSS = '#6B7A57'
-const BONE = '#D8D3C5'
-const CARD = '#131710'
+// ─── Apple-keynote luxury palette (investor edition) ────────────────────────
+// Near-black forest base, deep forest-green primary, warm gold/amber accent
+// used SPARINGLY (score, CTA, active state), bone/off-white text.
+const BASE = '#07120D'        // near-black forest (page base)
+const BASE_2 = '#0A140E'      // raised base
+const FOREST = '#0A3D2F'      // deep forest-green primary
+const MOSS = '#4E6B57'        // muted moss (secondary green)
+const GOLD = '#C9A227'        // antique gold accent
+const GOLD_HI = '#E0B43A'     // bright amber (emphasis only)
+const BONE = '#E8E4D8'        // bone / off-white text
+const BONE_DIM = '#A8A498'    // dimmed body text
+const BONE_FAINT = '#7C8276'  // faintest labels
+
+// Glass primitives
+const GLASS = 'rgba(10,20,14,0.62)'        // translucent dark fill
+const GLASS_DEEP = 'rgba(7,16,11,0.74)'    // denser glass (sidebar)
+const HAIRLINE = 'rgba(255,255,255,0.08)'  // 1px hairline border
+const HAIRLINE_HI = 'rgba(255,255,255,0.14)'
+const INNER_HI = 'inset 0 1px 0 rgba(255,255,255,0.07)'  // subtle top highlight
+const BLUR = 'blur(22px) saturate(125%)'
+const PANEL_SHADOW = '0 18px 50px rgba(0,0,0,0.5)'
+
+// Legacy alias kept for card backgrounds in the plan list
+const INK = 'rgba(8,16,11,0.5)'
+const CARD = '#0A140E'
+
 const DISPLAY = "'Teko','Oswald',sans-serif"
 const MONO = "'Share Tech Mono',monospace"
 const BODY = "'Barlow Condensed','Inter',sans-serif"
 
 const TYPE_LABEL: Record<string, string> = {
-  sanctuary: 'Sanctuary', bedding: 'Bedding', food_plot: 'Food Plot', kill_plot: 'Kill Plot',
+  sanctuary: 'Sanctuary', bedding: 'Bedding', food_plot: 'Food Plot', kill_plot: 'Harvest Plot',
   stand_site: 'Stand', staging_area: 'Staging', access_route: 'Access', water: 'Water',
 }
 // map engine type → the key drawAnnotations / report color tables understand
@@ -41,8 +62,8 @@ const ANN_TYPE: Record<string, string> = {
   staging_area: 'staging_area', sanctuary: 'sanctuary', access_route: 'access_trail', water: 'water',
 }
 const DOT: Record<string, string> = {
-  sanctuary: '#5F7A52', bedding: '#9B7A2A', food_plot: '#32CD32', kill_plot: '#7B9E5A',
-  stand_site: '#ef4444', staging_area: '#6B7A4F', access_route: '#D4AC4A', water: '#3B82F6',
+  sanctuary: '#5F7A52', bedding: '#C9A227', food_plot: '#4ADE80', kill_plot: '#7B9E5A',
+  stand_site: '#ef4444', staging_area: '#6B7A4F', access_route: '#E0B43A', water: '#3B82F6',
 }
 // reveal order = how a consultant walks the property: protect → where they live →
 // what they eat → where you kill → how you get in.
@@ -201,16 +222,22 @@ export default function DemoPage() {
 
   // ── Layout pieces ───────────────────────────────────────────────────────────
   const Selector = (
-    <div style={{ display: 'flex', gap: 6 }}>
+    <div style={{ display: 'flex', gap: 7 }}>
       {HERO_PROPERTIES.map(h => {
         const on = h.id === heroId
         return (
-          <button key={h.id} onClick={() => selectHero(h.id)}
+          <button key={h.id} onClick={() => selectHero(h.id)} className="bg-chip"
             style={{
-              background: on ? MOSS : 'transparent', color: on ? '#10140e' : '#9A9588',
-              border: `1px solid ${on ? MOSS : '#3A3F39'}`, borderRadius: 4, padding: '5px 10px',
-              fontFamily: DISPLAY, fontWeight: 700, fontSize: 13, letterSpacing: '.06em', cursor: 'pointer',
-              textTransform: 'uppercase', whiteSpace: 'nowrap', transition: 'all .15s',
+              background: on ? 'rgba(10,61,47,0.85)' : 'rgba(255,255,255,0.03)',
+              color: on ? BONE : BONE_DIM,
+              border: `1px solid ${on ? 'rgba(125,216,143,0.45)' : HAIRLINE}`,
+              borderRadius: 10, padding: '7px 14px',
+              fontFamily: DISPLAY, fontWeight: 600, fontSize: 14, letterSpacing: '.1em', cursor: 'pointer',
+              textTransform: 'uppercase', whiteSpace: 'nowrap',
+              backdropFilter: BLUR, WebkitBackdropFilter: BLUR,
+              boxShadow: on
+                ? `0 0 18px rgba(95,122,82,0.4), ${INNER_HI}`
+                : INNER_HI,
             }}>
             {h.name}
           </button>
@@ -222,33 +249,57 @@ export default function DemoPage() {
   const Plan = (
     <>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-        <div style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 700, color: MOSS, letterSpacing: '.1em' }}>TONY&apos;S GAME PLAN</div>
-        {phase === 'done' && <div style={{ fontFamily: MONO, fontSize: 9, color: '#6E7A5C', letterSpacing: '.1em' }}>{calls.length} CALLS</div>}
+        <div style={{ fontFamily: DISPLAY, fontSize: 22, fontWeight: 600, color: BONE, letterSpacing: '.14em' }}>
+          TONY&apos;S GAME PLAN
+        </div>
+        {phase === 'done' && (
+          <div style={{ fontFamily: MONO, fontSize: 9, color: GOLD, letterSpacing: '.16em', padding: '3px 8px', borderRadius: 6, border: `1px solid rgba(201,162,39,0.3)`, background: 'rgba(201,162,39,0.08)' }}>
+            {calls.length} CALLS
+          </div>
+        )}
       </div>
+      <div style={{ height: 1, background: HAIRLINE, margin: '12px 0 2px' }} />
 
       {(phase === 'loading' || phase === 'ready') && (
-        <div style={{ fontFamily: BODY, fontSize: 14.5, color: '#A7A293', lineHeight: 1.5, marginTop: 8 }}>
-          {hero.blurb} <span style={{ color: '#7E7A6C' }}>Hit the button — Tony reads the terrain, cover, and wind in code and draws the whole plan, every call backed by what&apos;s on the ground.</span>
+        <div style={{ fontFamily: BODY, fontSize: 15, color: BONE_DIM, lineHeight: 1.6, marginTop: 12, fontWeight: 400 }}>
+          {hero.blurb} <span style={{ color: BONE_FAINT }}>Hit the button — Tony reads the terrain, cover, and wind in code and draws the whole plan, every call backed by what&apos;s on the ground.</span>
         </div>
       )}
 
       {(phase === 'analyzing' || phase === 'done') && (
-        <div style={{ borderLeft: `3px solid ${MOSS}`, background: '#10140e', borderRadius: 4, padding: '9px 11px', margin: '10px 0' }}>
-          <div style={{ fontFamily: MONO, fontSize: 9, color: MOSS, letterSpacing: '.14em', marginBottom: 3 }}>TONY&apos;S READ</div>
-          <div style={{ fontFamily: BODY, fontSize: 14, color: BONE, lineHeight: 1.45 }}>{TONY_READ[hero.id]}</div>
+        <div className="bg-card-rise" style={{
+          borderLeft: `2px solid ${GOLD}`,
+          background: 'linear-gradient(180deg, rgba(201,162,39,0.07), rgba(10,20,14,0.35))',
+          border: `1px solid ${HAIRLINE}`, borderLeftWidth: 2, borderLeftColor: GOLD,
+          borderRadius: 12, padding: '12px 14px', margin: '14px 0',
+          boxShadow: INNER_HI,
+        }}>
+          <div style={{ fontFamily: MONO, fontSize: 9, color: GOLD, letterSpacing: '.2em', marginBottom: 6 }}>TONY&apos;S READ</div>
+          <div style={{ fontFamily: BODY, fontSize: 14.5, color: BONE, lineHeight: 1.55 }}>{TONY_READ[hero.id]}</div>
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 4 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 10 }}>
         {calls.slice(0, shown).map((c) => (
-          <div key={c.id} style={{ borderLeft: `3px solid ${DOT[c.type] ?? MOSS}`, background: INK, borderRadius: 4, padding: '8px 10px' }}>
+          <div key={c.id} className="bg-card-rise" style={{
+            borderLeft: `2px solid ${DOT[c.type] ?? MOSS}`,
+            background: GLASS,
+            border: `1px solid ${HAIRLINE}`, borderLeftWidth: 2, borderLeftColor: DOT[c.type] ?? MOSS,
+            borderRadius: 12, padding: '11px 13px',
+            backdropFilter: BLUR, WebkitBackdropFilter: BLUR,
+            boxShadow: `0 8px 22px rgba(0,0,0,0.32), ${INNER_HI}`,
+          }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-              <span style={{ fontFamily: DISPLAY, fontSize: 16, fontWeight: 700, color: BONE, letterSpacing: '.04em' }}>
+              <span style={{ fontFamily: DISPLAY, fontSize: 18, fontWeight: 600, color: BONE, letterSpacing: '.08em' }}>
                 {(TYPE_LABEL[c.type] ?? c.type).toUpperCase()} · {c.compass.toUpperCase()}{c.acres ? ` · ${c.acres} AC` : ''}
               </span>
-              <span style={{ fontFamily: MONO, fontSize: 11, color: c.score >= 75 ? '#7Fd88f' : '#e3c34d' }}>{Math.round(c.score)}</span>
+              <span style={{
+                fontFamily: MONO, fontSize: 13, fontWeight: 700,
+                color: c.score >= 75 ? GOLD_HI : c.score >= 60 ? GOLD : BONE_DIM,
+                textShadow: c.score >= 75 ? '0 0 12px rgba(224,180,58,0.5)' : 'none',
+              }}>{Math.round(c.score)}</span>
             </div>
-            <div style={{ fontFamily: BODY, fontSize: 13, color: '#A7A293', lineHeight: 1.45, marginTop: 2 }}>
+            <div style={{ fontFamily: BODY, fontSize: 13, color: BONE_DIM, lineHeight: 1.5, marginTop: 4 }}>
               {cleanFactors(c.factors).join(' · ')}
             </div>
           </div>
@@ -256,7 +307,7 @@ export default function DemoPage() {
       </div>
 
       {phase === 'done' && (
-        <div style={{ marginTop: 12, fontFamily: MONO, fontSize: 10.5, color: MOSS, letterSpacing: '.06em', lineHeight: 1.5 }}>
+        <div className="bg-fade-in" style={{ marginTop: 16, fontFamily: MONO, fontSize: 10, color: MOSS, letterSpacing: '.1em', lineHeight: 1.7, opacity: 0.85 }}>
           EVERY PIN: TERRAIN-MATH BACKED · BOUNDARY-GUARANTEED · NOT AN LLM GUESS.
         </div>
       )}
@@ -264,10 +315,17 @@ export default function DemoPage() {
   )
 
   const sidebar = (
-    <div style={{ display: 'flex', flexDirection: 'column', background: '#232623', borderLeft: isMobile ? 'none' : '1px solid #32362F', borderTop: isMobile ? '1px solid #32362F' : 'none' }}>
-      <div style={{ overflowY: 'auto', padding: 16, flex: '1 1 auto' }}>{Plan}</div>
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      background: GLASS_DEEP,
+      backdropFilter: BLUR, WebkitBackdropFilter: BLUR,
+      borderLeft: isMobile ? 'none' : `1px solid ${HAIRLINE}`,
+      borderTop: isMobile ? `1px solid ${HAIRLINE}` : 'none',
+      boxShadow: isMobile ? 'none' : `-20px 0 50px rgba(0,0,0,0.45), ${INNER_HI}`,
+    }}>
+      <div className="bg-scroll" style={{ overflowY: 'auto', padding: '20px 18px', flex: '1 1 auto' }}>{Plan}</div>
       {phase === 'done' && (
-        <div style={{ flex: '0 0 auto', borderTop: '1px solid #32362F', background: '#3A4042' }}>
+        <div className="bg-fade-in" style={{ flex: '0 0 auto', borderTop: `1px solid ${HAIRLINE}`, background: 'rgba(7,16,11,0.5)', padding: '4px 6px 0' }}>
           <DemoTonightsSit stands={standTargets} cover={coverZones} center={hero.center} />
           <ShareReportButton
             getMapElement={() => mapRef.current?.getCaptureElement() ?? null}
@@ -284,21 +342,21 @@ export default function DemoPage() {
   )
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: INK, display: 'flex', flexDirection: 'column', fontFamily: BODY }}>
-      {/* Header */}
-      <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 12, padding: isMobile ? '8px 12px' : '0 18px', height: isMobile ? 'auto' : 62, minHeight: 56, borderBottom: '1px solid #32362F', background: 'rgba(20,23,20,0.6)', flexWrap: 'wrap' }}>
-        <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: 34 }} />
+    <div style={{ position: 'fixed', inset: 0, background: `radial-gradient(120% 90% at 50% -10%, ${BASE_2} 0%, ${BASE} 60%)`, display: 'flex', flexDirection: 'column', fontFamily: BODY }}>
+      {/* Header — floating glass bar */}
+      <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 14, padding: isMobile ? '10px 14px' : '0 22px', height: isMobile ? 'auto' : 70, minHeight: 60, borderBottom: `1px solid ${HAIRLINE}`, background: GLASS, backdropFilter: BLUR, WebkitBackdropFilter: BLUR, boxShadow: `0 12px 32px rgba(0,0,0,0.4), ${INNER_HI}`, flexWrap: 'wrap', position: 'relative', zIndex: 20 }}>
+        <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: 36, filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.5))' }} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, color: BONE, letterSpacing: '.05em', lineHeight: 1 }}>
+          <div style={{ fontFamily: DISPLAY, fontSize: 22, fontWeight: 600, color: BONE, letterSpacing: '.1em', lineHeight: 1 }}>
             {hero.name.toUpperCase()}
           </div>
-          <div style={{ fontFamily: MONO, fontSize: 9.5, color: MOSS, letterSpacing: '.14em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontFamily: MONO, fontSize: 9.5, color: GOLD, letterSpacing: '.18em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: 3 }}>
             {hero.locationLabel} · {hero.acresLabel} · {hero.season}
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.12em', color: '#9A9588', border: '1px solid #44483F', borderRadius: 4, padding: '5px 9px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-            ⌁ {prevailingLabel}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.14em', color: BONE_DIM, border: `1px solid ${HAIRLINE}`, borderRadius: 10, padding: '7px 12px', textTransform: 'uppercase', whiteSpace: 'nowrap', background: 'rgba(255,255,255,0.03)', boxShadow: INNER_HI }}>
+            <span style={{ color: GOLD }}>⌁</span> {prevailingLabel}
           </div>
           {Selector}
         </div>
@@ -308,15 +366,22 @@ export default function DemoPage() {
       <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', minHeight: 0 }}>
         <div style={{ position: 'relative', flex: isMobile ? '0 0 52vh' : 1, minHeight: 0 }}>
           <MapContainer ref={mapRef} activeTool={NAV_TOOL} brushSize={30} />
+          {/* Cinematic edge vignette — frames the imagery, deepens the mood, and
+              guarantees text contrast at the margins. Center stays fully legible. */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5, boxShadow: 'inset 0 0 160px 30px rgba(5,12,8,0.55)' }} />
+          {/* Top scrim — keeps any imagery from fighting the glass header */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 100, background: 'linear-gradient(180deg, rgba(5,12,8,0.5), transparent)', pointerEvents: 'none', zIndex: 5 }} />
+          {/* Bottom scrim — seats the floating CTA on a darker base */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(0deg, rgba(5,12,8,0.55), transparent)', pointerEvents: 'none', zIndex: 5 }} />
           {phase === 'ready' && (
-            <button onClick={runTony}
-              style={{ position: 'absolute', bottom: 26, left: '50%', transform: 'translateX(-50%)', background: '#FF6B00', color: '#1E2122', border: 'none', borderRadius: 7, padding: isMobile ? '12px 20px' : '14px 30px', fontFamily: DISPLAY, fontSize: isMobile ? 18 : 22, fontWeight: 700, letterSpacing: '.06em', cursor: 'pointer', boxShadow: '0 6px 28px rgba(0,0,0,.55)', whiteSpace: 'nowrap' }}>
+            <button onClick={runTony} className="bg-cta"
+              style={{ position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)', background: `linear-gradient(180deg, ${GOLD_HI}, ${GOLD})`, color: '#1B1405', border: '1px solid rgba(255,235,170,0.5)', borderRadius: 14, padding: isMobile ? '13px 22px' : '15px 34px', fontFamily: DISPLAY, fontSize: isMobile ? 19 : 24, fontWeight: 600, letterSpacing: '.1em', cursor: 'pointer', whiteSpace: 'nowrap', zIndex: 10, textShadow: '0 1px 0 rgba(255,255,255,0.25)' }}>
               ASK TONY TO ANALYZE {isMobile ? 'THE PARCEL' : 'THIS PROPERTY'}
             </button>
           )}
           {phase === 'analyzing' && (
-            <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', background: 'rgba(10,15,9,0.85)', border: `1px solid rgba(255,107,0,0.5)`, borderRadius: 4, padding: '6px 14px', fontFamily: MONO, fontSize: 11, letterSpacing: '.1em', color: '#FFB273', textTransform: 'uppercase', pointerEvents: 'none' }}>
-              ◌ Tony is reading {hero.name}…
+            <div style={{ position: 'absolute', top: 18, left: '50%', transform: 'translateX(-50%)', background: GLASS_DEEP, backdropFilter: BLUR, WebkitBackdropFilter: BLUR, border: `1px solid rgba(224,180,58,0.4)`, borderRadius: 10, padding: '8px 16px', fontFamily: MONO, fontSize: 11, letterSpacing: '.14em', color: GOLD_HI, textTransform: 'uppercase', pointerEvents: 'none', zIndex: 10, boxShadow: `0 10px 28px rgba(0,0,0,0.45), 0 0 22px rgba(201,162,39,0.18), ${INNER_HI}` }}>
+              <span className="bg-spinner" style={{ display: 'inline-block' }}>◌</span> Tony is reading {hero.name}…
             </div>
           )}
         </div>

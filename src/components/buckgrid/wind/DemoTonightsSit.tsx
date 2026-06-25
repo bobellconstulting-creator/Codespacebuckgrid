@@ -23,7 +23,20 @@ type State =
 const MONO = "'Share Tech Mono', monospace"
 const DISPLAY = "'Teko', 'Oswald', sans-serif"
 const BODY = "'Barlow Condensed','Inter',sans-serif"
-const MOSS = '#6B7A57'
+const MOSS = '#4E6B57'
+const GOLD = '#C9A227'
+const GOLD_HI = '#E0B43A'
+const BONE = '#E8E4D8'
+const BONE_DIM = '#A8A498'
+const GLASS = 'rgba(10,20,14,0.55)'
+const HAIRLINE = 'rgba(255,255,255,0.08)'
+const INNER_HI = 'inset 0 1px 0 rgba(255,255,255,0.06)'
+const ROW: React.CSSProperties = {
+  background: GLASS,
+  border: `1px solid ${HAIRLINE}`,
+  borderRadius: 9,
+  boxShadow: INNER_HI,
+}
 
 export default function DemoTonightsSit({ stands, cover, center }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' })
@@ -64,51 +77,51 @@ export default function DemoTonightsSit({ stands, cover, center }: Props) {
   const hero = state.kind === 'ready' ? state.calls[0] : null
 
   return (
-    <div style={{ padding: '10px 12px 0' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 7 }}>
-        <span style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 15, color: MOSS, letterSpacing: '.1em' }}>≋ TONIGHT&apos;S SIT</span>
+    <div style={{ padding: '12px 14px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+        <span style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 18, color: BONE, letterSpacing: '.12em' }}>≋ TONIGHT&apos;S SIT</span>
         {state.kind === 'ready' && (
-          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.08em', color: '#8A8578' }}>
+          <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.12em', color: GOLD }}>
             {state.live ? 'LIVE' : 'FORECAST'} · {state.wind.compass} {state.wind.speedMph}MPH
           </span>
         )}
       </div>
 
       {state.kind === 'loading' && (
-        <div style={{ fontFamily: MONO, fontSize: 10, color: '#8A8578', letterSpacing: '.08em', padding: '4px 0 8px' }}>◌ Reading the wind…</div>
+        <div style={{ fontFamily: MONO, fontSize: 10, color: BONE_DIM, letterSpacing: '.1em', padding: '4px 0 8px' }}><span className="bg-spinner">◌</span> Reading the wind…</div>
       )}
 
       {state.kind === 'ready' && hero && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <div style={{ background: '#1E2122', borderLeft: `3px solid ${hero.score >= 60 ? MOSS : '#ef4444'}`, border: '1px solid rgba(107,122,87,0.3)', padding: '8px 10px' }}>
-            <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.12em', color: MOSS }}>BEST SIT TONIGHT</div>
-            <div style={{ fontFamily: DISPLAY, fontWeight: 700, fontSize: 16, color: '#D8D3C5', letterSpacing: '.04em' }}>{hero.name}</div>
-            <div style={{ fontFamily: BODY, fontSize: 12.5, color: '#A7A293', lineHeight: 1.4 }}>{hero.reason}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ ...ROW, borderLeft: `2px solid ${hero.score >= 60 ? GOLD : '#ef4444'}`, padding: '10px 12px' }}>
+            <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.16em', color: GOLD }}>BEST SIT TONIGHT</div>
+            <div style={{ fontFamily: DISPLAY, fontWeight: 600, fontSize: 18, color: BONE, letterSpacing: '.06em' }}>{hero.name}</div>
+            <div style={{ fontFamily: BODY, fontSize: 12.5, color: BONE_DIM, lineHeight: 1.45 }}>{hero.reason}</div>
           </div>
 
           {state.windows.length > 0 && (
             <>
-              <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.12em', color: MOSS, marginTop: 3 }}>NEXT 72 HRS — BEST WINDOWS</div>
+              <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.16em', color: MOSS, marginTop: 4 }}>NEXT 72 HRS — BEST WINDOWS</div>
               {state.windows.map((w, i) => (
-                <div key={`${w.dayLabel}-${w.period}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#1E2122', border: '1px solid rgba(107,122,87,0.18)', borderLeft: `2px solid ${w.score >= 60 ? MOSS : '#e3c34d'}`, padding: '4px 8px' }}>
-                  <span style={{ fontFamily: MONO, fontSize: 9, color: '#D8D3C5', minWidth: 74 }}>{w.dayLabel} {w.period}</span>
-                  <span style={{ fontFamily: BODY, fontSize: 12, color: '#9A9588', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.standName}</span>
+                <div key={`${w.dayLabel}-${w.period}-${i}`} style={{ ...ROW, display: 'flex', alignItems: 'center', gap: 7, borderLeft: `2px solid ${w.score >= 60 ? MOSS : GOLD}`, padding: '6px 9px' }}>
+                  <span style={{ fontFamily: MONO, fontSize: 9, color: BONE, minWidth: 74 }}>{w.dayLabel} {w.period}</span>
+                  <span style={{ fontFamily: BODY, fontSize: 12, color: BONE_DIM, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.standName}</span>
                   <span style={{ fontFamily: MONO, fontSize: 9, color: MOSS }}>{w.windLabel}</span>
-                  <span style={{ fontFamily: MONO, fontSize: 9, color: '#8A8578', minWidth: 20, textAlign: 'right' }}>{w.score}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 9, color: BONE_DIM, minWidth: 20, textAlign: 'right' }}>{w.score}</span>
                 </div>
               ))}
             </>
           )}
 
-          <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.12em', color: MOSS, marginTop: 3 }}>RIGHT NOW — STANDS BY SCENT RISK</div>
+          <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.16em', color: MOSS, marginTop: 4 }}>RIGHT NOW — STANDS BY SCENT RISK</div>
           {state.calls.map((c, i) => (
-            <div key={`${c.name}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 7, background: '#1E2122', border: '1px solid rgba(107,122,87,0.18)', padding: '4px 8px' }}>
-              <span style={{ fontFamily: MONO, fontSize: 9, color: MOSS }}>{String(i + 1).padStart(2, '0')}</span>
-              <span style={{ fontFamily: BODY, fontSize: 12, color: '#D8D3C5', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
-              <span style={{ width: 42, height: 3, background: 'rgba(107,122,87,0.15)', borderRadius: 1, overflow: 'hidden', flexShrink: 0 }}>
-                <span style={{ display: 'block', height: '100%', width: `${c.score}%`, background: c.score >= 60 ? '#7Fd88f' : c.score >= 40 ? '#e3c34d' : '#ef4444' }} />
+            <div key={`${c.name}-${i}`} style={{ ...ROW, display: 'flex', alignItems: 'center', gap: 7, padding: '6px 9px' }}>
+              <span style={{ fontFamily: MONO, fontSize: 9, color: GOLD }}>{String(i + 1).padStart(2, '0')}</span>
+              <span style={{ fontFamily: BODY, fontSize: 12, color: BONE, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+              <span style={{ width: 44, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
+                <span style={{ display: 'block', height: '100%', width: `${c.score}%`, background: c.score >= 60 ? '#7Fd88f' : c.score >= 40 ? GOLD_HI : '#ef4444', borderRadius: 3 }} />
               </span>
-              <span style={{ fontFamily: MONO, fontSize: 9, color: '#8A8578', minWidth: 24, textAlign: 'right' }}>{c.score}</span>
+              <span style={{ fontFamily: MONO, fontSize: 9, color: BONE_DIM, minWidth: 24, textAlign: 'right' }}>{c.score}</span>
             </div>
           ))}
         </div>
