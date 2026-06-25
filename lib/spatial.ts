@@ -451,10 +451,76 @@ function pruneCache(): void {
   }
 }
 
+// ── Persistent spatial cache (Upstash / Vercel KV over REST) ────────────────
+// Cover/DEM/soil/terrain don't change between hunts, but each analysis otherwise
+// re-fetches ~11 live endpoints — slow, and one flaky source silently degrades
+// the plan. A read-through KV cache makes a re-analyzed parcel a fast hit and
+// locks in clean data. Fully optional: with no KV configured every line below is
+// a no-op and the in-memory cache + live fetch behave exactly as before.
+const _KV_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || ''
+const _KV_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || ''
+// Bump when the SpatialContext shape changes, to invalidate stale cached blobs.
+const SPATIAL_CACHE_VERSION = 1
+const SPATIAL_CACHE_TTL_S = 30 * 24 * 60 * 60 // 30 days — base layers are static
+const kvKey = (b: Bounds): string => `spatial:v${SPATIAL_CACHE_VERSION}:${boundsKey(b)}`
+
+// JSON with Uint8Array support (the cover/canopy grids), base64-encoded.
+function serializeContext(ctx: SpatialContext): string {
+  return JSON.stringify(ctx, (_k, v) =>
+    v instanceof Uint8Array ? { __u8: Buffer.from(v).toString('base64') } : v)
+}
+function deserializeContext(s: string): SpatialContext {
+  return JSON.parse(s, (_k, v) =>
+    v && typeof v === 'object' && typeof (v as { __u8?: unknown }).__u8 === 'string'
+      ? new Uint8Array(Buffer.from((v as { __u8: string }).__u8, 'base64'))
+      : v) as SpatialContext
+}
+
+async function kvGetContext(key: string): Promise<SpatialContext | null> {
+  if (!_KV_URL || !_KV_TOKEN) return null
+  try {
+    const r = await fetch(_KV_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_KV_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(['GET', key]),
+      signal: AbortSignal.timeout(2500),
+    })
+    if (!r.ok) return null
+    const j = await r.json() as { result?: string | null }
+    if (typeof j.result !== 'string') return null
+    const ctx = deserializeContext(j.result)
+    // sanity-check shape before trusting a cached blob
+    return ctx && Array.isArray(ctx.osmFeatures) ? ctx : null
+  } catch { return null }
+}
+
+async function kvSetContext(key: string, ctx: SpatialContext): Promise<void> {
+  if (!_KV_URL || !_KV_TOKEN) return
+  try {
+    const payload = serializeContext(ctx)
+    if (payload.length > 900_000) return // too large for a safe single KV write
+    await fetch(_KV_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${_KV_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(['SET', key, payload, 'EX', String(SPATIAL_CACHE_TTL_S)]),
+      signal: AbortSignal.timeout(2500),
+    })
+  } catch { /* cache write is best-effort */ }
+}
+
 export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> {
   const key = boundsKey(bounds)
   const cached = cache.get(key)
   if (cached && Date.now() < cached.expiresAt) return cached.data
+
+  // Persistent KV read-through (no-op when KV isn't configured)
+  const persistentKey = kvKey(bounds)
+  const fromKv = await kvGetContext(persistentKey)
+  if (fromKv) {
+    pruneCache()
+    cache.set(key, { data: fromKv, expiresAt: Date.now() + CACHE_TTL_MS })
+    return fromKv
+  }
 
   const centerLat = (bounds.north + bounds.south) / 2
   const centerLng = (bounds.east + bounds.west) / 2
@@ -496,5 +562,11 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
   }
   pruneCache()
   cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS })
+  // Persist ONLY a complete analysis. Caching a result where a key source failed
+  // (empty OSM, missing cover/elevation) would lock in a degraded plan for the
+  // whole TTL — the opposite of "lock in clean data". A degraded result just
+  // isn't persisted, so the next analysis re-fetches and self-heals.
+  const cacheworthy = !!result.coverGrid && result.elevationSamples.length > 0 && result.osmFeatures.length > 0
+  if (cacheworthy) await kvSetContext(persistentKey, result)
   return result
 }
