@@ -116,16 +116,38 @@ function buildOverpassQuery(bounds: Bounds): string {
   return lines.join('\n')
 }
 
+// The main Overpass instance is frequently overloaded (503/504), which used to
+// zero out roads/water entirely — and then the engine placed zones (even
+// sanctuary) blind to roads. Hit several mirrors in PARALLEL and take the first
+// that answers, so one busy server can no longer gut the plan.
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+]
+
+async function overpassAny(query: string): Promise<any> {
+  const attempts = OVERPASS_ENDPOINTS.map(async (url) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(11_000),
+    })
+    if (!res.ok) throw new Error(`Overpass ${res.status} @ ${url}`)
+    const json = await res.json()
+    if (!json || !Array.isArray(json.elements)) throw new Error(`Overpass bad payload @ ${url}`)
+    return json
+  })
+  // Promise.any resolves with the first fulfilled attempt; rejects only if ALL fail.
+  return Promise.any(attempts)
+}
+
 async function fetchOsmFeatures(bounds: Bounds): Promise<OsmFeature[]> {
   const query = buildOverpassQuery(bounds)
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(20_000),
-  })
-  if (!res.ok) throw new Error(`Overpass ${res.status}`)
-  const json = await res.json()
+  const json = await overpassAny(query)
 
   const nodeById = new Map<number, { lat: number; lon: number }>()
   for (const el of json.elements) {

@@ -1127,8 +1127,17 @@ export async function POST(req: NextRequest) {
           }).filter(m => m.text)
         : undefined
 
+      // When OSM road/parcel data failed to load, the engine can't see roads —
+      // so Tony must NOT claim anything avoids a road (it was reading the old
+      // "Infinity yd from road" as "very far"). Tell the truth instead.
+      const roadsUnavailable = !!(boundaryRing && boundaryRing.length >= 4) &&
+        !(resolvedSpatial?.osmFeatures?.some(f => f.kind === 'road'))
+      const guardedMsg = roadsUnavailable
+        ? `${trimmedMsg}\n\n[SYSTEM — ROAD DATA UNAVAILABLE THIS TURN: road/parcel data did not load, so you do NOT know where roads are. NEVER say a feature is "far from roads", "away from any road", or that it avoids a road — you cannot verify that. Tell the user plainly that road data didn't load and to tap Retry for road-aware placement. Base habitat on terrain and cover only, and warn that placements near the property edge may sit near a road.]`
+        : trimmedMsg
+
       const tonyPrompt = buildTonyPrompt(
-        trimmedMsg, effBounds, zoom ?? 14, safeFeatures,
+        guardedMsg, effBounds, zoom ?? 14, safeFeatures,
         typeof season === 'string' ? season : '',
         safePropertyName,
         resolvedSpatial,

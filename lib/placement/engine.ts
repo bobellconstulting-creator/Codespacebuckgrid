@@ -544,6 +544,14 @@ export function generatePlacements(opts: {
   const halfH = (north - south) / 2
   const compass = (pt: LngLat) => compassLabel(pt, parcelCenter, halfW, halfH)
   const yd = (m: number) => Math.round(m / 0.9144)
+  // Road-clearance phrase. When OSM road data didn't load, roadDistM is Infinity
+  // for every cell — never print "Infinityyd" or imply a feature avoids a road we
+  // can't see. Say so honestly instead.
+  const hasRoadData = roadLines.length > 0
+  const roadFac = (distM: number): string =>
+    hasRoadData && isFinite(distM)
+      ? `${yd(distM)}yd from nearest road`
+      : 'road distance unverified (road data did not load this turn)'
 
   // Aspect preference: south-facing bonus late season (thermal bedding),
   // north-facing bonus early season (cool-weather bedding)
@@ -627,7 +635,7 @@ export function generatePlacements(opts: {
       const factors = [
         p.cell.cover === 'open' ? 'open ground — land-cover verified (ESA WorldCover)' : 'open ground (unclassified — verify on satellite)',
         `${p.cell.slopeDeg.toFixed(0)}° slope`,
-        `${yd(p.cell.roadDistM)}yd from nearest road`,
+        roadFac(p.cell.roadDistM),
       ]
       if (p.cell.distToCoverM <= cellM * 2) factors.push('on a timber/cover edge')
       candidates.push({
@@ -667,7 +675,7 @@ export function generatePlacements(opts: {
       const coverName = p.cell.cover === 'scrub' ? 'brushy early-successional cover' : p.cell.cover === 'wetland' ? 'wetland thermal cover' : 'timber'
       const factors = [
         `thick ${coverName}`,
-        `${yd(p.cell.roadDistM)}yd from nearest road`,
+        roadFac(p.cell.roadDistM),
       ]
       if (hasElevation && p.cell.slopeDeg > 3) {
         factors.push(`${degreesToCompass8(p.cell.aspectDeg)}-facing slope (${p.cell.slopeDeg.toFixed(0)}°)`)
@@ -749,7 +757,7 @@ export function generatePlacements(opts: {
       const blockCells = [...bestBlock].map(i => cells[i])
       blockCells.sort((a, b) => b.roadDistM - a.roadDistM)
       const targetAcres = Math.max(3, Math.min(15, parcelAcres * 0.12))
-      const cluster = growCluster(blockCells[0], cl => bestBlock!.has(cl.idx) && cl.waterDistM > WATER_BUFFER_M && cl.buildingDistM > BUILDING_BUFFER_M, targetAcres)
+      const cluster = growCluster(blockCells[0], cl => bestBlock!.has(cl.idx) && placeableCover(cl), targetAcres)
       const polygon = clusterToPolygon(cluster)
       if (polygon) {
         const acres = Math.round(cluster.size * cellAcres * 10) / 10
@@ -761,7 +769,7 @@ export function generatePlacements(opts: {
           compass: compass(seed.center),
           factors: [
             `core of the largest cover block on the parcel (~${Math.round(bestBlock.size * cellAcres)} ac total)`,
-            `${yd(seed.roadDistM)}yd from nearest road — never-enter ground`,
+            `${roadFac(seed.roadDistM)}${hasRoadData ? ' — never-enter ground' : ''}`,
           ],
         })
       }
@@ -828,7 +836,7 @@ export function generatePlacements(opts: {
           : ''
         factors.push(`${yd(s.bedD)}yd from bedding ${s.nearestBed.id}${windNote}`)
       }
-      factors.push(`${yd(s.cell.roadDistM)}yd from nearest road`)
+      factors.push(roadFac(s.cell.roadDistM))
       candidates.push({
         id: `st${i + 1}`, type: 'stand_site',
         center: { lat: s.cell.center[1], lng: s.cell.center[0] },
@@ -871,7 +879,7 @@ export function generatePlacements(opts: {
         polygon, acres: Math.round(cluster.size * cellAcres * 10) / 10,
         score: Math.round(Math.max(0, Math.min(100, p.score))),
         compass: compass(p.cell.center),
-        factors: ['small open pocket against cover', `${yd(p.cell.roadDistM)}yd from nearest road`],
+        factors: ['small open pocket against cover', roadFac(p.cell.roadDistM)],
       })
     })
   }
