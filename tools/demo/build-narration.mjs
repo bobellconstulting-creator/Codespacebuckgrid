@@ -61,22 +61,30 @@ const p = (f) => path.join(OUT, f)
 const total = dur(SILENT)
 console.log(`silent master: ${total.toFixed(1)}s · voice ${VOICE} · ${LINES.length} lines`)
 
-// ── 1. Synthesize each line via ElevenLabs → wav ─────────────────────────────
+// ── 1. Synthesize each line via ElevenLabs → wav. Each line is loudness-
+//      normalized to a consistent, punchy −16 LUFS so the raw (quiet) EL output
+//      doesn't bury the voice. Cached: set EL_REGEN=1 to force re-synthesis. ────
 for (let i = 0; i < LINES.length; i++) {
-  const body = JSON.stringify({
-    text: LINES[i].s,
-    model_id: MODEL,
-    voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.16, use_speaker_boost: true },
-  })
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE}?output_format=mp3_44100_128`, {
-    method: 'POST',
-    headers: { 'xi-api-key': KEY, 'Content-Type': 'application/json' },
-    body,
-  })
-  if (!res.ok) throw new Error(`EL ${res.status}: ${await res.text()}`)
-  const buf = Buffer.from(await res.arrayBuffer())
-  fs.writeFileSync(p(`nv_${i}.mp3`), buf)
-  ff(['-i', p(`nv_${i}.mp3`), '-ar', '48000', '-ac', '2', p(`nv_${i}.wav`)])
+  if (!process.env.EL_REGEN && fs.existsSync(p(`nv_${i}.mp3`))) {
+    // reuse cached synthesis
+  } else {
+    const body = JSON.stringify({
+      text: LINES[i].s,
+      model_id: MODEL,
+      voice_settings: { stability: 0.5, similarity_boost: 0.8, style: 0.16, use_speaker_boost: true },
+    })
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE}?output_format=mp3_44100_128`, {
+      method: 'POST',
+      headers: { 'xi-api-key': KEY, 'Content-Type': 'application/json' },
+      body,
+    })
+    if (!res.ok) throw new Error(`EL ${res.status}: ${await res.text()}`)
+    const buf = Buffer.from(await res.arrayBuffer())
+    fs.writeFileSync(p(`nv_${i}.mp3`), buf)
+  }
+  // bring each line up to a consistent, clearly-audible level before mixing
+  ff(['-i', p(`nv_${i}.mp3`), '-ar', '48000', '-ac', '2',
+    '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', p(`nv_${i}.wav`)])
   console.log(`  nv_${i} @${LINES[i].t}s (${dur(p(`nv_${i}.wav`)).toFixed(1)}s): "${LINES[i].s.slice(0, 46)}…"`)
 }
 
@@ -100,7 +108,7 @@ else console.log(`  ✓ narration fits: ends ${lastEnd.toFixed(1)}s of ${total.t
 const voIn = ['-f', 'lavfi', '-t', String(total), '-i', 'anullsrc=r=48000:cl=stereo']
 LINES.forEach((_, i) => voIn.push('-i', p(`nv_${i}.wav`)))
 let vfc = ''
-starts.forEach((st, i) => { vfc += `[${i + 1}:a]adelay=${Math.round(st * 1000)}|${Math.round(st * 1000)},volume=1.9[v${i}];` })
+starts.forEach((st, i) => { vfc += `[${i + 1}:a]adelay=${Math.round(st * 1000)}|${Math.round(st * 1000)}[v${i}];` })
 vfc += '[0:a]' + LINES.map((_, i) => `[v${i}]`).join('') + `amix=inputs=${LINES.length + 1}:duration=longest:normalize=0,alimiter=limit=0.97[vo]`
 ff([...voIn, '-filter_complex', vfc, '-map', '[vo]', '-c:a', 'pcm_s16le', p('vo_full.wav')])
 
@@ -130,7 +138,8 @@ ff(['-f', 'lavfi', '-i', `sine=frequency=65.41:sample_rate=48000`,
 ff(['-i', p('vo_full.wav'), '-i', p('bed.wav'),
   '-filter_complex',
   '[1:a][0:a]sidechaincompress=threshold=0.02:ratio=6:attack=20:release=380:makeup=1[duck];' +
-  '[0:a][duck]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.96[mix]',
+  '[0:a][duck]amix=inputs=2:duration=first:normalize=0,' +
+  'loudnorm=I=-12:TP=-1.0:LRA=11,alimiter=limit=0.98[mix]',
   '-map', '[mix]', '-c:a', 'aac', '-b:a', '192k', p('final_audio.m4a')])
 
 // ── 5. Mux under the silent video ────────────────────────────────────────────
