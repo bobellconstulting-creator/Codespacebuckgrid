@@ -72,8 +72,124 @@ export async function fetchWorldCover(bounds: Bounds): Promise<CoverGrid | null>
   return grid
 }
 
-/** The actual COG window read — wrapped in a timeout by fetchWorldCover. */
+/** The actual COG window read — wrapped in a timeout by fetchWorldCover.
+ *  Tries a multi-tile read first (for parcels straddling a 3° tile seam) and
+ *  falls back to the proven single center-tile read, so the common single-tile
+ *  case never regresses. */
 async function readCover(bounds: Bounds): Promise<CoverGrid | null> {
+  try {
+    const multi = await readCoverMulti(bounds)
+    if (multi && multi.classes.some((v) => v !== 0)) return multi
+  } catch { /* fall through to single-tile read */ }
+  return readCoverSingle(bounds)
+}
+
+/**
+ * Read every 3° WorldCover tile the parcel touches and stitch them into one
+ * grid. Fixes the seam bug where a parcel crossing a tile boundary read only the
+ * center tile and smeared the far half to a single clamped edge pixel. Returns
+ * null for the single-tile case (handled by readCoverSingle) or on any failure.
+ */
+async function readCoverMulti(bounds: Bounds): Promise<CoverGrid | null> {
+  const { west, south, east, north } = bounds
+
+  // 3° tiles (SW corners) covering the bbox
+  const tiles: Array<{ lat: number; lng: number }> = []
+  for (let tLat = Math.floor(south / 3) * 3; tLat <= Math.floor(north / 3) * 3; tLat += 3) {
+    for (let tLng = Math.floor(west / 3) * 3; tLng <= Math.floor(east / 3) * 3; tLng += 3) {
+      tiles.push({ lat: tLat, lng: tLng })
+    }
+  }
+  if (tiles.length <= 1) return null // single tile → use the simpler proven path
+
+  // Open each tile (missing tiles, e.g. ocean, resolve to null and stay no-data)
+  const images = await Promise.all(tiles.map(async (t) => {
+    try {
+      const url = `${BASE}/ESA_WorldCover_10m_2021_v200_${tileName(t.lat + 1, t.lng + 1)}_Map.tif`
+      const tiff = await fromUrl(url)
+      return await tiff.getImage()
+    } catch { return null }
+  }))
+  const ref = images.find((im) => im)
+  if (!ref) return null
+
+  // All WorldCover tiles share one global pixel grid + resolution, so any tile's
+  // origin/resolution serves as the global reference for indexing across tiles.
+  const [ox0, oy0] = ref.getOrigin()
+  const [rx, ry] = ref.getResolution() // rx > 0, ry < 0 (north-up)
+
+  const gLeft = Math.floor((west - ox0) / rx)
+  const gRight = Math.ceil((east - ox0) / rx)
+  const gTop = Math.floor((north - oy0) / ry) // ry < 0 → north = smaller row
+  const gBottom = Math.ceil((south - oy0) / ry)
+  const fullW = gRight - gLeft, fullH = gBottom - gTop
+  if (fullW <= 0 || fullH <= 0) return null
+
+  const CAP = 220
+  const step = Math.max(1, Math.ceil(Math.max(fullW, fullH) / CAP))
+  const outW = Math.ceil(fullW / step)
+  const outH = Math.ceil(fullH / step)
+  const northUp = new Uint8Array(outW * outH) // 0 = no data; row 0 = NORTH here
+
+  for (const img of images) {
+    if (!img) continue
+    const [ox, oy] = img.getOrigin()
+    const tw = img.getWidth(), th = img.getHeight()
+    const offCol = Math.round((ox - ox0) / rx)
+    const offRow = Math.round((oy - oy0) / ry)
+
+    const interLeft = Math.max(gLeft, offCol)
+    const interRight = Math.min(gRight, offCol + tw)
+    const interTop = Math.max(gTop, offRow)
+    const interBottom = Math.min(gBottom, offRow + th)
+    if (interRight <= interLeft || interBottom <= interTop) continue
+
+    const ocStart = Math.ceil((interLeft - gLeft) / step)
+    const ocEnd = Math.floor((interRight - 1 - gLeft) / step)
+    const orStart = Math.ceil((interTop - gTop) / step)
+    const orEnd = Math.floor((interBottom - 1 - gTop) / step)
+    if (ocEnd < ocStart || orEnd < orStart) continue
+
+    const winW = Math.max(1, Math.round((interRight - interLeft) / step))
+    const winH = Math.max(1, Math.round((interBottom - interTop) / step))
+    let src: ArrayLike<number> | null = null
+    try {
+      const rasters = await img.readRasters({
+        window: [interLeft - offCol, interTop - offRow, interRight - offCol, interBottom - offRow],
+        width: winW, height: winH,
+        resampleMethod: 'nearest',
+        pool: getPool(),
+      })
+      src = rasters[0] as unknown as ArrayLike<number>
+    } catch { continue }
+    if (!src) continue
+
+    for (let or = orStart; or <= orEnd; or++) {
+      const sy = Math.min(winH - 1, Math.max(0, Math.round((gTop + or * step - interTop) / step)))
+      for (let oc = ocStart; oc <= ocEnd; oc++) {
+        const sx = Math.min(winW - 1, Math.max(0, Math.round((gLeft + oc * step - interLeft) / step)))
+        northUp[or * outW + oc] = src[sy * winW + sx] & 0xff
+      }
+    }
+  }
+
+  // Flip to engine orientation (row 0 = SOUTH increasing north)
+  const classes = new Uint8Array(outW * outH)
+  for (let r = 0; r < outH; r++) {
+    for (let c = 0; c < outW; c++) {
+      classes[(outH - 1 - r) * outW + c] = northUp[r * outW + c]
+    }
+  }
+
+  return {
+    west: ox0 + gLeft * rx, east: ox0 + gRight * rx,
+    north: oy0 + gTop * ry, south: oy0 + gBottom * ry,
+    cols: outW, rows: outH, classes,
+  }
+}
+
+/** Single center-tile COG window read (the original, proven path). */
+async function readCoverSingle(bounds: Bounds): Promise<CoverGrid | null> {
   const { west, south, east, north } = bounds
   let grid: CoverGrid | null = null
   try {

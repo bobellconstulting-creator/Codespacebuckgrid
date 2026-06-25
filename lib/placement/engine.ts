@@ -97,6 +97,8 @@ interface Cell {
   distToOpenM: number
   funnel: boolean
   saddle: boolean
+  tpi: number // topographic position: cell elev minus mean of neighbors (+ high / - low)
+  bench: boolean // flat terrace mid-slope — deer travel/bed on benches
 }
 
 // ─── Wind helper ──────────────────────────────────────────────────────────────
@@ -403,7 +405,7 @@ export function generatePlacements(opts: {
         roadDistM, waterDistM, buildingDistM, elevM,
         slopeDeg: 0, aspectDeg: 0, edge: false,
         distToCoverM: Infinity, distToOpenM: Infinity,
-        funnel: false, saddle: false,
+        funnel: false, saddle: false, tpi: 0, bench: false,
       })
     }
   }
@@ -425,13 +427,33 @@ export function generatePlacements(opts: {
       // Aspect = compass direction of downslope
       cl.aspectDeg = ((Math.atan2(-dzdx, -dzdy) * 180) / Math.PI + 360) % 360
 
+      // TPI (topographic position): cell elevation minus the mean of its 8
+      // neighbors. Positive = local high (spur/point/ridge), negative = local
+      // low (draw/bottom), near-zero = uniform slope or flat ground.
+      let nSum = 0, nCount = 0
+      for (const nb of [eN, eS, eE, eW,
+        cellAt(cl.r + 1, cl.c + 1)?.elevM, cellAt(cl.r + 1, cl.c - 1)?.elevM,
+        cellAt(cl.r - 1, cl.c + 1)?.elevM, cellAt(cl.r - 1, cl.c - 1)?.elevM]) {
+        if (nb !== undefined) { nSum += nb; nCount++ }
+      }
+      cl.tpi = nCount > 0 ? cl.elevM - nSum / nCount : 0
+
+      // Relief threshold scales with cell size (was a flat 1.2 m, which over-
+      // flagged on coarse cells and under-flagged on fine ones).
+      const TH = Math.max(0.8, cellM * 0.05)
       // Saddle: lower than both neighbors along one axis, higher along the other
-      const TH = 1.2 // meters of relief to count
       const nsLow = Math.min(eN, eS) - cl.elevM > TH
       const ewLow = Math.min(eE, eW) - cl.elevM > TH
       const nsHigh = cl.elevM - Math.max(eN, eS) > TH
       const ewHigh = cl.elevM - Math.max(eE, eW) > TH
       cl.saddle = (nsLow && ewHigh) || (ewLow && nsHigh)
+
+      // Bench: a flat terrace mid-slope — uphill on one side, downhill on the
+      // other, but the cell itself is near-level and not a knob/pit. Deer travel
+      // and bed on benches ("benches like highways").
+      const hi = Math.max(eN, eS, eE, eW), lo = Math.min(eN, eS, eE, eW)
+      cl.bench = cl.slopeDeg < 6 && Math.abs(cl.tpi) < TH &&
+        hi - cl.elevM > TH && cl.elevM - lo > TH
     }
   }
 
@@ -499,6 +521,16 @@ export function generatePlacements(opts: {
     cl.cover !== 'water' &&
     cl.cover !== 'developed' &&
     cl.roadDistM > ROAD_BUFFER_M &&
+    cl.buildingDistM > BUILDING_BUFFER_M
+
+  // Cover-cell version for bedding/staging/sanctuary GROWTH: thick cover kept off
+  // roads, open water, and buildings so a grown zone can't bridge across a pond,
+  // road, or yard (the polygon hull would otherwise span the excluded gap — the
+  // same failure class as bedding drawn over a road).
+  const placeableCover = (cl: Cell): boolean =>
+    isCoverCell(cl) &&
+    cl.roadDistM > ROAD_BUFFER_M &&
+    cl.waterDistM > WATER_BUFFER_M &&
     cl.buildingDistM > BUILDING_BUFFER_M
 
   const windFromDeg = huntingWindFromDeg(spatial)
@@ -620,13 +652,15 @@ export function generatePlacements(opts: {
         score += Math.min(10, (cell.buildingDistM - BUILDING_BUFFER_M) / 40)
         if (cell.distToOpenM > cellM && cell.distToOpenM < 200) score += 8 // inside cover but near food
         score += aspectBonus(cell.aspectDeg)
-        if (cell.slopeDeg > 3 && cell.slopeDeg < 15) score += 6 // benches/points hold beds
+        if (cell.slopeDeg > 3 && cell.slopeDeg < 15) score += 6 // slopes/points hold beds
+        if (cell.bench) score += 8 // flat terrace on a slope — prime bedding
+        if (cell.tpi > 0 && cell.slopeDeg > 3) score += 4 // spur/point — beds with a downwind view
         return { cell, score }
       })
     const picked = pickTop(scored, 3, Math.max(180, cellM * 6))
     const targetAcres = Math.max(1, Math.min(6, parcelAcres * 0.05))
     picked.forEach((p, i) => {
-      const cluster = growCluster(p.cell, cl => isCoverCell(cl) && cl.roadDistM > ROAD_BUFFER_M, targetAcres)
+      const cluster = growCluster(p.cell, placeableCover, targetAcres)
       const polygon = clusterToPolygon(cluster)
       if (!polygon) return
       const acres = Math.round(cluster.size * cellAcres * 10) / 10
@@ -638,6 +672,7 @@ export function generatePlacements(opts: {
       if (hasElevation && p.cell.slopeDeg > 3) {
         factors.push(`${degreesToCompass8(p.cell.aspectDeg)}-facing slope (${p.cell.slopeDeg.toFixed(0)}°)`)
       }
+      if (p.cell.bench) factors.push('on a flat bench — sheltered bedding terrace')
       candidates.push({
         id: `bd${i + 1}`, type: 'bedding',
         center: { lat: p.cell.center[1], lng: p.cell.center[0] },
@@ -714,7 +749,7 @@ export function generatePlacements(opts: {
       const blockCells = [...bestBlock].map(i => cells[i])
       blockCells.sort((a, b) => b.roadDistM - a.roadDistM)
       const targetAcres = Math.max(3, Math.min(15, parcelAcres * 0.12))
-      const cluster = growCluster(blockCells[0], cl => bestBlock!.has(cl.idx), targetAcres)
+      const cluster = growCluster(blockCells[0], cl => bestBlock!.has(cl.idx) && cl.waterDistM > WATER_BUFFER_M && cl.buildingDistM > BUILDING_BUFFER_M, targetAcres)
       const polygon = clusterToPolygon(cluster)
       if (polygon) {
         const acres = Math.round(cluster.size * cellAcres * 10) / 10
@@ -742,6 +777,7 @@ export function generatePlacements(opts: {
         if (cell.funnel) score += 22
         if (cell.saddle) score += 18
         if (cell.edge) score += 14
+        if (cell.bench) score += 12
         if (cell.distToCoverM <= cellM) score += 6 // huntable from cover
         // Relationship to bedding: ideal 80–200yd, downwind
         let nearestBed: PlacementCandidate | null = null
@@ -784,6 +820,7 @@ export function generatePlacements(opts: {
       const factors: string[] = []
       if (s.cell.funnel) factors.push('terrain/cover funnel — movement pinches through here')
       if (s.cell.saddle) factors.push('topographic saddle')
+      if (s.cell.bench) factors.push('flat bench on the slope face — deer travel benches like trails')
       if (s.cell.edge) factors.push('cover-to-open edge')
       if (s.nearestBed && isFinite(s.bedD)) {
         const windNote = windTravel && windFromDeg != null
@@ -862,7 +899,7 @@ export function generatePlacements(opts: {
       .filter(s => s.score > 0)
     const picked = pickTop(scored, 2, 150)
     picked.forEach((p, i) => {
-      const cluster = growCluster(p.cell, cl => isCoverCell(cl), 1)
+      const cluster = growCluster(p.cell, placeableCover, 1)
       const polygon = clusterToPolygon(cluster)
       if (!polygon) return
       candidates.push({
@@ -985,7 +1022,7 @@ export function generatePlacements(opts: {
 
   // ── Prompt block for the LLM ────────────────────────────────────────────────
   const typeLabel: Record<CandidateType, string> = {
-    food_plot: 'FOOD PLOT', kill_plot: 'KILL PLOT', bedding: 'BEDDING',
+    food_plot: 'FOOD PLOT', kill_plot: 'HARVEST PLOT', bedding: 'BEDDING',
     stand_site: 'STAND', staging_area: 'STAGING AREA', sanctuary: 'SANCTUARY',
     access_route: 'ACCESS ROUTE', water: 'WATER',
   }
