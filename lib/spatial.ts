@@ -2,6 +2,7 @@
 import { fetchSoilData, summarizeSoilForTony, type SoilMapUnit } from './soil-sda'
 import { fetchElevationGridDEM } from './elevation-dem'
 import { fetchCanopyGrid, type CanopyGrid } from './satellite-cover'
+import { fetchWorldCover, type CoverGrid } from './worldcover'
 import { fetchNlcdGrid, summarizeNlcdForTony, type NlcdSample } from './nlcd'
 import { fetchWindRose, type WindRoseSummary } from './wind-rose'
 import { fetchDeerPressure, type DeerPressureSummary } from './deer-pressure'
@@ -61,10 +62,12 @@ export interface SpatialContext {
   deerPressure?: DeerPressureSummary
   // Sub-meter canopy/open grid from satellite imagery (fine cover refinement)
   canopyGrid?: CanopyGrid
+  // Authoritative land cover (ESA WorldCover 10m) — primary cover source
+  coverGrid?: CoverGrid
 }
 
 // Re-export new types so route.ts + engine can use them without direct imports
-export type { WindRoseSummary, DeerPressureSummary, CanopyGrid }
+export type { WindRoseSummary, DeerPressureSummary, CanopyGrid, CoverGrid }
 
 export function isValidBounds(b: unknown): b is Bounds {
   if (!b || typeof b !== 'object') return false
@@ -88,7 +91,7 @@ const OSM_QUERIES: Array<{ tag: string; kind: OsmFeature['kind'] }> = [
   { tag: '["building"]',                kind: 'building' },
   { tag: '["natural"="wood"]',          kind: 'forest'   },
   { tag: '["landuse"="forest"]',        kind: 'forest'   },
-  { tag: '["highway"~"primary|secondary|residential|unclassified|track"]', kind: 'road' },
+  { tag: '["highway"~"motorway|trunk|primary|secondary|tertiary|unclassified|residential|track"]', kind: 'road' },
   { tag: '["landuse"="farmland"]',      kind: 'farmland' },
   { tag: '["landuse"="meadow"]',        kind: 'farmland' },
   { tag: '["landuse"="orchard"]',       kind: 'farmland' },
@@ -457,7 +460,7 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
   const centerLng = (bounds.east + bounds.west) / 2
 
   // Fetch all data in parallel — all enrichments are optional, fail gracefully
-  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure, canopyGrid] = await Promise.all([
+  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure, canopyGrid, coverGrid] = await Promise.all([
     fetchOsmFeatures(bounds).catch((): OsmFeature[] => []),
     fetchElevationGrid(bounds).catch((): ElevationSample[] => []),
     fetchPrevailingWind(bounds).catch((): undefined => undefined),
@@ -468,6 +471,7 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
     fetchWindRose(centerLat, centerLng).catch((): WindRoseSummary | null => null),
     fetchDeerPressure(centerLat, centerLng).catch((): DeerPressureSummary | null => null),
     fetchCanopyGrid(bounds).catch((): CanopyGrid | null => null),
+    fetchWorldCover(bounds).catch((): CoverGrid | null => null),
   ])
 
   const { summary: elevationSummary, highGroundPoints, lowGroundPoints } = summarizeElevation(elevationSamples)
@@ -488,6 +492,7 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
     windRose: windRose ?? undefined,
     deerPressure: deerPressure ?? undefined,
     canopyGrid: canopyGrid ?? undefined,
+    coverGrid: coverGrid ?? undefined,
   }
   pruneCache()
   cache.set(key, { data: result, expiresAt: Date.now() + CACHE_TTL_MS })

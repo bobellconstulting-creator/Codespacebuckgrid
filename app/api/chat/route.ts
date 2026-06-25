@@ -48,16 +48,24 @@ const OLLAMA_TIMEOUT_MS = 45000
 const GLOBAL_DEADLINE_MS = 108_000
 
 // ─── Tony v2 system prompt — relative positioning, no GPS output ──────────────
-const TONY_SYSTEM_PROMPT = `You are Tony — a direct whitetail habitat consultant for BuckGrid Pro. You know every property. You give specific advice.
+const TONY_SYSTEM_PROMPT = `You are Tony — a whitetail habitat consultant for BuckGrid Pro. You're the expert a landowner is lucky to have walking their property: warm, genuinely helpful, plain-spoken, and specific. You know the property in front of you and you give real advice, kindly.
 
 CRITICAL OUTPUT RULE: NEVER output raw GPS coordinates. Always describe where features go using compass directions relative to the property boundary (north, northeast, east, southeast, south, southwest, west, northwest, center). The client handles coordinate translation — your job is analysis and reasoning, not GPS math.
 
-HONEST POSITIONING:
-- You are a habitat consultant, not a GPS system. Your zone suggestions are directional approximations (compass-based) intended to focus the hunter's attention, not survey-grade coordinates.
-- When users share field observations ("deer are bedding in the northeast," "I saw three bucks near the creek"), treat that as ground truth and reason FROM it. This is your most valuable mode.
-- Always acknowledge that zone placements are suggestions: "I'm putting this in the northeast based on the terrain, but walk it — you'll know better than I do."
-- Lead with strategic reasoning (why this zone, what wind, what timing) more than placement precision.
-- When a user brings field intel, prioritize that over terrain data inference. Their eyes on the ground beat satellite analysis every time.
+HOW YOU TALK TO CLIENTS — FRIENDLY EXPERT, NOT A LECTURER:
+- Answer the question they actually asked, first and directly. If they ask "what do I plant in this sanctuary," answer THAT — don't swerve into your own agenda. Add a helpful next thought after, never instead of, their answer.
+- Be warm and encouraging. The client is putting real work into their land — respect it. Note what's already working, then build on it. No scolding, no "you're doing it wrong."
+- Be decisive and specific without being pushy: make a clear call and say why ("here's what I'd do, and the reason"), but as friendly advice, not an order. Say "walk it to confirm" at most once, and only when it genuinely matters. Never "you know better than I do."
+- The owner's field intel — water, food plots, bedding, stands they've drawn — is GROUND TRUTH that already EXISTS. Anchor your plan to it and reference it by location. Never grade an existing feature as if you'd proposed it ("well placed"), and never re-recommend something they already have. Your value is the NEW moves that work with what's there — and gently flagging anything existing that's hurting them, with the fix.
+- NEVER quote a percentage quota or "target acreage." Size every recommendation to its JOB on THIS property (see sizing rules). Only call a plot too big or too small when the property gives a concrete reason, and say it kindly — otherwise leave the owner's acreage alone.
+- You don't fabricate. If the data can't confirm water or a feature, say so plainly and kindly instead of inventing it.
+
+WHAT YOU KNOW — proven whitetail habitat design (apply the principle in your own friendly voice; teach it, don't name-drop):
+- SECURITY COVER IS KING: on most properties — especially open ag country — quality bedding/security cover is the single biggest lever. A mature buck demands security and will travel far to feed as long as he can bed safe. When a property is short on thick cover, that's usually the #1 fix, ahead of adding more food.
+- BUILD BEDDING FAST WITH NATIVE GRASS: switchgrass and other native warm-season grasses (big bluestem, Indiangrass) create thick, secure bedding fast — often huntable the first season — and do best on south-facing slopes for thermal cover. Hinge-cutting achieves the same inside timber.
+- DESIGN THE PROPERTY ON PURPOSE: engineer deer movement instead of hoping for it — connect bedding to food with defined travel corridors and staging areas, then place stands with dedicated entry/exit access so a buck passes the stand and your scent/access never blows him out. Design first, build to the design.
+- WATER HOLES HOLD AND PATTERN DEER: a small, secluded water hole is a high-value, easy add — especially early season and in heat — and helps pattern movement. Recommend NEW water only where the property lacks it; never re-recommend water the owner already has.
+- SANCTUARY IS NEVER-ENTER GROUND: the secure core you do not hunt and do not plant — its entire value is that deer feel zero pressure there.
 
 ABSOLUTE RULES (violating any is a critical failure):
 1. NEVER place any feature outside the user's stated property boundary
@@ -66,7 +74,7 @@ ABSOLUTE RULES (violating any is a critical failure):
 4. NEVER place a stand or food_plot inside a confirmed OSM forest polygon or water polygon
 5. Every response MUST complete the 4-step Scene Analysis and 5-factor Habitat Audit before placing features
 6. CITE VISUAL EVIDENCE: every recommendation must name the specific location using compass direction and cover type
-7. QUANTIFY: use real numbers — acreage, distances in yards, soil pH targets, plot % of total property`
+7. QUANTIFY helpfully: use real numbers — acreage, distances in yards, soil pH targets — each sized to the feature's job, never as a percentage quota of the property`
 
 // ─── v2 Zone and StandSite types ──────────────────────────────────────────────
 type RelativePosition = 'north' | 'northeast' | 'east' | 'southeast' | 'south' | 'southwest' | 'west' | 'northwest' | 'center'
@@ -485,13 +493,13 @@ function buildTonyPrompt(
   placement?: PlacementResult | null
 ): string {
   const featureDesc = features.length > 0
-    ? `\n\nThe user has already drawn ${features.length} feature(s) on the map:\n${features.slice(0, MAX_FEATURES).map((f, i) => {
+    ? `\n\nThe owner has marked ${features.length} EXISTING feature(s) on the map — this is field intel about what is ALREADY on the property (water, food plots, bedding they've watched, stands), not a request for you to grade it:\n${features.slice(0, MAX_FEATURES).map((f, i) => {
         const type = f.properties?.layerType ?? f.type ?? 'unknown'
         const geomType = f.geometry?.type ?? 'unknown'
         const label = String(f.properties?.label ?? '').replace(/["""]/g, "'").slice(0, 80)
         return `  ${i + 1}. ${type} (${geomType})${label ? ` — "${label}"` : ''}`
-      }).join('\n')}\nReact specifically to what they've drawn — validate, improve, or redirect as needed.`
-    : '\n\nThe user has not drawn any features yet — give your initial read of the property.'
+      }).join('\n')}\nTreat these as FIXED ground truth — water and food plots the owner drew already EXIST (don't call them "well placed" or re-recommend them). Anchor your plan to them and reference them by location ("with your water in the SW, I'd..."). Then prescribe NEW moves: stands/access/sanctuary/plots that work with what's there, plus resize or relocate an existing plot ONLY if the property gives a concrete reason.`
+    : '\n\nThe owner has not marked anything yet — give your decisive first read of the property and the plan you would build.'
 
   const seasonGuidance = season ? getSeasonalGuidance(season) : ''
   const propertyLine = propertyName ? `Property name: "${propertyName}"` : ''
@@ -505,7 +513,6 @@ function buildTonyPrompt(
     ((bounds.north - bounds.south) * 111000) *
     ((bounds.east - bounds.west) * 111000 * Math.cos(centerLat * Math.PI / 180)) / 4047
   )
-  const targetFoodPlotAcres = `${(approxAcres * 0.03).toFixed(1)}–${(approxAcres * 0.05).toFixed(1)}`
 
   const prevailingWind = windDirection ?? getRegionalWindDefault(bounds)
 
@@ -513,8 +520,8 @@ function buildTonyPrompt(
     ? `\nPROPERTY BOUNDARY — HARD RULE: The user ONLY owns land INSIDE the drawn boundary. Every zone and stand site you recommend MUST be positioned INSIDE this boundary. The satellite image shows neighboring land the user does not own. Describe all placements using compass directions relative to the property center.\n`
     : ''
 
-  return `You are Tony — a direct whitetail habitat consultant for WildLogic. You know every property. You give specific advice.
-${propertyLine}${approxAcres > 0 ? `\nVisible area: approximately ${approxAcres} acres. Target food plot coverage: ${targetFoodPlotAcres} acres total (3–5% of huntable area).` : ''}${historyBlock}
+  return `You are Tony — a direct whitetail habitat consultant for BuckGrid Pro. You know every property. You give specific advice.
+${propertyLine}${approxAcres > 0 ? `\nVisible area: approximately ${approxAcres} acres (rough — use it for scale, not as a quota).` : ''}${historyBlock}
 
 ${seasonGuidance}
 
@@ -553,7 +560,7 @@ TERRAIN READING RULES:
 - Inside corners where two field edges form an L/V are almost always the highest-value stand site on the property.
 - SANCTUARY: If no 5+ acre undisturbed block exists, state this explicitly. Sanctuary is never-entry ground.
 - KILL PLOT vs DESTINATION PLOT: Kill plot = 0.1-0.5 acres tucked 60-100 yards inside timber edge near staging area. Destination plot = 2-5+ acres in open ground for herd nutrition.
-- FOOD PLOT COVERAGE: Target 3–5% of huntable acres (~${targetFoodPlotAcres} acres for this property).
+- FOOD PLOT SIZING — TACTICAL, NOT A QUOTA: Size the plot to its job, never to a percentage. Kill plot = 0.25–1 ac tucked tight to cover near bedding/staging (a place to kill, not herd nutrition). Destination/feeding plot = 2–5+ ac in open ground for the herd. Only call a plot "too big" or "too small" when THIS property gives a concrete reason (e.g., a 5-ac plot crowds a 30-ac timber block and piles on pressure; a 0.25-ac plot gets browsed to dirt where deer density is high). Do NOT scold the owner's acreage against a generic rule.
 - TSI: Where canopy is too open for bedding (deer visible 100+ yards), prescribe hinge-cut TSI — 10-20 trees/acre cut 60% through at 4 feet height.
 - SOUTH-FACING SLOPES: Deer bed here November–February. Flag when slope/aspect data confirms.
 - THERMAL RULES: Morning hunts = elevated/mid-slope stands. Evening hunts = lower slope/drainage edge stands.
@@ -563,7 +570,7 @@ TERRAIN READING RULES:
 
 ${placement ? placement.promptBlock + '\n\n' : ''}User says: "${message}"
 
-${placement ? `OUTPUT FORMAT (GROUNDED MODE): The placement engine above already computed WHERE everything goes — real coordinates snapped to verified terrain inside the boundary. Your job is to SELECT, RANK, and EXPLAIN. Return JSON with 'message', 'zones', and 'stand_sites' arrays. Every zone and stand MUST reference one of the candidate ids above via "candidate_id". NEVER invent a position, NEVER output lat/lng, NEVER use a candidate id that is not listed above. Pick the 4-8 strongest zones and 2-4 stands for this property and season; skip weak candidates. In each description, explain WHY that computed spot works (wind, terrain, cover, distances from the candidate's evidence) in hunter language.
+${placement ? `OUTPUT FORMAT (GROUNDED MODE): The placement engine above already computed WHERE everything goes — real coordinates snapped to verified terrain inside the boundary. Your job is to SELECT, RANK, and EXPLAIN. Return JSON with 'message', 'zones', and 'stand_sites' arrays. Every zone and stand MUST reference one of the candidate ids above via "candidate_id". NEVER invent a position, NEVER output lat/lng, NEVER use a candidate id that is not listed above. Pick the 4-8 strongest zones and 2-4 stands for this property and season; skip weak candidates. You MUST return at least one zone or stand whenever candidates are listed above — selecting nothing leaves the map blank and is a failure. Candidate ids that start with "u" are the OWNER'S OWN existing features (already drawn on the map): reference them in your reasoning but do NOT select them as zones/stands — draw only your NEW recommendations (fp/kp/bd/st/sn/sg/ar/wt ids). In each description, explain WHY that computed spot works (wind, terrain, cover, distances from the candidate's evidence) in hunter language.
 
 Exact JSON format:
 {
@@ -775,7 +782,10 @@ function groundResponse(
   stands: StandSite[],
   placement: PlacementResult
 ): { zones: TonyZone[]; stands: StandSite[] } {
-  const byId = new Map(placement.candidates.map(cd => [cd.id, cd]))
+  // Drawable pool excludes the owner's OWN drawn features (ids starting "u"):
+  // those are already on the map — Tony adds NEW recommendations, never re-draws them.
+  const drawable = placement.candidates.filter(cd => !cd.id.startsWith('u'))
+  const byId = new Map(drawable.map(cd => [cd.id, cd]))
   const used = new Set<string>()
 
   const claim = (candidateId: string | undefined, wantedType?: string): PlacementCandidate | null => {
@@ -788,7 +798,7 @@ function groundResponse(
     }
     // Fallback: best unused candidate of the wanted type
     if (wantedType) {
-      const fallback = placement.candidates
+      const fallback = drawable
         .filter(cd => cd.type === wantedType && !used.has(cd.id))
         .sort((a, b) => b.score - a.score)[0]
       if (fallback) {
@@ -873,6 +883,7 @@ function deterministicFallback(placement: PlacementResult): {
   const zones: TonyZone[] = []
   const stands: StandSite[] = []
   for (const cd of placement.candidates) {
+    if (cd.id.startsWith('u')) continue // owner's own drawn features — already on the map
     if (cd.type === 'stand_site') {
       stands.push({
         id: cd.id,
@@ -1424,6 +1435,23 @@ export async function POST(req: NextRequest) {
         stand_sites: groundedStands,
         annotations: toAnnotations(groundedZones, groundedStands),
         grounded: true,
+      })
+    }
+
+    // Boundary drawn but the engine couldn't produce a grounded plan (terrain/
+    // cover data failed this turn). Be honest and ask for a retry instead of
+    // dropping into the compass-guess path — never "talk but draw nothing" on a
+    // real property.
+    if (boundaryRing && boundaryRing.length >= 4) {
+      clearTimeout(globalTimer)
+      return NextResponse.json({
+        reply:
+          "I pulled your boundary but couldn't read the land data (terrain/cover) cleanly this turn — and I won't guess on your ground. Nudge the map a hair and ask again; it usually loads on the second pass.",
+        zones: [],
+        stand_sites: [],
+        annotations: [],
+        grounded: false,
+        retryable: true,
       })
     }
 

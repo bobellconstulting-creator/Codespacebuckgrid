@@ -283,6 +283,30 @@ export function generatePlacements(opts: {
     return cg.canopy[r * cg.cols + c] ? 1 : 0
   }
 
+  // Authoritative land cover from ESA WorldCover 10m (infrared-derived, so it
+  // actually separates timber/crop/grass/water instead of guessing from RGB).
+  // This is the PRIMARY cover source — it's what makes placements land true.
+  const wcg = spatial.coverGrid
+  const wcToCover = (code: number): Cover => {
+    if (code === 80) return 'water'
+    if (code === 90 || code === 95) return 'wetland'
+    if (code === 10) return 'forest'
+    if (code === 20) return 'scrub'
+    if (code === 50) return 'developed'
+    if (code === 30 || code === 40 || code === 60 || code === 70 || code === 100) return 'open'
+    return 'unknown'
+  }
+  const sampleWorldCover = (pt: LngLat): Cover => {
+    if (!wcg || wcg.east === wcg.west || wcg.north === wcg.south) return 'unknown'
+    if (pt[0] < wcg.west || pt[0] > wcg.east || pt[1] < wcg.south || pt[1] > wcg.north) return 'unknown'
+    const cFrac = (pt[0] - wcg.west) / (wcg.east - wcg.west)
+    const rFrac = (pt[1] - wcg.south) / (wcg.north - wcg.south) // row 0 = south
+    const c = Math.min(wcg.cols - 1, Math.max(0, Math.round(cFrac * (wcg.cols - 1))))
+    const r = Math.min(wcg.rows - 1, Math.max(0, Math.round(rFrac * (wcg.rows - 1))))
+    return wcToCover(wcg.classes[r * wcg.cols + c])
+  }
+  const hasWorldCover = !!wcg && wcg.classes.length > 0
+
   // ── Build cells ─────────────────────────────────────────────────────────────
   const cells: Cell[] = []
   const cellAt = (r: number, c: number): Cell | null =>
@@ -310,18 +334,25 @@ export function generatePlacements(opts: {
       let elevM = 0
 
       if (inside) {
-        // Cover from OSM polygons (priority: water > wetland > forest > scrub > farm)
-        // bbox test first — full point-in-ring only when the bbox contains the cell
+        // Cover priority, highest trust first:
+        //  1. Precise OSM water/wetland (a tagged pond/creek can be finer than 10 m)
+        //  2. ESA WorldCover 10 m — AUTHORITATIVE for timber vs crop vs grass
+        //  3. OSM forest/scrub/farm tags (fallback where WorldCover is missing)
+        //  4. NLCD (legacy fallback)
+        //  5. Excess-Green texture canopy — LAST resort only, and never when
+        //     WorldCover exists (texture flips crop↔timber, which is the bug we fixed)
         const hit = (polys: Boxed[]) => polys.some(p => inBox(center, p.box) && pointInRing(center, p.pts))
-        let osmConfirmed = true
         if (hit(waterPolys)) cover = 'water'
         else if (hit(wetlandPolys)) cover = 'wetland'
-        else if (hit(forestPolys)) cover = 'forest'
-        else if (hit(scrubPolys)) cover = 'scrub'
-        else if (hit(farmPolys)) cover = 'open'
-        else osmConfirmed = false
 
-        // NLCD fallback (nearest sample)
+        if (cover === 'unknown') cover = sampleWorldCover(center)
+
+        if (cover === 'unknown') {
+          if (hit(forestPolys)) cover = 'forest'
+          else if (hit(scrubPolys)) cover = 'scrub'
+          else if (hit(farmPolys)) cover = 'open'
+        }
+
         if (cover === 'unknown' && nlcdSamples.length > 0) {
           let bestD = Infinity
           let bestCode = 0
@@ -335,15 +366,11 @@ export function generatePlacements(opts: {
           if (bestCode > 0) cover = nlcdToCover(bestCode)
         }
 
-        // Sub-meter canopy refinement — only where coarse layers are weak.
-        // Never overrides OSM-confirmed cover, water, or wetland.
-        if (!osmConfirmed && cover !== 'water' && cover !== 'wetland') {
+        // Texture canopy only fills true gaps (no WorldCover, no NLCD, no OSM).
+        if (cover === 'unknown' && !hasWorldCover) {
           const cv = sampleCanopy(center)
-          if (cv === 1 && (cover === 'unknown' || cover === 'open')) {
-            cover = 'forest' // satellite shows canopy the coarse layer missed
-          } else if (cv === 0 && (cover === 'unknown' || cover === 'forest')) {
-            cover = 'open' // real opening inside NLCD-classed timber (food-plot ground)
-          }
+          if (cv === 1) cover = 'forest'
+          else if (cv === 0) cover = 'open'
         }
 
         // Distance loops: skip any feature whose bbox is already further than
@@ -566,7 +593,7 @@ export function generatePlacements(opts: {
       if (!polygon) return
       const acres = Math.round(cluster.size * cellAcres * 10) / 10
       const factors = [
-        p.cell.cover === 'open' ? 'verified open ground (OSM/NLCD)' : 'open ground (unclassified — verify on satellite)',
+        p.cell.cover === 'open' ? 'open ground — land-cover verified (ESA WorldCover)' : 'open ground (unclassified — verify on satellite)',
         `${p.cell.slopeDeg.toFixed(0)}° slope`,
         `${yd(p.cell.roadDistM)}yd from nearest road`,
       ]
