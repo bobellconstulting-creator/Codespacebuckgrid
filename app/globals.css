@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* Google fonts — must precede other rules (CSS @import ordering). Stencil
+   display + Inter body + JetBrains data + field-map type (Teko/Barlow/Oswald/Share Tech Mono). */
+@import url('https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Teko:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Share+Tech+Mono&display=swap');
 
 /* ─── BuckGrid Pro — Tactical Heritage ─────────────────────────────────────
    Sitka materiality. Linear-grade grid. Apparel-grade marks.
@@ -31,8 +34,8 @@
   --font-mono:    'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
 }
 
-/* Google fonts — stencil display + Inter body + JetBrains data */
-@import url('https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Google fonts — stencil display + Inter body + JetBrains data + field-map type (Teko/Barlow/Oswald/Share Tech Mono) */
+@import url('https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Teko:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Share+Tech+Mono&display=swap');
 
 html, body {
   margin: 0;
@@ -48,6 +51,25 @@ html, body {
   background: #B8923A;
   color: #0E1410;
 }
+
+/* Tony annotation labels on the map (MapLibre DOM markers) — shared by the
+   live app and /demo so map pins read clean on satellite imagery. */
+.tony-label {
+  background: rgba(10, 15, 9, 0.82);
+  border: 1px solid rgba(107, 122, 87, 0.5);
+  border-radius: 2px;
+  color: #D8D3C5;
+  font-family: 'Teko', 'Oswald', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  box-shadow: 0 0 8px rgba(107, 122, 87, 0.3);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tony-label::before { display: none; }
 
 /* Stencil display headlines */
 .font-stencil {
