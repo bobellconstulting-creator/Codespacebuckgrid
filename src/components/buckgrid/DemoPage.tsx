@@ -118,11 +118,21 @@ export default function DemoPage() {
     const api = mapRef.current
     if (!api) return
     api.wipeAll()
-    api.flyTo(h.center.lat, h.center.lng, 14.6)
     api.addFeature(
       { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [h.boundaryRing] } },
       'boundary', h.name
     )
+    // Frame tight on the parcel so the land + every placement fills the map pane.
+    const ring = h.boundaryRing
+    let west = Infinity, east = -Infinity, south = Infinity, north = -Infinity
+    for (const [lng, lat] of ring) {
+      if (lng < west) west = lng
+      if (lng > east) east = lng
+      if (lat < south) south = lat
+      if (lat > north) north = lat
+    }
+    if (isFinite(west)) api.fitBounds({ north, south, east, west }, 70)
+    else api.flyTo(h.center.lat, h.center.lng, 15.4)
   }, [])
 
   // Wait for the map once, then show the first property.

@@ -33,13 +33,13 @@ ff(['-framerate', String(FPS), '-i', p('frames/f_%05d.jpg'), ...capInputs,
 const card = (png, dur, file) => ff(['-loop', '1', '-t', String(dur), '-i', p(png),
   '-vf', `scale=1920:1080,format=yuv420p,setsar=1,fade=in:st=0:d=0.5,fade=out:st=${dur - 0.6}:d=0.6`,
   '-r', '30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '19', '-preset', 'medium', p(file)])
-card('intro.png', 5, 'seg_intro.mp4')
-card('outro.png', 6, 'seg_outro.mp4')
+card('intro.png', 6.5, 'seg_intro.mp4')
+card('outro.png', 8, 'seg_outro.mp4')
 
 // ── 3. Slow pan over the tall branded export report ─────────────────────────
 // report scaled to 1040px wide; scroll it up the Ink frame over the clip.
 const PANW = 1040, REPORT_H = Math.round(2813 * PANW / 1200) // ≈2440
-const PAN_DUR = 12
+const PAN_DUR = 30 // slow cinematic scroll over the full branded report
 const travel = REPORT_H - 1080 + 120 // a little headroom top+bottom
 ff(['-f', 'lavfi', '-t', String(PAN_DUR), '-i', `color=c=${INK}:s=1920x1080:r=30`,
   '-loop', '1', '-t', String(PAN_DUR), '-i', p('cedar-hollow-export.png'),

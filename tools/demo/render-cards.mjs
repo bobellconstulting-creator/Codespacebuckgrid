@@ -48,12 +48,13 @@ ${topo}${glow}
 </div>`, true)
 
 function captionHTML(text) {
+  // Lower-third, large + high-contrast so it reads on a phone. Bottom gradient
+  // scrim guarantees legibility over bright satellite imagery.
   return shell(`
-  <div style="position:absolute;left:64px;bottom:120px;max-width:1180px">
-    <div style="display:inline-block;background:rgba(19,23,16,0.86);border-left:5px solid ${ORANGE};border-radius:4px;padding:16px 26px 18px;box-shadow:0 8px 40px rgba(0,0,0,.55)">
-      <div class="mono" style="font-size:15px;color:${MOSS};letter-spacing:.26em;margin-bottom:6px">◢ TONY&nbsp;AI</div>
-      <div class="teko" style="font-size:46px;font-weight:600;color:${BONE};letter-spacing:.03em;line-height:1.02">${text}</div>
-    </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;height:340px;background:linear-gradient(to top, rgba(10,12,9,0.92) 0%, rgba(10,12,9,0.78) 42%, rgba(10,12,9,0) 100%)"></div>
+  <div style="position:absolute;left:72px;right:72px;bottom:88px">
+    <div class="mono" style="font-size:24px;color:${ORANGE};letter-spacing:.30em;margin-bottom:14px;text-shadow:0 2px 12px rgba(0,0,0,.8)">◢ TONY&nbsp;AI</div>
+    <div class="teko" style="font-size:86px;font-weight:700;color:${BONE};letter-spacing:.015em;line-height:0.98;text-shadow:0 4px 22px rgba(0,0,0,.85),0 0 2px rgba(0,0,0,.9)">${text}</div>
   </div>`, false)
 }
 

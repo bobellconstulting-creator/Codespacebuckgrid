@@ -15,7 +15,7 @@ fs.mkdirSync(FR, { recursive: true })
 const URL = process.env.DEMO_URL || 'http://localhost:3100/demo'
 const W = 1920, H = 1080
 const FPS = 12
-const DUR = 40 // seconds of capture
+const DUR = 42 // seconds of capture
 const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 
 const browser = await chromium.launch({
@@ -43,9 +43,28 @@ async function waitPainted(timeout = 25000) {
 await waitPainted()
 await sleep(1800) // let flyTo settle + tiles sharpen before capture
 
+// De-clutter the map labels once the plan is fully drawn: greedily hide any
+// '.tony-label' whose box overlaps one already kept (kept order = reveal order =
+// importance), so the final frame reads clean instead of a pile of pins.
+async function declutterLabels() {
+  await page.evaluate(() => {
+    const els = Array.from(document.querySelectorAll('.tony-label'))
+    const kept = []
+    const M = 6 // collision margin px
+    for (const el of els) {
+      const r = el.getBoundingClientRect()
+      if (r.width === 0) continue
+      const hit = kept.some(k => !(r.right + M < k.left || r.left - M > k.right || r.bottom + M < k.top || r.top - M > k.bottom))
+      if (hit) { el.style.display = 'none' } else { kept.push(r) }
+    }
+  }).catch(() => {})
+}
+
 // Actions fired at elapsed-second marks during capture.
 const actions = [
-  { t: 6.2, fn: async () => { await page.getByRole('button', { name: /ASK TONY/i }).click().catch(e => console.log('ask', e.message)) } },
+  { t: 3.2, fn: async () => { await page.getByRole('button', { name: /ASK TONY/i }).click().catch(e => console.log('ask', e.message)) } },
+  { t: 12.0, fn: declutterLabels },   // reveal finished (~3.2 + 12*0.56s) → tidy labels
+  { t: 14.0, fn: declutterLabels },   // re-run once in case a marker landed late
   { t: 31.0, fn: async () => { await page.getByRole('button', { name: /SHARE \/ EXPORT/i }).click().catch(e => console.log('share', e.message)) } },
   { t: 32.4, fn: async () => {
       const dl = page.waitForEvent('download', { timeout: 12000 }).catch(() => null)
@@ -54,17 +73,18 @@ const actions = [
     } },
 ]
 
-// Caption beats (id, start, end in seconds, text).
+// Caption beats (start, end in CAPTURE seconds, text). Short + punchy — the
+// narrator carries it; captions just anchor the eye. Bigger = phone-readable.
 const captions = [
-  { t0: 0.4, t1: 5.9, text: 'Real Iowa timber-and-crop ground · ~101 acres' },
-  { t0: 6.4, t1: 9.2, text: 'One click — Tony reads the terrain, cover & wind' },
-  { t0: 9.4, t1: 12.6, text: 'Sanctuary core — found automatically' },
-  { t0: 12.8, t1: 15.8, text: 'Bedding on the south-facing slopes' },
-  { t0: 16.0, t1: 19.0, text: 'Food plots on the timber-to-crop edge' },
-  { t0: 19.2, t1: 23.0, text: 'Stand placed downwind of bedding' },
-  { t0: 23.2, t1: 27.0, text: 'Every call shows its evidence — not an LLM guess' },
-  { t0: 27.2, t1: 30.8, text: "Tonight's Sit ranks every stand on tonight's wind" },
-  { t0: 31.2, t1: 39.5, text: 'Branded plan — export for the truck or the group chat' },
+  { t0: 0.5, t1: 3.0, text: '~101 acres · real Iowa ground' },
+  { t0: 3.6, t1: 7.4, text: 'One click — Tony reads it all' },
+  { t0: 7.6, t1: 11.0, text: 'Sanctuary core, found' },
+  { t0: 11.2, t1: 14.4, text: 'Bedding on the south slopes' },
+  { t0: 14.6, t1: 18.0, text: 'Food on the timber edge' },
+  { t0: 18.2, t1: 22.2, text: 'Stands downwind of every bed' },
+  { t0: 22.4, t1: 27.0, text: 'Every call shows its math' },
+  { t0: 27.2, t1: 30.6, text: "Tonight's Sit ranks the wind" },
+  { t0: 33.2, t1: 41.5, text: 'Export it — truck-ready' },
 ]
 
 let frame = 0
