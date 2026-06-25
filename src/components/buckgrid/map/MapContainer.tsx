@@ -12,6 +12,7 @@ export interface MapContainerHandle {
   drawTonyAnnotations: (annotations: TonyAnnotation[]) => void
   getBoundsAndFeatures: () => { bounds: { north: number; south: number; east: number; west: number }; zoom: number; features: any[] } | null
   flyTo: (lat: number, lng: number, zoom: number) => void
+  fitBounds: (bounds: { north: number; south: number; east: number; west: number }, padding?: number) => void
 }
 
 interface Props {
@@ -37,6 +38,7 @@ const MapContainer = forwardRef<MapContainerHandle, Props>(({ activeTool, brushS
     drawTonyAnnotations: (annotations: TonyAnnotation[]) => api.drawAnnotations(annotations),
     getBoundsAndFeatures: () => api.getBoundsAndFeatures(),
     flyTo: (lat: number, lng: number, zoom: number) => api.flyTo([lat, lng], zoom),
+    fitBounds: (bounds, padding) => api.fitBounds(bounds, padding),
   }))
 
   return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />

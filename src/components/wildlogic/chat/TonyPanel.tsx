@@ -42,7 +42,7 @@ const ZONE_TYPE_COLORS: Record<TonyZone['type'], string> = {
 
 const ZONE_TYPE_LABELS: Record<TonyZone['type'], string> = {
   food_plot: 'FOOD PLOT',
-  kill_plot: 'KILL PLOT',
+  kill_plot: 'HARVEST PLOT',
   access_route: 'ACCESS',
   bedding: 'BEDDING',
   stand_site: 'STAND',

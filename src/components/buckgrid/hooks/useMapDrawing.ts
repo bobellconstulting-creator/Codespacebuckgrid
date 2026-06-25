@@ -25,6 +25,7 @@ export interface LayerSummary {
 
 export interface MapApi {
   flyTo: (center: [number, number], zoom: number) => void
+  fitBounds: (bounds: { north: number; south: number; east: number; west: number }, padding?: number) => void
   clearAll: () => void
   undoLast: () => void
   setDrawMode: (mode: LayerType) => void
@@ -807,6 +808,13 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
     flyTo: (center, zoom) => {
       // center arrives as [lat, lng] (legacy Leaflet order)
       mapRef.current?.flyTo({ center: [center[1], center[0]], zoom, duration: 1800, essential: true })
+    },
+    fitBounds: (bounds, padding = 64) => {
+      // Frame tight on a parcel so it fills the map pane regardless of size.
+      mapRef.current?.fitBounds(
+        [[bounds.west, bounds.south], [bounds.east, bounds.north]],
+        { padding, duration: 1800, essential: true, maxZoom: 17 }
+      )
     },
     clearAll: () => {
       drawnRef.current = []
