@@ -969,6 +969,10 @@ export async function POST(req: NextRequest) {
     }
 
     const googleKey = process.env.GOOGLE_AI_KEY || process.env.GOOGLE_API_KEY
+    // Second Gemini key — when the primary key hits its free-tier 429 quota, the
+    // vision path retries the SAME models on this key before falling to text-only.
+    const googleKey2 = process.env.GOOGLE_AI_KEY_2 || process.env.GOOGLE_API_KEY_2
+    const googleKeys = [googleKey, googleKey2].filter((k): k is string => !!k)
     const groqKey = process.env.GROQ_API_KEY || process.env.GROQ_JARVIS_API_KEY
     const openaiKey = process.env.OPENAI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
@@ -1146,48 +1150,43 @@ export async function POST(req: NextRequest) {
         generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json' },
       })
 
-      // ── 1. Gemini 2.5 Flash — PRIMARY (best spatial vision, free) ────────────
-      if (googleKey) {
-        try {
-          const result = await Promise.race([
-            fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': googleKey },
-              body: geminiBody25,
-            }),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)),
-          ])
-          if (result.status === 429) { geminiRateLimited = true; throw new Error('Gemini2.5 429') }
-          if (!result.ok) throw new Error(`Gemini2.5 ${result.status}`)
-          const j = await result.json()
-          rawText = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
-          if (rawText) usedVision = true
-          else throw new Error('Gemini2.5 empty')
-        } catch (e: unknown) {
-          console.warn('[chat] Gemini 2.5 Flash failed:', e instanceof Error ? e.message : e)
+      // Try one Gemini model across ALL configured keys (double-key fallback):
+      // a 429 on the primary key retries the same model on the backup key before
+      // we give up vision. Returns the model's text, or '' if every key failed.
+      const tryGeminiModel = async (model: string, body: string): Promise<string> => {
+        for (const key of googleKeys) {
+          try {
+            const result = await Promise.race([
+              fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+                body,
+              }),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)),
+            ])
+            if (result.status === 429) { geminiRateLimited = true; console.warn(`[chat] ${model} 429 (key …${key.slice(-4)}) — trying next key`); continue }
+            if (!result.ok) throw new Error(`${model} ${result.status}`)
+            const j = await result.json()
+            const txt = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
+            if (txt) return txt
+            throw new Error(`${model} empty`)
+          } catch (e: unknown) {
+            console.warn(`[chat] ${model} failed (key …${key.slice(-4)}):`, e instanceof Error ? e.message : e)
+          }
         }
+        return ''
       }
 
-      // ── 2. Gemini 2.0 Flash — stable Google vision fallback ──────────────────
-      if (!usedVision && googleKey) {
-        try {
-          const result = await Promise.race([
-            fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': googleKey },
-              body: geminiBody,
-            }),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), GEMINI_TIMEOUT_MS)),
-          ])
-          if (result.status === 429) { geminiRateLimited = true; throw new Error('Gemini2.0 429') }
-          if (!result.ok) throw new Error(`Gemini2.0 ${result.status}`)
-          const j = await result.json()
-          rawText = j.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
-          if (rawText) usedVision = true
-          else throw new Error('Gemini2.0 empty')
-        } catch (e: unknown) {
-          console.warn('[chat] Gemini 2.0 Flash failed:', e instanceof Error ? e.message : e)
-        }
+      // ── 1. Gemini 2.5 Flash — PRIMARY vision (best, free), both keys ─────────
+      if (googleKeys.length) {
+        const txt = await tryGeminiModel('gemini-2.5-flash', geminiBody25)
+        if (txt) { rawText = txt; usedVision = true }
+      }
+
+      // ── 2. Gemini 2.0 Flash — stable vision fallback, both keys ──────────────
+      if (!usedVision && googleKeys.length) {
+        const txt = await tryGeminiModel('gemini-2.0-flash', geminiBody)
+        if (txt) { rawText = txt; usedVision = true }
       }
 
       // ── 3. Ollama/Hermes — FREE local fallback (before cloud paid APIs) ──────
