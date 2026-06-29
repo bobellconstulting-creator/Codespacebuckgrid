@@ -156,9 +156,10 @@ function checkTerrainConflict(coord: [number, number], osmFeatures: OsmFeature[]
 // Persistent rate limiter + free tier enforcement via Upstash Redis
 // Falls back to in-memory if KV not configured (local dev)
 const _rateLimitFallback = new Map<string, { count: number; resetAt: number }>()
+const _freeTierFallback = new Map<string, { count: number; resetAt: number }>()
 const RATE_LIMIT_MAX = 5
 const RATE_LIMIT_WINDOW_S = 60
-const FREE_TIER_DAILY_LIMIT = 3
+const FREE_TIER_DAILY_LIMIT = Number(process.env.FREE_TIER_DAILY_LIMIT || 40)  // free for the buddy test; tune via Vercel env (was 3)
 
 const _KV_URL = process.env.KV_REST_API_URL || ''
 const _KV_TOKEN = process.env.KV_REST_API_TOKEN || ''
@@ -205,9 +206,22 @@ async function checkRateLimit(ip: string): Promise<boolean> {
 }
 
 async function checkFreeTier(ip: string): Promise<boolean> {
-  if (!_KV_URL || !_KV_TOKEN) return true
   const today = new Date().toISOString().slice(0, 10)
   const key = `ft:${ip}:${today}`
+  // Fail CLOSED when KV is absent: cap per-IP/day in memory so AI cost abuse is
+  // bounded even without KV. (KV is still the real fix — it caps globally; this
+  // in-memory fallback is per serverless instance.)
+  if (!_KV_URL || !_KV_TOKEN) {
+    const now = Date.now()
+    const entry = _freeTierFallback.get(key)
+    if (!entry || now > entry.resetAt) {
+      _freeTierFallback.set(key, { count: 1, resetAt: now + 86400 * 1000 })
+      return true
+    }
+    if (entry.count >= FREE_TIER_DAILY_LIMIT) return false
+    entry.count++
+    return true
+  }
   const count = await _kvIncr(key)
   if (count === 1) await _kvExpire(key, 86400)
   return count <= FREE_TIER_DAILY_LIMIT
@@ -223,6 +237,10 @@ function isValidBounds(b: unknown): b is Bounds {
     && east !== west
     && north <= 90 && south >= -90
     && east <= 180 && west >= -180
+    // Reject degenerate (near-zero) and absurdly large extents — guards spatial
+    // OOM and blocks "advice from a zoomed-out viewport" with no real property.
+    && (north - south) > 0.0002 && (north - south) <= 0.6
+    && Math.abs(east - west) > 0.0002 && Math.abs(east - west) <= 0.8
 }
 
 function getSeasonalGuidance(season: string): string {
@@ -1154,11 +1172,11 @@ export async function POST(req: NextRequest) {
       // engine is the source of truth, so extended reasoning isn't needed here.
       const geminiBody25 = JSON.stringify({
         contents: geminiContents,
-        generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
+        generationConfig: { maxOutputTokens: 3072, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } },
       })
       const geminiBody = JSON.stringify({
         contents: geminiContents,
-        generationConfig: { maxOutputTokens: 8192, responseMimeType: 'application/json' },
+        generationConfig: { maxOutputTokens: 3072, responseMimeType: 'application/json' },
       })
 
       // Try one Gemini model across ALL configured keys (double-key fallback):
