@@ -8,6 +8,8 @@ import PropertySearch from './ui/PropertySearch'
 import TonyChat, { type TonyChatHandle } from './chat/TonyChat'
 import { TOOLS, type Tool } from './constants/tools'
 import { usePropertyMemory } from './hooks/usePropertyMemory'
+import { CornerFrame, Wordmark, PhaseChip } from './hud/Hud'
+import { HUD, FONT, rgba } from './hud/tokens'
 
 type SeasonInfo = { label: string; tip: string; color: string }
 
@@ -154,7 +156,7 @@ export default function BuckGridProPage() {
   const isDrawing = activeTool.id !== 'nav'
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#3A4042', fontFamily: "'Barlow Condensed', 'Inter', sans-serif", overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, background: `radial-gradient(1200px 800px at 50% -10%, ${HUD.spruce}, ${HUD.bark} 60%, #07120C 100%)`, fontFamily: FONT.body, overflow: 'hidden' }}>
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: 1; } 40% { transform: translateY(-6px); opacity: 0.7; } }
@@ -171,13 +173,16 @@ export default function BuckGridProPage() {
         .leaflet-popup-close-button { color: #6E6A5C !important; }
       `}</style>
 
+      {/* HUD corner-bracket frame (matches the demo). Above map, below modals. */}
+      <CornerFrame inset={14} len={36} weight={2} />
+
       {/* ═══════════════════════════════════════════════
           TOP HEADER BAR
       ═══════════════════════════════════════════════ */}
       <header style={{
         position: 'absolute', top: 0, left: 0, right: 0, height: `${HEADER_H}px`,
-        background: 'linear-gradient(135deg, #1E2122 0%, #3A4042 50%, #1E2122 100%)',
-        borderBottom: '1px solid rgba(107,122,87,0.15)',
+        background: `linear-gradient(135deg, ${HUD.bark} 0%, ${HUD.spruce} 50%, ${HUD.bark} 100%)`,
+        borderBottom: `1px solid ${rgba(HUD.field, 0.7)}`,
         display: 'flex', alignItems: 'center',
         paddingLeft: '0', paddingRight: '16px',
         zIndex: 1100,
@@ -188,7 +193,7 @@ export default function BuckGridProPage() {
           /* ── Mobile header: logo + hamburger only ── */
           <>
             <div style={{ display: 'flex', alignItems: 'center', padding: '0 16px', flex: 1 }}>
-              <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: '54px', width: 'auto', objectFit: 'contain', display: 'block', maxHeight: '54px' }} />
+              <Wordmark size={22} />
             </div>
             <button
               onClick={handleAnalyze}
@@ -202,7 +207,7 @@ export default function BuckGridProPage() {
             <button
               onClick={handleGetAdvice}
               disabled={isAdvising || isAnalyzing}
-              style={{ minHeight: '44px', padding: '0 12px', background: isAdvising ? 'rgba(107,122,87,0.3)' : '#6B7A57', border: '1px solid rgba(107,122,87,0.6)', borderRadius: '3px', cursor: (isAdvising || isAnalyzing) ? 'not-allowed' : 'pointer', color: '#fff', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '12px', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: '8px', opacity: (isAdvising || isAnalyzing) ? 0.6 : 1 }}
+              style={{ minHeight: '44px', padding: '0 14px', background: isAdvising ? rgba(HUD.blaze, 0.4) : HUD.blaze, border: `1px solid ${rgba(HUD.blaze, 0.7)}`, borderRadius: '6px', cursor: (isAdvising || isAnalyzing) ? 'not-allowed' : 'pointer', color: HUD.bone, fontFamily: FONT.display, fontWeight: 700, fontSize: '14px', letterSpacing: '0.06em', textTransform: 'uppercase', marginRight: '8px', opacity: (isAdvising || isAnalyzing) ? 0.6 : 1, boxShadow: isAdvising ? 'none' : `0 0 14px ${rgba(HUD.blaze, 0.35)}` }}
               aria-label="Get advice drawn on map"
             >
               {isAdvising ? '◌' : '⊕ Advice'}
@@ -226,10 +231,10 @@ export default function BuckGridProPage() {
               height: '100%',
               display: 'flex', alignItems: 'center', gap: '0',
               padding: '0 16px',
-              borderRight: '1px solid rgba(107,122,87,0.15)',
+              borderRight: `1px solid ${rgba(HUD.field, 0.6)}`,
               flexShrink: 0,
             }}>
-              <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: '58px', width: 'auto', objectFit: 'contain', display: 'block', maxHeight: '58px', maxWidth: '100%' }} />
+              <Wordmark size={28} />
             </div>
 
             {/* Property search */}
@@ -313,29 +318,26 @@ export default function BuckGridProPage() {
             <button
               onClick={handleGetAdvice}
               disabled={isAdvising || isAnalyzing}
-              style={{ padding: '7px 18px', background: isAdvising ? 'rgba(107,122,87,0.3)' : '#6B7A57', border: '1px solid rgba(107,122,87,0.6)', borderRadius: '3px', cursor: (isAdvising || isAnalyzing) ? 'not-allowed' : 'pointer', color: '#fff', fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em', textTransform: 'uppercase', marginRight: '8px', transition: 'all 0.15s ease', whiteSpace: 'nowrap', opacity: (isAdvising || isAnalyzing) ? 0.6 : 1, boxShadow: isAdvising ? 'none' : '0 0 14px rgba(107,122,87,0.35)' }}
-              onMouseEnter={e => { if (!isAdvising && !isAnalyzing) { e.currentTarget.style.background = '#7A8A66'; e.currentTarget.style.boxShadow = '0 0 20px rgba(107,122,87,0.55)' } }}
-              onMouseLeave={e => { e.currentTarget.style.background = isAdvising ? 'rgba(107,122,87,0.3)' : '#6B7A57'; e.currentTarget.style.boxShadow = isAdvising ? 'none' : '0 0 14px rgba(107,122,87,0.35)' }}
+              style={{ padding: '8px 20px', background: isAdvising ? rgba(HUD.blaze, 0.4) : HUD.blaze, border: `1px solid ${rgba(HUD.blaze, 0.7)}`, borderRadius: '6px', cursor: (isAdvising || isAnalyzing) ? 'not-allowed' : 'pointer', color: HUD.bone, fontFamily: FONT.display, fontWeight: 700, fontSize: '15px', letterSpacing: '0.08em', textTransform: 'uppercase', marginRight: '8px', transition: 'all 0.15s ease', whiteSpace: 'nowrap', opacity: (isAdvising || isAnalyzing) ? 0.6 : 1, boxShadow: isAdvising ? 'none' : `0 0 16px ${rgba(HUD.blaze, 0.4)}` }}
+              onMouseEnter={e => { if (!isAdvising && !isAnalyzing) { e.currentTarget.style.background = '#F2682E'; e.currentTarget.style.boxShadow = `0 0 24px ${rgba(HUD.blaze, 0.6)}` } }}
+              onMouseLeave={e => { e.currentTarget.style.background = isAdvising ? rgba(HUD.blaze, 0.4) : HUD.blaze; e.currentTarget.style.boxShadow = isAdvising ? 'none' : `0 0 16px ${rgba(HUD.blaze, 0.4)}` }}
               aria-label="Get advice drawn on map from Tony"
             >
               {isAdvising ? '◌ Drawing...' : '⊕ Get Advice'}
             </button>
 
-            {/* Season chip */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingLeft: '12px', borderLeft: '1px solid #1A2A1F', marginLeft: '4px' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#5A8A5F', display: 'inline-block', boxShadow: '0 0 8px #5A8A5F' }} />
-              <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '11px', letterSpacing: '0.14em', color: '#6B7A57', textTransform: 'uppercase' }}>
-                {season.label}
-              </span>
+            {/* Season phase chip (HUD) */}
+            <div style={{ display: 'flex', alignItems: 'center', paddingLeft: '12px', borderLeft: `1px solid ${rgba(HUD.field, 0.5)}`, marginLeft: '4px' }}>
+              <PhaseChip text={season.label} size={11} />
             </div>
 
             {/* Acres */}
             {propertyAcres > 0 ? (
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', paddingLeft: '14px', borderLeft: '1px solid rgba(107,122,87,0.15)', marginLeft: '8px' }}>
-                <span key={propertyAcres} style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '28px', letterSpacing: '0.04em', color: '#6B7A57', lineHeight: 1, animation: 'acresFlyIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', paddingLeft: '14px', borderLeft: `1px solid ${rgba(HUD.field, 0.5)}`, marginLeft: '8px' }}>
+                <span key={propertyAcres} style={{ fontFamily: FONT.display, fontWeight: 900, fontSize: '30px', letterSpacing: '0.02em', color: HUD.bone, lineHeight: 1, animation: 'acresFlyIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both' }}>
                   {propertyAcres.toLocaleString()}
                 </span>
-                <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 700, fontSize: '11px', color: '#6B7A57', letterSpacing: '0.12em', paddingBottom: '2px', opacity: 0.7 }}>AC</span>
+                <span style={{ fontFamily: FONT.mono, fontWeight: 700, fontSize: '12px', color: HUD.ember, letterSpacing: '0.12em', paddingBottom: '2px' }}>AC</span>
                 {featureCount > 0 && (
                   <span style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontSize: '10px', color: '#6B7A57', letterSpacing: '0.08em', paddingBottom: '2px', marginLeft: '2px', opacity: 0.5 }}>
                     · {featureCount}
@@ -372,7 +374,7 @@ export default function BuckGridProPage() {
           left: 0,
           width: `${SIDEBAR_W}px`,
           bottom: 0,
-          background: '#3A4042',
+          background: '#16291E',
           borderRight: '1px solid rgba(107,122,87,0.15)',
           overflowY: 'auto',
           zIndex: 1000,
@@ -461,7 +463,7 @@ export default function BuckGridProPage() {
           zIndex: 2000,
           maxHeight: '80dvh',
           overflowY: 'auto',
-          background: '#3A4042',
+          background: '#16291E',
           borderBottom: '1px solid rgba(107,122,87,0.12)',
           transform: isMenuOpen ? 'translateY(0)' : 'translateY(-110%)',
           transition: 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -504,9 +506,9 @@ export default function BuckGridProPage() {
         <div onClick={() => { localStorage.setItem('buckgrid_onboarded', '1'); setShowOnboarding(false) }} style={{ position: 'absolute', inset: 0, zIndex: 3000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(8px)', animation: 'modalBackdropIn 0.25s ease-out both' }}>
           <div onClick={(e) => e.stopPropagation()} style={{
             width: '440px', maxWidth: 'calc(100vw - 32px)',
-            background: '#2E3335',
-            border: '1px solid rgba(107,122,87,0.2)',
-            borderTop: '3px solid #6B7A57',
+            background: HUD.spruce,
+            border: `1px solid ${rgba(HUD.field, 0.6)}`,
+            borderTop: `3px solid ${HUD.blaze}`,
             borderRadius: '8px',
             boxShadow: '0 4px 24px rgba(0,0,0,0.6), 0 24px 80px rgba(0,0,0,0.85), 0 0 0 1px rgba(107,122,87,0.08)',
             overflow: 'hidden',
@@ -533,15 +535,11 @@ export default function BuckGridProPage() {
               }} />
 
               <div style={{ position: 'relative', zIndex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                  <img src="/buckgrid-logo.png" alt="BuckGrid Pro" style={{ height: '160px', width: 'auto', objectFit: 'contain', display: 'block', maxWidth: '100%' }} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '18px' }}>
+                  <Wordmark size={48} />
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontWeight: 900, fontSize: '42px', letterSpacing: '0.12em', color: '#D8D3C5', textTransform: 'uppercase', lineHeight: 1, marginBottom: '8px', display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '10px' }}>
-                    <span>BUCK<span style={{ color: '#6B7A57' }}>GRID</span></span>
-                    <span style={{ fontSize: '20px', fontWeight: 600, letterSpacing: '0.16em', color: '#6E6A5C' }}>PRO</span>
-                  </div>
-                  <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '10px', letterSpacing: '0.28em', color: '#5A8A5F', textTransform: 'uppercase', fontWeight: 700, marginBottom: '18px' }}>
+                  <div style={{ fontFamily: FONT.mono, fontSize: '10px', letterSpacing: '0.28em', color: HUD.sage, textTransform: 'uppercase', fontWeight: 700, marginBottom: '18px' }}>
                     AI-POWERED HUNTING PROPERTY INTELLIGENCE
                   </div>
                   <p style={{ fontFamily: "'Teko', 'Oswald', sans-serif", fontSize: '15px', color: '#C8C3B5', letterSpacing: '0.03em', lineHeight: 1.8, margin: 0, maxWidth: '320px', marginLeft: 'auto', marginRight: 'auto' }}>
@@ -594,13 +592,13 @@ export default function BuckGridProPage() {
                 onClick={() => { localStorage.setItem('buckgrid_onboarded', '1'); setShowOnboarding(false) }}
                 style={{
                   width: '100%',
-                  background: 'linear-gradient(135deg, #6B7A57 0%, #6B7A57 100%)',
-                  color: '#1E2122',
-                  fontFamily: "'Teko', 'Oswald', sans-serif",
-                  fontWeight: 800, fontSize: '14px', letterSpacing: '0.16em', textTransform: 'uppercase',
-                  padding: '14px 16px', borderRadius: '4px', border: 'none', cursor: 'pointer',
+                  background: HUD.blaze,
+                  color: HUD.bone,
+                  fontFamily: FONT.display,
+                  fontWeight: 800, fontSize: '15px', letterSpacing: '0.12em', textTransform: 'uppercase',
+                  padding: '15px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: '0 4px 16px rgba(107,122,87,0.25)',
+                  boxShadow: `0 4px 18px ${rgba(HUD.blaze, 0.35)}`,
                   position: 'relative',
                   overflow: 'hidden',
                 }}

@@ -3,6 +3,7 @@ import { fetchSoilData, summarizeSoilForTony, type SoilMapUnit } from './soil-sd
 import { fetchElevationGridDEM } from './elevation-dem'
 import { fetchCanopyGrid, type CanopyGrid } from './satellite-cover'
 import { fetchWorldCover, type CoverGrid } from './worldcover'
+import { fetchBuildings } from './buildings'
 import { fetchNlcdGrid, summarizeNlcdForTony, type NlcdSample } from './nlcd'
 import { fetchWindRose, type WindRoseSummary } from './wind-rose'
 import { fetchDeerPressure, type DeerPressureSummary } from './deer-pressure'
@@ -548,7 +549,7 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
   const centerLng = (bounds.east + bounds.west) / 2
 
   // Fetch all data in parallel — all enrichments are optional, fail gracefully
-  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure, canopyGrid, coverGrid] = await Promise.all([
+  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure, canopyGrid, coverGrid, mlBuildings] = await Promise.all([
     fetchOsmFeatures(bounds).catch((): OsmFeature[] => []),
     fetchElevationGrid(bounds).catch((): ElevationSample[] => []),
     fetchPrevailingWind(bounds).catch((): undefined => undefined),
@@ -560,7 +561,12 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
     fetchDeerPressure(centerLat, centerLng).catch((): DeerPressureSummary | null => null),
     fetchCanopyGrid(bounds).catch((): CanopyGrid | null => null),
     fetchWorldCover(bounds).catch((): CoverGrid | null => null),
+    fetchBuildings(bounds).catch((): OsmFeature[] => []),
   ])
+
+  // Merge ML building footprints (Microsoft) — fills the rural gap OSM misses,
+  // so the engine's building buffer keeps stands/plots out of homestead yards.
+  if (mlBuildings.length > 0) osmFeatures.push(...mlBuildings)
 
   const { summary: elevationSummary, highGroundPoints, lowGroundPoints } = summarizeElevation(elevationSamples)
   const terrainDerivatives = computeTerrainDerivatives(elevationSamples, bounds)

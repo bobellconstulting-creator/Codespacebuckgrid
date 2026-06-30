@@ -1,6 +1,7 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react'
 import maplibregl from 'maplibre-gl'
 import { polygonToCells } from 'h3-js'
+import { parcelAcresLabel, parcelAreaAcres } from '../../../../lib/parcel-area'
 import buffer from '@turf/buffer'
 import simplify from '@turf/simplify'
 import { lineString } from '@turf/helpers'
@@ -300,7 +301,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       map.addLayer({
         id: 'drawn-glow', type: 'line', source: 'drawn',
         filter: ['==', ['get', 'layerType'], 'boundary'],
-        paint: { 'line-color': '#FF6B00', 'line-width': 9, 'line-blur': 7, 'line-opacity': 0.45 },
+        paint: { 'line-color': '#F2A14B', 'line-width': 11, 'line-blur': 9, 'line-opacity': 0.55 },
       })
       map.addLayer({
         id: 'drawn-point', type: 'circle', source: 'drawn',
@@ -456,7 +457,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       canvas.style.cursor = 'crosshair'
       if (ring) ring.style.display = 'none'
 
-      const color = '#FF6B00'
+      const color = '#F4EFE3' // HUD bone — boundary renders as the demo's glowing white line
       const points: [number, number][] = []
 
       const draftFeatures = (cursor?: [number, number]) => {
@@ -483,7 +484,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
           const legYds = Math.round(haversineMeters(points[points.length - 1], cursor) * 1.09361)
           parts.push(`LEG ${legYds} YDS`)
         }
-        if (all.length >= 3) parts.push(`${polygonAreaAcres(all).toFixed(1)} AC`)
+        if (all.length >= 3) parts.push(`${parcelAreaAcres(all).toFixed(1)} AC`)
         parts.push(points.length >= 3 ? 'CLICK FIRST PT / ENTER TO CLOSE' : 'KEEP CLICKING CORNERS')
         showHud(parts.join('  ·  '))
       }
@@ -712,22 +713,16 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
 
     if (!boundaryGeo) return empty
 
-    // h3-js v4 API: takes [[lat, lng], ...] not GeoJSON [lng, lat]
-    let acres = 0
-    let hexCount = 0
+    // Acreage = geodesic area on the WGS84 ellipsoid (survey-grade, defensible).
+    // Single source of truth — see lib/parcel-area.ts.
+    const acres = parcelAcresLabel(boundaryGeo.geometry.coordinates[0] as [number, number][])
+    // h3 hex count kept only for the legacy `count` field (informational).
+    let hexCount = Math.max(1, Math.round(acres / 0.0344))
     try {
       const ring = (boundaryGeo.geometry.coordinates[0] as [number, number][])
         .map(([lng, lat]) => [lat, lng] as [number, number])
-      const hexIds = polygonToCells([ring], 10)
-      hexCount = hexIds.length
-      if (hexCount > 0) acres = parseFloat((hexCount * 0.0344).toFixed(1))
-    } catch { /* fall through to shoelace below */ }
-
-    if (acres === 0) {
-      const coords = boundaryGeo.geometry.coordinates[0] as [number, number][]
-      acres = parseFloat(polygonAreaAcres(coords).toFixed(2))
-      hexCount = Math.max(1, Math.round(acres / 0.0344))
-    }
+      hexCount = polygonToCells([ring], 10).length || hexCount
+    } catch { /* keep derived hexCount */ }
 
     return {
       count: hexCount,

@@ -5,6 +5,7 @@ import { fetchSpatialData } from '../../../lib/spatial'
 import { fetchNlcdPoint } from '../../../lib/nlcd'
 import type { PlacementCandidate, PlacementResult, PlacementObservation } from '../../../lib/placement/engine'
 import { generatePlacements, candidateGeometry } from '../../../lib/placement/engine'
+import { parcelAreaAcres } from '../../../lib/parcel-area'
 import { parseTonyV2 } from '../../../lib/tonyJson'
 import { get as httpsGet } from 'node:https'
 
@@ -66,6 +67,16 @@ WHAT YOU KNOW — proven whitetail habitat design (apply the principle in your o
 - DESIGN THE PROPERTY ON PURPOSE: engineer deer movement instead of hoping for it — connect bedding to food with defined travel corridors and staging areas, then place stands with dedicated entry/exit access so a buck passes the stand and your scent/access never blows him out. Design first, build to the design.
 - WATER HOLES HOLD AND PATTERN DEER: a small, secluded water hole is a high-value, easy add — especially early season and in heat — and helps pattern movement. Recommend NEW water only where the property lacks it; never re-recommend water the owner already has.
 - SANCTUARY IS NEVER-ENTER GROUND: the secure core you do not hunt and do not plant — its entire value is that deer feel zero pressure there.
+- ACCESS IS HALF THE GAME: the best stand is worthless if you blow deer out getting to it. Enter and exit on the wind, keep access routes off bedding, and hunt a property LESS, not more — pressure is the fastest way to push a mature buck nocturnal or right off the place.
+
+ASK & LISTEN — YOU'RE A CONSULTANT, NOT A VENDING MACHINE:
+- The hunter's eyes on the ground beat any satellite. When the intel that would change the plan is missing, ASK for it — warmly, ONE or two questions at a time, never an interrogation. The highest-value questions: Where have you seen deer, bedding, or sign (rubs, scrapes, well-worn trails)? Where do you park and walk in? How hard is it hunted, and what's on the neighbors' ground? And above all — what's your #1 goal this year: hold more deer, kill a specific buck, or just better food?
+- Tell them they can DRAW what they tell you right on the map — a sighting, a bedding area, where they enter — and you'll build the plan around it.
+- When they give you intel, USE it out loud and show how it changes the plan: "You kicked a buck up on the north end — that's his bedroom, so I'm keeping it a sanctuary and moving your access to the south so you never bump him." Field intel reshapes bedding, access, and stands before anything else.
+
+GUIDE THE BUILD — IN ORDER, LIKE A FOREMAN:
+- Don't just list zones — walk them through the play in priority order and tell them what to do FIRST: (1) lock in SECURITY / SANCTUARY — the secure core; (2) build BEDDING where cover is short (switchgrass / native grass on south slopes, or hinge-cut in timber); (3) put FOOD and, where it's lacking, a small secluded WATER hole where they pull deer toward your setup in daylight; (4) cut clean ACCESS — entry/exit you can hunt on the right wind; (5) hang STANDS last, built to the access and the wind. Note what's this-season vs a next-year project.
+- Make clear calls — "here's what I'd do first, and why" — and show each one on the map.
 
 ABSOLUTE RULES (violating any is a critical failure):
 1. NEVER place any feature outside the user's stated property boundary
@@ -509,10 +520,14 @@ function buildTonyPrompt(
     : ''
 
   const centerLat = (bounds.north + bounds.south) / 2
-  const approxAcres = Math.round(
-    ((bounds.north - bounds.south) * 111000) *
-    ((bounds.east - bounds.west) * 111000 * Math.cos(centerLat * Math.PI / 180)) / 4047
-  )
+  // Accurate geodesic acreage of the drawn parcel when available; else a rough
+  // bbox estimate of the visible area.
+  const approxAcres = boundaryRing && boundaryRing.length >= 3
+    ? Math.round(parcelAreaAcres(boundaryRing))
+    : Math.round(
+        ((bounds.north - bounds.south) * 111000) *
+        ((bounds.east - bounds.west) * 111000 * Math.cos(centerLat * Math.PI / 180)) / 4047
+      )
 
   const prevailingWind = windDirection ?? getRegionalWindDefault(bounds)
 
@@ -521,7 +536,7 @@ function buildTonyPrompt(
     : ''
 
   return `You are Tony — a direct whitetail habitat consultant for BuckGrid Pro. You know every property. You give specific advice.
-${propertyLine}${approxAcres > 0 ? `\nVisible area: approximately ${approxAcres} acres (rough — use it for scale, not as a quota).` : ''}${historyBlock}
+${propertyLine}${approxAcres > 0 ? `\n${boundaryRing && boundaryRing.length >= 3 ? `Property size: ~${approxAcres} acres (measured). Use for scale, not as a quota.` : `Visible area: approximately ${approxAcres} acres (rough — use it for scale, not as a quota).`}` : ''}${historyBlock}
 
 ${seasonGuidance}
 
@@ -601,7 +616,7 @@ VALID season: "all" | "spring" | "summer" | "fall" | "winter"
 CRITICAL OUTPUT RULES:
 - Respond ONLY with raw valid JSON — no markdown, no code fences, zero text outside JSON
 - NEVER output lat/lng/coordinates
-- "message" field: 3-4 sentences MAX. Direct, specific, named features. v2 Tony voice: like a land manager who's walked 1000 properties. Lead with your single biggest finding. Follow with #1 priority action.
+- "message" field: warm, plain-spoken Tony voice — like a habitat man who's walked 1000 properties. Lead with your read and the #1 thing you'd do first (the build order), kept tight (a few sentences — guide, don't lecture). Then END with the ONE question that would most improve the plan ("Where have you seen the most deer?" / "Where do you walk in?") and remind them they can mark it on the map and you'll redraw. Always leave the door open to refine with their field intel.
 ${placement ? '' : `
 VALID relative_position values: "north" | "northeast" | "east" | "southeast" | "south" | "southwest" | "west" | "northwest" | "center"
 VALID zone types: "food_plot" | "kill_plot" | "access_route" | "bedding" | "stand_site" | "water" | "staging_area" | "sanctuary"

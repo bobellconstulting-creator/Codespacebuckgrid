@@ -13,6 +13,7 @@
 // candidates by id.
 
 import type { SpatialContext, OsmFeature, ElevationSample } from '../spatial'
+import { parcelAcresLabel } from '../parcel-area'
 import type { LngLat } from './geo'
 import {
   metersPerDegree,
@@ -515,7 +516,7 @@ export function generatePlacements(opts: {
   // ── Hard exclusion for placements ───────────────────────────────────────────
   const ROAD_BUFFER_M = 40
   const WATER_BUFFER_M = 20
-  const BUILDING_BUFFER_M = 75
+  const BUILDING_BUFFER_M = 91 // ~100 yards — keep stands/plots off homesteads, yards, outbuildings
   const placeable = (cl: Cell): boolean =>
     cl.inside &&
     cl.cover !== 'water' &&
@@ -1051,7 +1052,7 @@ export function generatePlacements(opts: {
     candidates,
     promptBlock: lines.join('\n'),
     windFromDeg,
-    gridInfo: { rows, cols, cellM: Math.round(cellM), insideCells: insideCells.length, acres: Math.round(parcelAcres) },
+    gridInfo: { rows, cols, cellM: Math.round(cellM), insideCells: insideCells.length, acres: parcelAcresLabel(boundaryRing) },
   }
 }
 
