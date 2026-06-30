@@ -116,6 +116,17 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
     const containerRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
 
+    // On mobile, start with Tony CLOSED so the user sees and can use the MAP first
+    // (the chat sheet otherwise covers the whole map on load). Desktop keeps the
+    // side panel open. The floating button + unread badge handle re-opening.
+    const didMobileInit = useRef(false)
+    useEffect(() => {
+      if (isMobile && !didMobileInit.current) {
+        didMobileInit.current = true
+        setIsOpen(false)
+      }
+    }, [isMobile])
+
     useEffect(() => {
       if (containerRef.current) {
         containerRef.current.scrollTop = containerRef.current.scrollHeight
@@ -619,24 +630,27 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           {!isOpen && (
             <button
               onClick={openSheet}
+              aria-label="Ask Tony"
               style={{
                 position: 'fixed',
                 bottom: '90px',
                 right: '12px',
                 zIndex: 1800,
-                width: '50px',
                 height: '50px',
-                borderRadius: '50%',
+                padding: '0 18px 0 14px',
+                borderRadius: '25px',
                 background: '#6B7A57',
                 border: 'none',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 4px 20px rgba(107,122,87,0.4)',
+                gap: '8px',
+                boxShadow: '0 4px 20px rgba(107,122,87,0.45)',
               }}
             >
-              <img src="/buckgrid-logo.png" width="26" height="26" alt="" style={{ display: 'block' }} />
+              <img src="/buckgrid-logo.png" width="24" height="24" alt="" style={{ display: 'block' }} />
+              <span style={{ color: '#0D1A0B', fontWeight: 800, fontSize: '13px', letterSpacing: '0.04em', whiteSpace: 'nowrap', fontFamily: "'Teko','Oswald',sans-serif", textTransform: 'uppercase' }}>Ask Tony</span>
               {hasUnread && (
                 <span
                   style={{
