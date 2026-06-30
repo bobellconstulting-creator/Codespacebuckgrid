@@ -445,6 +445,29 @@ export default function BuckGridProPage() {
       {/* ═══════════════════════════════════════════════
           MOBILE DRAWER
       ═══════════════════════════════════════════════ */}
+      {/* ═══════════════════════════════════════════════
+          MOBILE SEARCH — find your land (floating bar under header)
+      ═══════════════════════════════════════════════ */}
+      {isMobile && (
+        <div style={{
+          position: 'fixed',
+          top: `${HEADER_H}px`,
+          left: 0,
+          right: 0,
+          zIndex: 1050,
+          padding: '8px 12px',
+          background: 'rgba(13,26,11,0.94)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          borderBottom: '1px solid rgba(107,122,87,0.18)',
+        }}>
+          <PropertySearch
+            onResult={(lat, lng) => { mapRef.current?.flyTo(lat, lng, 15) }}
+            compact
+          />
+        </div>
+      )}
+
       {isMobile && isMenuOpen && (
         <div
           onClick={() => setIsMenuOpen(false)}
