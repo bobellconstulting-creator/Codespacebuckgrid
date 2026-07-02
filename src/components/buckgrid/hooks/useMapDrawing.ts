@@ -188,6 +188,8 @@ const GLOBAL_CSS = `
 .bg-draw-hud { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 50; background: rgba(10,15,9,0.85); border: 1px solid rgba(255,107,0,0.5); border-radius: 3px; padding: 6px 14px; font-family: 'Share Tech Mono', monospace; font-size: 11px; letter-spacing: 0.08em; color: #FFB273; text-transform: uppercase; pointer-events: none; white-space: nowrap; box-shadow: 0 0 16px rgba(255,107,0,0.2); }
 .bg-brush-cursor { position: absolute; border: 1.5px solid rgba(255,255,255,0.9); border-radius: 50%; pointer-events: none; z-index: 49; transform: translate(-50%, -50%); box-shadow: 0 0 10px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,0,0,0.25); display: none; }
 .bg-acres-pop { font-family: 'Teko','Oswald',sans-serif; }
+@keyframes bgTonyPinIn { from { opacity: 0; transform: translateY(8px) scale(.92); filter: blur(2px); } to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
+.tony-label { animation: bgTonyPinIn .24s cubic-bezier(.16,1,.3,1) both; }
 `
 
 let cssInjected = false
@@ -315,6 +317,16 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       // Tony annotations
       map.addSource('tony', { type: 'geojson', data: fc([]) as any })
       map.addLayer({
+        id: 'tony-glow', type: 'line', source: 'tony',
+        filter: ['!=', ['geometry-type'], 'Point'],
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': ['case', ['==', ['geometry-type'], 'LineString'], 9, 7],
+          'line-blur': 8,
+          'line-opacity': 0.46,
+        },
+      })
+      map.addLayer({
         id: 'tony-fill', type: 'fill', source: 'tony',
         filter: ['==', ['geometry-type'], 'Polygon'],
         paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.32 },
@@ -323,6 +335,16 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
         id: 'tony-line', type: 'line', source: 'tony',
         filter: ['!=', ['geometry-type'], 'Point'],
         paint: { 'line-color': ['get', 'color'], 'line-width': ['case', ['==', ['geometry-type'], 'LineString'], 3, 2], 'line-dasharray': [2, 1], 'line-opacity': 0.9 },
+      })
+      map.addLayer({
+        id: 'tony-point-glow', type: 'circle', source: 'tony',
+        filter: ['==', ['geometry-type'], 'Point'],
+        paint: {
+          'circle-radius': 18,
+          'circle-color': ['get', 'color'],
+          'circle-opacity': 0.38,
+          'circle-blur': 0.85,
+        },
       })
       map.addLayer({
         id: 'tony-point', type: 'circle', source: 'tony',
@@ -750,11 +772,15 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       const confBar = typeof conf === 'number'
         ? `<div style="height:3px;background:#1a2a1a;border-radius:2px;margin:4px 0 6px"><div style="height:100%;width:${Math.max(0, Math.min(100, conf))}%;background:${conf >= 75 ? '#4ade80' : conf >= 50 ? '#facc15' : '#ef4444'};border-radius:2px"></div></div>`
         : ''
+      const scoreLine = typeof conf === 'number'
+        ? `<div style="font-size:10px;color:#9A9588;margin-top:4px;letter-spacing:.06em">ENGINE SCORE ${Math.round(conf)}</div>`
+        : ''
       return `<div style="font-family:'Barlow Condensed',sans-serif;min-width:180px;max-width:240px;padding:2px 0">
         <div style="font-family:'Teko',sans-serif;font-weight:700;font-size:13px;color:#6B7A57;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">${typeName}</div>
         <div style="font-size:13px;color:#D8D3C5;line-height:1.4;margin-bottom:4px">${label}</div>
         ${confBar}
         ${why ? `<div style="font-size:11px;color:#9A9588;line-height:1.4">${why}</div>` : ''}
+        ${scoreLine}
         ${typeof pri === 'number' ? `<div style="font-size:10px;color:#6B7A57;margin-top:4px;letter-spacing:.06em">PRIORITY ${pri}</div>` : ''}
       </div>`
     }
@@ -776,7 +802,7 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
       const color = ANNOTATION_COLORS[ann.type] ?? '#FF6B00'
       const feature = {
         type: 'Feature',
-        properties: { color, popupHtml: popupContent(ann), annType: ann.type, label: ann.label },
+        properties: { color, popupHtml: popupContent(ann), annType: ann.type, label: ann.label, score: (ann as any).confidence ?? 0 },
         geometry,
       }
       tonyFeaturesRef.current.push(feature)

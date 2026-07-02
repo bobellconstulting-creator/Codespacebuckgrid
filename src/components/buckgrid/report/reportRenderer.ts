@@ -345,7 +345,7 @@ function zoneCardBlock(z: ReportZone, index: number, w: number, mctx: CanvasRend
       if (hasMeta) {
         const parts: string[] = []
         if (z.priority !== undefined) parts.push(`PRIORITY ${z.priority}`)
-        if (z.confidence !== undefined) parts.push(`CONFIDENCE ${z.confidence}%`)
+        if (z.confidence !== undefined) parts.push(`ENGINE SCORE ${Math.round(z.confidence)}`)
         ctx.font = `12px ${MONO}`
         ctx.fillStyle = BONE_DIM
         ctx.fillText(parts.join('   ·   '), x + padX, ty + 20)

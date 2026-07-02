@@ -182,9 +182,10 @@ export default function BuckGridProPage() {
         @keyframes acresFlyIn { from { opacity: 0; transform: translateY(8px) scale(0.88); } to { opacity: 1; transform: translateY(0) scale(1); } }
         @keyframes modalBackdropIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes modalCardIn { from { opacity: 0; transform: translateY(18px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes tonyPinIn { from { opacity: 0; transform: translateY(8px) scale(0.92); filter: blur(2px); } to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); } }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: #1E2122; } ::-webkit-scrollbar-thumb { background: #2A2A2A; border-radius: 2px; }
         ::-webkit-scrollbar-thumb:hover { background: #6B7A57; }
-        .tony-label { background: rgba(10,15,9,0.82) !important; border: 1px solid rgba(107,122,87,0.5) !important; border-radius: 2px !important; color: #D8D3C5 !important; font-family: 'Teko','Oswald',sans-serif !important; font-size: 11px !important; font-weight: 700 !important; letter-spacing: .06em !important; text-transform: uppercase !important; padding: 2px 6px !important; box-shadow: 0 0 8px rgba(107,122,87,0.3) !important; white-space: nowrap !important; }
+        .tony-label { background: rgba(10,15,9,0.72) !important; backdrop-filter: blur(10px) saturate(125%) !important; border: 1px solid rgba(244,239,227,0.16) !important; border-radius: 6px !important; color: #D8D3C5 !important; font-family: 'Teko','Oswald',sans-serif !important; font-size: 11px !important; font-weight: 700 !important; letter-spacing: .07em !important; text-transform: uppercase !important; padding: 3px 7px !important; box-shadow: 0 8px 18px rgba(0,0,0,0.42), 0 0 14px rgba(242,161,75,0.24) !important; white-space: nowrap !important; pointer-events: none !important; animation: tonyPinIn .24s cubic-bezier(.16,1,.3,1) both !important; }
         .tony-label::before { display: none !important; }
         .leaflet-popup-content-wrapper { background: #1E2122 !important; border: 1px solid rgba(107,122,87,0.35) !important; border-radius: 3px !important; box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 20px rgba(107,122,87,0.15) !important; color: #D8D3C5 !important; }
         .leaflet-popup-tip { background: #1E2122 !important; }

@@ -134,6 +134,32 @@ interface StandSite {
   grounded?: boolean
 }
 
+type AnalysisSourceStatus = 'locked' | 'partial' | 'missing'
+
+type AnalysisSourceReceipt = {
+  id: string
+  label: string
+  status: AnalysisSourceStatus
+  detail: string
+}
+
+type AnalysisReceipt = {
+  grounded: boolean
+  engineOnly?: boolean
+  retryable?: boolean
+  engine?: {
+    candidates: number
+    grid: string
+    cellMeters: number
+    acres: number
+    windFromDeg: number | null
+  }
+  sources: AnalysisSourceReceipt[]
+  warnings: string[]
+  windLabel?: string
+  fetchedAt?: number
+}
+
 // ─── OSM bbox terrain validation — check coord isn't inside a forest/water polygon ──
 function isPointInOsmBbox(coord: [number, number], f: OsmFeature): boolean {
   if (!f.bbox) return false
@@ -996,6 +1022,107 @@ function toAnnotations(zones: TonyZone[], stands: StandSite[]): Array<Record<str
   return anns
 }
 
+function buildAnalysisReceipt(
+  spatial: SpatialContext | undefined,
+  placement: PlacementResult | null,
+  opts: { engineOnly?: boolean; retryable?: boolean } = {}
+): AnalysisReceipt {
+  const osmCount = spatial?.osmFeatures?.length ?? 0
+  const roadCount = spatial?.osmFeatures?.filter(f => f.kind === 'road').length ?? 0
+  const waterCount = spatial?.osmFeatures?.filter(f => f.kind === 'water').length ?? 0
+  const soilCount = spatial?.soilUnits?.length ?? 0
+  const nlcdCount = spatial?.landCoverSamples?.length ?? 0
+  const source = (id: string, label: string, ok: boolean, detailOk: string, detailMissing: string, partial?: boolean): AnalysisSourceReceipt => ({
+    id,
+    label,
+    status: ok ? (partial ? 'partial' : 'locked') : 'missing',
+    detail: ok ? detailOk : detailMissing,
+  })
+
+  const sources: AnalysisSourceReceipt[] = [
+    {
+      id: 'imagery',
+      label: 'Esri imagery',
+      status: 'locked',
+      detail: 'Satellite image pulled for this exact map window.',
+    },
+    source(
+      'worldcover',
+      'ESA WorldCover 10m',
+      !!spatial?.coverGrid,
+      spatial?.coverGrid ? `${spatial.coverGrid.cols}x${spatial.coverGrid.rows} cover grid` : '',
+      'Land-cover grid did not load this turn.'
+    ),
+    source(
+      'elevation',
+      'Elevation terrain',
+      (spatial?.elevationSamples?.length ?? 0) > 0,
+      `${spatial?.elevationSamples?.length ?? 0} elevation samples`,
+      'Elevation/terrain samples did not load.'
+    ),
+    source(
+      'osm',
+      'OSM roads/water',
+      osmCount > 0,
+      `${osmCount} mapped features (${roadCount} road, ${waterCount} water)`,
+      'Road/water data did not load.',
+      roadCount === 0 || waterCount === 0
+    ),
+    source(
+      'wind',
+      'Open-Meteo wind',
+      !!(spatial?.windRose || spatial?.windDirection),
+      spatial?.windRose?.dataSource ?? spatial?.windDirection ?? '',
+      'Wind data did not load.',
+      !!spatial?.windDirection && !spatial?.windRose
+    ),
+    source(
+      'soils',
+      'USDA soils',
+      soilCount > 0,
+      `${soilCount} soil map unit${soilCount === 1 ? '' : 's'}`,
+      'Soil map units did not load.',
+    ),
+    source(
+      'nlcd',
+      'NLCD cover check',
+      nlcdCount > 0,
+      `${nlcdCount} NLCD samples`,
+      'NLCD samples did not load.',
+    ),
+    source(
+      'canopy',
+      'Canopy/open texture',
+      !!spatial?.canopyGrid,
+      spatial?.canopyGrid ? `${spatial.canopyGrid.cols}x${spatial.canopyGrid.rows} canopy grid` : '',
+      'Fine canopy texture did not load.',
+    ),
+  ]
+
+  const warnings: string[] = []
+  if (!spatial) warnings.push('Spatial data did not load; Tony will not draw a guessed plan.')
+  if (spatial && !spatial.coverGrid) warnings.push('Land-cover grid missing, so cover labels may be weaker this turn.')
+  if (spatial && roadCount === 0) warnings.push('Road data unavailable; Tony should not claim a stand avoids roads.')
+  if (!placement) warnings.push('Placement engine did not return grounded candidates.')
+
+  return {
+    grounded: !!placement,
+    engineOnly: opts.engineOnly,
+    retryable: opts.retryable,
+    engine: placement ? {
+      candidates: placement.candidates.length,
+      grid: `${placement.gridInfo.rows}x${placement.gridInfo.cols}`,
+      cellMeters: placement.gridInfo.cellM,
+      acres: placement.gridInfo.acres,
+      windFromDeg: placement.windFromDeg,
+    } : undefined,
+    sources,
+    warnings,
+    windLabel: spatial?.windRose?.huntingSeasonPrevailing ?? spatial?.windDirection,
+    fetchedAt: spatial?.fetchedAt,
+  }
+}
+
 export async function POST(req: NextRequest) {
   // Global deadline — ensures we always respond before Vercel's hard kill
   const globalAbort = new AbortController()
@@ -1480,6 +1607,7 @@ export async function POST(req: NextRequest) {
           annotations: toAnnotations(fallback.zones, fallback.stands),
           grounded: true,
           engineOnly: true,
+          analysis: buildAnalysisReceipt(resolvedSpatial, placement, { engineOnly: true }),
         })
       }
       const msg = err instanceof Error ? err.message : ''
@@ -1514,6 +1642,7 @@ export async function POST(req: NextRequest) {
         stand_sites: groundedStands,
         annotations: toAnnotations(groundedZones, groundedStands),
         grounded: true,
+        analysis: buildAnalysisReceipt(resolvedSpatial, placement),
       })
     }
 
@@ -1531,6 +1660,7 @@ export async function POST(req: NextRequest) {
         annotations: [],
         grounded: false,
         retryable: true,
+        analysis: buildAnalysisReceipt(resolvedSpatial, null, { retryable: true }),
       })
     }
 
@@ -1542,6 +1672,7 @@ export async function POST(req: NextRequest) {
       reply: tonyMessage,
       zones: checkedZones,
       stand_sites: rawStands,
+      analysis: buildAnalysisReceipt(resolvedSpatial, null),
     })
   } catch (err) {
     clearTimeout(globalTimer)

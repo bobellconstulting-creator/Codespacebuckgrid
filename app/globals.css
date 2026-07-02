@@ -1,8 +1,8 @@
-@import "tailwindcss";
 /* Google fonts — must precede other rules (CSS @import ordering).
    HUD skin: Big Shoulders Display (display) + JetBrains Mono (data) + Inter (body),
    matching the demo render engine. Plus legacy Teko/Barlow/Oswald/Stardos. */
 @import url('https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Big+Shoulders+Display:wght@600;700;800;900&family=Teko:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Share+Tech+Mono&display=swap');
+@import "tailwindcss";
 
 /* ─── BuckGrid Pro — Tactical Heritage ─────────────────────────────────────
    Sitka materiality. Linear-grade grid. Apparel-grade marks.

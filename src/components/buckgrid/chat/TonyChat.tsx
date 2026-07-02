@@ -1,9 +1,12 @@
 'use client'
 
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import ShareReportButton from '../report/ShareReportButton'
 import type { ReportZone } from '../report/reportRenderer'
 import TonightsSit, { type SitInputs } from '../wind/TonightsSit'
+import { GamePlanLabel, ReadingPill, ZoneCard } from '../hud/Hud'
+import { FONT, HUD, rgba } from '../hud/tokens'
 
 export type TonyChatHandle = {
   addTonyMessage: (text: string) => void
@@ -33,6 +36,39 @@ type TonyChatProps = {
 }
 
 type AnnotationSummary = { type: string; label: string; why: string; confidence?: number; priority?: number; conflictWarning?: string; centroid?: [number, number] }
+
+type AnalysisSource = {
+  id: string
+  label: string
+  status: 'locked' | 'partial' | 'missing'
+  detail: string
+}
+
+type AnalysisReceipt = {
+  grounded?: boolean
+  engineOnly?: boolean
+  retryable?: boolean
+  engine?: {
+    candidates: number
+    grid: string
+    cellMeters: number
+    acres: number
+    windFromDeg: number | null
+  }
+  sources?: AnalysisSource[]
+  warnings?: string[]
+  windLabel?: string
+}
+
+type AnalysisDeck = {
+  id: number
+  phase: 'scanning' | 'revealing' | 'done' | 'retryable'
+  prompt: string
+  annotations: AnnotationSummary[]
+  shown: number
+  drawableCount: number
+  receipt?: AnalysisReceipt
+}
 
 function computeCentroid(geojson: any): [number, number] | undefined {
   const geom = geojson?.geometry
@@ -102,6 +138,60 @@ function isErrorMessage(text: string): boolean {
   return text.includes('unavailable') || text.includes("Couldn't reach")
 }
 
+function normalizeReceipt(raw: unknown, fallback: { grounded?: boolean; engineOnly?: boolean; retryable?: boolean }): AnalysisReceipt | undefined {
+  if (!raw || typeof raw !== 'object') {
+    if (fallback.grounded === undefined && fallback.engineOnly === undefined && fallback.retryable === undefined) return undefined
+    return fallback
+  }
+  const r = raw as Record<string, unknown>
+  const sources = Array.isArray(r.sources)
+    ? r.sources.map((s): AnalysisSource | null => {
+        const src = s as Record<string, unknown>
+        const status = src.status === 'locked' || src.status === 'partial' || src.status === 'missing' ? src.status : 'missing'
+        if (typeof src.label !== 'string') return null
+        return {
+          id: typeof src.id === 'string' ? src.id : src.label,
+          label: src.label,
+          status,
+          detail: typeof src.detail === 'string' ? src.detail : '',
+        }
+      }).filter((s): s is AnalysisSource => !!s)
+    : undefined
+  const engineRaw = r.engine as Record<string, unknown> | undefined
+  const engine = engineRaw && typeof engineRaw === 'object'
+    ? {
+        candidates: typeof engineRaw.candidates === 'number' ? engineRaw.candidates : 0,
+        grid: typeof engineRaw.grid === 'string' ? engineRaw.grid : '',
+        cellMeters: typeof engineRaw.cellMeters === 'number' ? engineRaw.cellMeters : 0,
+        acres: typeof engineRaw.acres === 'number' ? engineRaw.acres : 0,
+        windFromDeg: typeof engineRaw.windFromDeg === 'number' ? engineRaw.windFromDeg : null,
+      }
+    : undefined
+  return {
+    grounded: typeof r.grounded === 'boolean' ? r.grounded : fallback.grounded,
+    engineOnly: typeof r.engineOnly === 'boolean' ? r.engineOnly : fallback.engineOnly,
+    retryable: typeof r.retryable === 'boolean' ? r.retryable : fallback.retryable,
+    engine,
+    sources,
+    warnings: Array.isArray(r.warnings) ? r.warnings.filter((w): w is string => typeof w === 'string') : undefined,
+    windLabel: typeof r.windLabel === 'string' ? r.windLabel : undefined,
+  }
+}
+
+function sourceStyle(status: AnalysisSource['status']) {
+  if (status === 'locked') return { color: HUD.success, border: rgba(HUD.success, 0.5), fill: rgba(HUD.success, 0.12), label: 'LOCK' }
+  if (status === 'partial') return { color: HUD.ember, border: rgba(HUD.ember, 0.5), fill: rgba(HUD.ember, 0.12), label: 'PART' }
+  return { color: '#D96B5B', border: 'rgba(217,107,91,0.45)', fill: 'rgba(217,107,91,0.1)', label: 'MISS' }
+}
+
+function receiptStatus(receipt?: AnalysisReceipt): string {
+  if (!receipt) return 'SCANNING DATA SOURCES'
+  if (receipt.retryable) return 'DATA INCOMPLETE - RETRY'
+  if (receipt.engineOnly) return 'ENGINE PLAN - COMMENTARY OFFLINE'
+  if (receipt.grounded) return 'GROUNDED ENGINE PLAN'
+  return 'UNLOCKED CHAT MODE'
+}
+
 // Panel dimensions
 const PANEL_W = 310
 
@@ -114,8 +204,18 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
     const [legendOpen, setLegendOpen] = useState(false)
     const [hasUnread, setHasUnread] = useState(false)
     const [lastUserMessage, setLastUserMessage] = useState<string | null>(null)
+    const [analysisDeck, setAnalysisDeck] = useState<AnalysisDeck | null>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
+    const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+    const deckSeq = useRef(0)
+
+    const clearRevealTimers = useCallback(() => {
+      revealTimers.current.forEach(t => clearTimeout(t))
+      revealTimers.current = []
+    }, [])
+
+    useEffect(() => () => clearRevealTimers(), [clearRevealTimers])
 
     // On mobile, start with Tony CLOSED so the user sees and can use the MAP first
     // (the chat sheet otherwise covers the whole map on load). Desktop keeps the
@@ -144,11 +244,23 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
       }
     }, [chat, isMobile, isOpen])
 
-    const askTony = useCallback(async (message: string) => {
+    const askTony = useCallback(async (message: string, mode: 'scan' | 'chat' = 'chat') => {
       const mapData = getBoundsAndFeatures()
       if (!mapData) {
         setChat(p => [...p, { role: 'tony', text: 'Map not ready yet.' }])
         return
+      }
+      const startedDeckId = ++deckSeq.current
+      if (mode === 'scan') {
+        clearRevealTimers()
+        setAnalysisDeck({
+          id: startedDeckId,
+          phase: 'scanning',
+          prompt: message,
+          annotations: [],
+          shown: 0,
+          drawableCount: 0,
+        })
       }
 
       // Spatial context is now fetched server-side in /api/chat (parallel with satellite image).
@@ -196,26 +308,65 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         const safeReply = looksLikeJson
           ? 'Response was too large — zoom in to a smaller area and try again.'
           : replyText
+        const receipt = normalizeReceipt(data.analysis, {
+          grounded: typeof data.grounded === 'boolean' ? data.grounded : undefined,
+          engineOnly: typeof data.engineOnly === 'boolean' ? data.engineOnly : undefined,
+          retryable: typeof data.retryable === 'boolean' ? data.retryable : undefined,
+        })
+        const drawable: any[] = Array.isArray(data.annotations)
+          ? data.annotations.filter((a: any) => a?.geojson?.geometry && a.label !== undefined)
+          : []
+        const shouldShowDeck = mode === 'scan' || annotationSummaries.length > 0 || Boolean(data.retryable) || Boolean(data.grounded)
+        const deckId = mode === 'scan' ? startedDeckId : ++deckSeq.current
         setChat(p => {
           const updated = p.filter(m => m.text !== '__thinking__')
           return [...updated, { role: 'tony', text: safeReply, annotations: annotationSummaries.length > 0 ? annotationSummaries : undefined }]
         })
+        if (shouldShowDeck) {
+          setAnalysisDeck({
+            id: deckId,
+            phase: data.retryable ? 'retryable' : drawable.length > 0 ? 'revealing' : 'done',
+            prompt: message,
+            annotations: annotationSummaries,
+            shown: 0,
+            drawableCount: drawable.length,
+            receipt,
+          })
+        }
         if (drawAnnotations && Array.isArray(data.annotations)) {
-          const drawable = data.annotations.filter((a: any) => a?.geojson?.geometry && a.label !== undefined)
           if (drawable.length > 0) {
-            drawAnnotations(drawable)
-            setChat(p => [...p, { role: 'tony', text: `📍 ${drawable.length} feature${drawable.length !== 1 ? 's' : ''} drawn on map — tap any marker for details.` }])
+            clearRevealTimers()
+            drawAnnotations([])
+            drawable.forEach((_, i) => {
+              const timer = setTimeout(() => {
+                drawAnnotations(drawable.slice(0, i + 1))
+                setAnalysisDeck(current => current?.id === deckId
+                  ? { ...current, shown: i + 1, phase: i === drawable.length - 1 ? 'done' : 'revealing' }
+                  : current
+                )
+                if (i === drawable.length - 1) {
+                  setChat(p => [...p, { role: 'tony', text: `Map replay complete: ${drawable.length} call${drawable.length !== 1 ? 's' : ''} placed from the grounded engine.` }])
+                }
+              }, 420 * (i + 1))
+              revealTimers.current.push(timer)
+            })
           } else if (data.annotations.length > 0) {
             setChat(p => [...p, { role: 'tony', text: `Coordinates landed outside the current view. Zoom in closer to your property and tap Get Advice again.` }])
           }
         }
       } catch {
+        if (mode === 'scan') {
+          setAnalysisDeck(current => current?.id === startedDeckId
+            ? { ...current, phase: 'retryable', receipt: { retryable: true, warnings: ["Tony couldn't be reached."] } }
+            : current
+          )
+        }
         setChat(p => {
           const updated = p.filter(m => m.text !== '__thinking__')
           return [...updated, { role: 'tony', text: "Couldn't reach Tony. Check your connection and try again." }]
         })
       }
-    }, [getBoundsAndFeatures, drawAnnotations, flyTo, propertyName, propertyAcres, seasonBanner])
+    }, [getBoundsAndFeatures, drawAnnotations, propertyName, propertyAcres, seasonBanner, clearRevealTimers, chat])
 
     useImperativeHandle(ref, () => ({
       addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]),
@@ -225,7 +376,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
         setLoading(true)
         setIsOpen(true)
         setChat(p => [...p, { role: 'tony', text: '__thinking__' }])
-        await askTony(contextPrompt)
+        await askTony(contextPrompt, 'scan')
         setLoading(false)
         onScanComplete?.()
       },
@@ -240,13 +391,15 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
       setChat(p => [...p, { role: 'user', text: msg }])
       setInput('')
       setChat(p => [...p, { role: 'tony', text: '__thinking__' }])
-      await askTony(msg)
+      await askTony(msg, 'chat')
       setLoading(false)
     }, [input, loading, askTony])
 
     const clearChat = useCallback(() => {
+      clearRevealTimers()
+      setAnalysisDeck(null)
       setChat([{ role: 'tony', text: ONBOARDING_MESSAGE }])
-    }, [])
+    }, [clearRevealTimers])
 
     // The branded report exports whatever Tony last drew on the map —
     // drawAnnotations clears previous layers, so the newest annotated
@@ -315,6 +468,123 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
       setHasUnread(false)
     }, [])
 
+    const analysisDeckCard = analysisDeck ? (() => {
+      const receipt = analysisDeck.receipt
+      const totalCalls = analysisDeck.drawableCount || analysisDeck.annotations.length
+      const shown = analysisDeck.phase === 'done' || analysisDeck.phase === 'retryable'
+        ? analysisDeck.annotations.length
+        : analysisDeck.shown
+      const progress = totalCalls > 0
+        ? Math.min(100, Math.max(8, Math.round(((analysisDeck.phase === 'done' ? totalCalls : shown) / totalCalls) * 100)))
+        : analysisDeck.phase === 'scanning' ? 38 : 100
+      const visibleCalls = analysisDeck.phase === 'scanning'
+        ? []
+        : analysisDeck.annotations.slice(0, Math.max(shown, analysisDeck.phase === 'done' ? analysisDeck.annotations.length : 1))
+      const metaFields: string[] = []
+      if (receipt?.engine) metaFields.push(`${receipt.engine.candidates} candidates`)
+      if (receipt?.engine?.grid) metaFields.push(`grid ${receipt.engine.grid}`)
+      if (receipt?.windLabel) metaFields.push(`wind ${receipt.windLabel}`)
+
+      return (
+        <motion.div
+          key={analysisDeck.id}
+          initial={{ opacity: 0, y: -10, scale: 0.985 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -6, scale: 0.99 }}
+          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          style={{
+            position: 'relative',
+            overflow: 'hidden',
+            borderRadius: 7,
+            border: `1px solid ${rgba(HUD.ember, analysisDeck.phase === 'retryable' ? 0.55 : 0.34)}`,
+            background: `linear-gradient(160deg, ${rgba(HUD.panel, 0.96)} 0%, ${rgba(HUD.spruce, 0.88)} 100%)`,
+            boxShadow: `0 14px 34px rgba(0,0,0,0.34), inset 0 1px 0 ${rgba(HUD.bone, 0.06)}`,
+            padding: '12px',
+          }}
+        >
+          <div aria-hidden style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, transparent 0%, ${rgba(HUD.ember, 0.12)} 46%, transparent 72%)`, transform: `translateX(${Math.min(100, progress + 12)}%)`, transition: 'transform 0.6s ease', opacity: analysisDeck.phase === 'done' ? 0.25 : 0.55 }} />
+          <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+              <GamePlanLabel count={totalCalls > 0 ? shown : undefined} title={analysisDeck.phase === 'retryable' ? 'DATA CHECK' : "TONY'S LIVE READ"} />
+              <span style={{
+                fontFamily: FONT.mono,
+                fontSize: 9,
+                letterSpacing: '.12em',
+                textTransform: 'uppercase',
+                color: analysisDeck.phase === 'retryable' ? '#D96B5B' : HUD.ember,
+                border: `1px solid ${analysisDeck.phase === 'retryable' ? 'rgba(217,107,91,0.45)' : rgba(HUD.ember, 0.45)}`,
+                borderRadius: 4,
+                padding: '4px 6px',
+                whiteSpace: 'nowrap',
+                background: analysisDeck.phase === 'retryable' ? 'rgba(217,107,91,0.1)' : rgba(HUD.ember, 0.09),
+              }}>
+                {receiptStatus(receipt)}
+              </span>
+            </div>
+
+            {analysisDeck.phase === 'scanning' ? (
+              <ReadingPill name={propertyName || 'PROPERTY'} />
+            ) : (
+              <div style={{ fontFamily: FONT.mono, fontSize: 10, letterSpacing: '.09em', color: HUD.sage, textTransform: 'uppercase', display: 'flex', flexWrap: 'wrap', gap: '6px 10px' }}>
+                {metaFields.length > 0 ? metaFields.map(f => <span key={f}>{f}</span>) : <span>analysis complete</span>}
+              </div>
+            )}
+
+            <div style={{ height: 4, borderRadius: 999, overflow: 'hidden', background: rgba(HUD.field, 0.35), border: `1px solid ${rgba(HUD.field, 0.32)}` }}>
+              <div style={{ width: `${progress}%`, height: '100%', background: analysisDeck.phase === 'retryable' ? '#D96B5B' : HUD.ember, transition: 'width 0.45s cubic-bezier(0.16,1,0.3,1)' }} />
+            </div>
+
+            {receipt?.sources && receipt.sources.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 5 }}>
+                {receipt.sources.slice(0, 8).map(src => {
+                  const s = sourceStyle(src.status)
+                  return (
+                    <div key={src.id} title={src.detail} style={{ minWidth: 0, border: `1px solid ${s.border}`, background: s.fill, borderRadius: 5, padding: '5px 6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                        <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.color, flexShrink: 0, boxShadow: `0 0 10px ${s.color}` }} />
+                        <span style={{ fontFamily: FONT.mono, fontSize: 8.5, letterSpacing: '.06em', color: HUD.bone, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase' }}>
+                          {src.label}
+                        </span>
+                        <span style={{ marginLeft: 'auto', fontFamily: FONT.mono, fontSize: 7.5, color: s.color, letterSpacing: '.06em' }}>{s.label}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {visibleCalls.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {visibleCalls.slice(0, 5).map((ann, idx) => (
+                  <motion.div
+                    key={`${analysisDeck.id}-${ann.label}-${idx}`}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.2, delay: idx * 0.03 }}
+                    onClick={() => { if (ann.centroid && flyTo) flyTo(ann.centroid[0], ann.centroid[1], 17) }}
+                    style={{ cursor: ann.centroid && flyTo ? 'pointer' : 'default' }}
+                  >
+                    <ZoneCard
+                      type={ann.type}
+                      title={ann.label || ann.type.replace(/_/g, ' ').toUpperCase()}
+                      sub={ann.why ? ann.why.slice(0, 96) : undefined}
+                      score={ann.confidence}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            )}
+
+            {receipt?.warnings && receipt.warnings.length > 0 && (
+              <div style={{ fontFamily: FONT.mono, fontSize: 9, lineHeight: 1.45, color: '#D9A06E', borderTop: `1px solid ${rgba(HUD.field, 0.32)}`, paddingTop: 8 }}>
+                {receipt.warnings.slice(0, 2).join(' ')}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )
+    })() : null
+
     const chatBody = (
       <>
         {/* Messages */}
@@ -331,6 +601,9 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             background: '#3A4042',
           }}
         >
+          <AnimatePresence mode="popLayout">
+            {analysisDeckCard}
+          </AnimatePresence>
           {chat.map((m, i) => {
             if (m.text === '__thinking__') {
               return (
@@ -421,7 +694,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
                           )}
                           {ann.confidence !== undefined && (
                             <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: '8px', letterSpacing: '0.04em', color: ann.confidence >= 75 ? '#4ade80' : ann.confidence >= 50 ? '#facc15' : '#ef4444', marginLeft: 'auto' }}>
-                              {ann.confidence}% conf
+                              score {Math.round(ann.confidence)}
                             </span>
                           )}
                         </div>
