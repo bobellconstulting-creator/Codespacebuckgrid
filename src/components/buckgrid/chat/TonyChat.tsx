@@ -9,6 +9,7 @@ export type TonyChatHandle = {
   addTonyMessage: (text: string) => void
   triggerScan: (prompt: string) => void
   isLoading: () => boolean
+  open: () => void
 }
 
 type MapData = {
@@ -165,7 +166,7 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, ...mapData, propertyName: propertyName || '', season: seasonBanner?.label ?? '', chatHistory: historyToSend }),
+            body: JSON.stringify({ message, ...mapData, propertyName: propertyName || '', propertyAcres: propertyAcres || 0, season: seasonBanner?.label ?? '', chatHistory: historyToSend }),
             signal: chatAbort.signal,
           })
         } finally {
@@ -214,10 +215,11 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
           return [...updated, { role: 'tony', text: "Couldn't reach Tony. Check your connection and try again." }]
         })
       }
-    }, [getBoundsAndFeatures, drawAnnotations, flyTo, propertyName, seasonBanner])
+    }, [getBoundsAndFeatures, drawAnnotations, flyTo, propertyName, propertyAcres, seasonBanner])
 
     useImperativeHandle(ref, () => ({
       addTonyMessage: (text: string) => setChat(p => [...p, { role: 'tony', text }]),
+      open: () => setIsOpen(true),
       triggerScan: async (contextPrompt: string) => {
         if (loading) return
         setLoading(true)

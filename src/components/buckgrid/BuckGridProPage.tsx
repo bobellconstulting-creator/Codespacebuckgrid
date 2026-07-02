@@ -77,7 +77,15 @@ export default function BuckGridProPage() {
     if (isAnalyzing || isAdvising) return
     setActiveTool(TOOLS[0])
     const result = mapRef.current?.lockBoundary()
-    if (!result) return
+    if (!result) {
+      // No boundary to lock — guide instead of silently doing nothing.
+      chatRef.current?.open()
+      chatRef.current?.addTonyMessage(
+        `First draw your land. Tap the **Boundary** tool and trace the outline of your property on the map — then hit **Lock Border** and I'll read your terrain, cover, and wind.`
+      )
+      if (isMobile) setIsMenuOpen(false)
+      return
+    }
     setPropertyAcres(result.acres)
     setFeatureCount(result.layers.length)
     setHasDrawn(true)
@@ -132,6 +140,7 @@ export default function BuckGridProPage() {
   const handleAnalyze = useCallback(() => {
     // Analyze = navigate the user: open Tony panel and prompt them to zoom in if needed
     if (!chatRef.current) return
+    chatRef.current.open()
     chatRef.current.addTonyMessage(
       `Navigate to your property on the satellite map, then draw your boundary with the Boundary tool. Once you're zoomed in to your land, hit **Get Advice** and I'll draw my recommendations directly on the map.`
     )
@@ -140,12 +149,21 @@ export default function BuckGridProPage() {
 
   const handleGetAdvice = useCallback(() => {
     if (isAdvising || isAnalyzing || !chatRef.current) return
+    // Honesty guard: no locked property = no real land to read. Guide, don't guess.
+    if (!propertyAcres) {
+      chatRef.current.open()
+      chatRef.current.addTonyMessage(
+        `Draw your **property boundary** first and tap **Lock Border** — then I'll put real recommendations on *your* land instead of guessing at the map.`
+      )
+      if (isMobile) setIsMenuOpen(false)
+      return
+    }
     mapRef.current?.drawTonyAnnotations([])
     const prompt = `Place your top 4-5 habitat recommendations on this map. Return exactly: 1 sanctuary polygon, 2 stand points, and 1-2 food plot polygons. Keep the "why" field under 30 words per feature. Every feature needs coordinates inside the visible viewport. Drawing phase only — reply text 2 sentences max.`
     setIsAdvising(true)
     chatRef.current.triggerScan(prompt)
     if (isMobile) setIsMenuOpen(false)
-  }, [isMobile, isAnalyzing, isAdvising])
+  }, [isMobile, isAnalyzing, isAdvising, propertyAcres])
 
   // Stable refs for TonyChat props — prevents React.memo bailout on every render
   const getBoundsAndFeatures = useCallback(() => mapRef.current?.getBoundsAndFeatures() ?? null, [])
@@ -445,6 +463,37 @@ export default function BuckGridProPage() {
       {/* ═══════════════════════════════════════════════
           MOBILE DRAWER
       ═══════════════════════════════════════════════ */}
+      {/* Lock Border — prominent CTA on the map until a property is locked (Bo: don't make me chase it) */}
+      {!propertyAcres && hasDrawn && (
+        <button
+          onClick={onLockBorder}
+          aria-label="Lock property border"
+          style={{
+            position: 'fixed',
+            bottom: isMobile ? '84px' : '28px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1100,
+            height: '48px',
+            padding: '0 26px',
+            background: HUD.blaze,
+            color: HUD.bone,
+            border: `1px solid ${rgba(HUD.blaze, 0.8)}`,
+            borderRadius: '8px',
+            fontFamily: FONT.display,
+            fontWeight: 800,
+            fontSize: '16px',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            boxShadow: `0 4px 24px ${rgba(HUD.blaze, 0.5)}`,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          ✓ Lock Border
+        </button>
+      )}
+
       {/* ═══════════════════════════════════════════════
           MOBILE SEARCH — find your land (floating bar under header)
       ═══════════════════════════════════════════════ */}

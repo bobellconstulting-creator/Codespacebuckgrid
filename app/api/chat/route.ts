@@ -45,6 +45,8 @@ const ANTHROPIC_TIMEOUT_MS = 50000
 const GEMINI_TIMEOUT_MS = 20000 // fail fast — the deterministic engine guarantees output, so don't make the user wait a minute for a slow model
 const OPENAI_TIMEOUT_MS = 25000
 const OLLAMA_TIMEOUT_MS = 45000
+const XAI_TIMEOUT_MS = 30000  // xAI Grok — primary vision (reliable; no Gemini free-tier 429)
+const XAI_MODEL = process.env.XAI_MODEL || 'grok-4.20-0309-non-reasoning'  // vision-capable, non-reasoning (no token bleed)
 // Global deadline — ensures we always respond before Vercel's 120s hard kill
 const GLOBAL_DEADLINE_MS = 108_000
 
@@ -68,6 +70,15 @@ WHAT YOU KNOW — proven whitetail habitat design (apply the principle in your o
 - WATER HOLES HOLD AND PATTERN DEER: a small, secluded water hole is a high-value, easy add — especially early season and in heat — and helps pattern movement. Recommend NEW water only where the property lacks it; never re-recommend water the owner already has.
 - SANCTUARY IS NEVER-ENTER GROUND: the secure core you do not hunt and do not plant — its entire value is that deer feel zero pressure there.
 - ACCESS IS HALF THE GAME: the best stand is worthless if you blow deer out getting to it. Enter and exit on the wind, keep access routes off bedding, and hunt a property LESS, not more — pressure is the fastest way to push a mature buck nocturnal or right off the place.
+
+OPEN / AG GROUND — BUILD THE SETUP, DON'T CHASE BAD TERRAIN (critical — get this wrong and you sound like an amateur):
+- NEVER send a hunter to hang a stand on a cliff, bluff, steep bank, or wet drainage cut just because the terrain data flagged "high ground," a "bench," or a slope. That is unsafe and wrong. A stand needs a real, climbable tree with safe, quiet access — if the only natural "structure" is a steep or sketchy feature, say so plainly and pivot.
+- On open, bare, or ag-dominated ground, the answer is almost never an existing terrain feature — it's to ENGINEER the setup in the workable field: screening cover — "walls" of Egyptian wheat, standing corn, sorghum, or switchgrass — to block sight lines so deer and hunter move unseen; hidden SNEAK TRAILS / mowed access lanes for clean entry and exit; small kill plots and a water hole to pull and hold deer where you want them; created edge and pinch. BUILD the property, then hang stands to the cover and access you made.
+- If the field is bare, the first moves are cover and access — not "go sit that ridge." Make sense like a real land manager standing on the dirt.
+
+NO FAKE PRECISION (honesty — hunters catch this instantly): NEVER state an exact acreage, yardage, or tree-count ("0.3 acres", "80 yards in", "15 trees per acre") unless it was actually measured or you were handed it. When reasoning from the image and general data, speak in honest relative terms — "a small kill plot just inside the timber edge", "tuck it tight to bedding", "a screen along the field edge". When you ARE given the property's surveyed acreage, use that EXACT number and never state a different one. Relative-and-true beats precise-and-made-up.
+
+LEAD WITH THE 2-3 BIGGEST MOVES FIRST — don't dump seven zones and three stands in one breath. Walk them through the highest-impact moves for THIS ground, in order, like you're standing on it together.
 
 ASK & LISTEN — YOU'RE A CONSULTANT, NOT A VENDING MACHINE:
 - The hunter's eyes on the ground beat any satellite. When the intel that would change the plan is missing, ASK for it — warmly, ONE or two questions at a time, never an interrogation. The highest-value questions: Where have you seen deer, bedding, or sign (rubs, scrapes, well-worn trails)? Where do you park and walk in? How hard is it hunted, and what's on the neighbors' ground? And above all — what's your #1 goal this year: hold more deer, kill a specific buck, or just better food?
@@ -501,7 +512,8 @@ function buildTonyPrompt(
   windDirection?: string,
   boundaryRing?: [number, number][] | null,
   chatHistory?: Array<{ role: string; text: string }>,
-  placement?: PlacementResult | null
+  placement?: PlacementResult | null,
+  propertyAcres?: number
 ): string {
   const featureDesc = features.length > 0
     ? `\n\nThe owner has marked ${features.length} EXISTING feature(s) on the map — this is field intel about what is ALREADY on the property (water, food plots, bedding they've watched, stands), not a request for you to grade it:\n${features.slice(0, MAX_FEATURES).map((f, i) => {
@@ -513,7 +525,12 @@ function buildTonyPrompt(
     : '\n\nThe owner has not marked anything yet — give your decisive first read of the property and the plan you would build.'
 
   const seasonGuidance = season ? getSeasonalGuidance(season) : ''
-  const propertyLine = propertyName ? `Property name: "${propertyName}"` : ''
+  const propertyLine = [
+    propertyName ? `Property name: "${propertyName}"` : '',
+    (typeof propertyAcres === 'number' && propertyAcres > 0)
+      ? `PROPERTY SIZE: ${propertyAcres} acres — this is the surveyed acreage from the drawn boundary. If you mention size, use THIS exact number and never state a different one.`
+      : '',
+  ].filter(Boolean).join('\n')
 
   const historyBlock = chatHistory && chatHistory.length > 0
     ? `\n\nPRIOR CONVERSATION CONTEXT (last ${chatHistory.length} exchanges — use this for continuity, do NOT repeat advice already given):\n${chatHistory.map(m => `${m.role === 'tony' ? 'Tony' : 'User'}: ${m.text.slice(0, 300)}`).join('\n')}\n--- END PRIOR CONTEXT ---`
@@ -1000,17 +1017,18 @@ export async function POST(req: NextRequest) {
     const googleKey2 = process.env.GOOGLE_AI_KEY_2 || process.env.GOOGLE_API_KEY_2
     const googleKeys = [googleKey, googleKey2].filter((k): k is string => !!k)
     const groqKey = process.env.GROQ_API_KEY || process.env.GROQ_JARVIS_API_KEY
+    const xaiKey = process.env.XAI_API_KEY   // xAI Grok — PRIMARY vision (reliable; no Gemini free-tier 429)
     const openaiKey = process.env.OPENAI_API_KEY
     const anthropicKey = process.env.ANTHROPIC_API_KEY
     const ollamaUrl = process.env.OLLAMA_BASE_URL   // e.g., http://localhost:11434
     const ollamaModel = process.env.OLLAMA_MODEL || 'hermes3'
 
-    if (!googleKey && !groqKey && !openaiKey && !anthropicKey && !ollamaUrl) {
+    if (!googleKey && !groqKey && !openaiKey && !anthropicKey && !ollamaUrl && !xaiKey) {
       return NextResponse.json({ error: 'Server configuration error', reply: 'Tony needs a fresh API key — contact support to get Tony back online.' }, { status: 500 })
     }
 
     const body = await req.json()
-    const { message, bounds, zoom, features = [], season = '', propertyName = '', spatialContext, chatHistory } = body
+    const { message, bounds, zoom, features = [], season = '', propertyName = '', propertyAcres, spatialContext, chatHistory } = body
 
     // Validate and sanitize inputs
     const rawMsg = typeof message === 'string' ? message.trim().slice(0, MAX_MESSAGE_LENGTH).replace(/["""]/g, "'") : ''
@@ -1023,6 +1041,11 @@ export async function POST(req: NextRequest) {
       ? `Analyze this hunting property and ${rawMsg}. Recommend stand locations, food plots, and bedding areas based on what you see.`
       : rawMsg
     if (!isValidBounds(bounds)) return NextResponse.json({ error: 'Valid map bounds required' }, { status: 400 })
+    // Reject absurd/planet-scale extents — a real parcel is tiny; huge spans crash the
+    // satellite fetch + engine (found in fuzzing: whole-earth bounds → 500). ~0.5° ≈ 35mi.
+    if (Math.abs(bounds.north - bounds.south) > 0.5 || Math.abs(bounds.east - bounds.west) > 0.5) {
+      return NextResponse.json({ error: 'Map area too large — zoom in to your property and try again.' }, { status: 400 })
+    }
     const safeFeatures = Array.isArray(features) ? features.slice(0, MAX_FEATURES) : []
     const safePropertyName = typeof propertyName === 'string' ? propertyName.replace(/[^a-zA-Z0-9 '\-_.]/g, '').slice(0, 100) : ''
 
@@ -1160,6 +1183,7 @@ export async function POST(req: NextRequest) {
         boundaryRing,
         safeChatHistory,
         placement,
+        typeof propertyAcres === 'number' ? propertyAcres : undefined,
       )
 
       let usedVision = false
@@ -1212,8 +1236,40 @@ export async function POST(req: NextRequest) {
         return ''
       }
 
-      // ── 1. Gemini 2.5 Flash — PRIMARY vision (best, free), both keys ─────────
-      if (googleKeys.length) {
+      // ── 0. xAI Grok — PRIMARY vision (Bo's reliable key; no Gemini free-tier 429) ──
+      if (xaiKey) {
+        try {
+          const result = await Promise.race([
+            fetch('https://api.x.ai/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${xaiKey}` },
+              body: JSON.stringify({
+                model: XAI_MODEL,
+                messages: [
+                  { role: 'system', content: `${TONY_SYSTEM_PROMPT}\n\nOUTPUT FORMAT: Respond with raw valid JSON only — no markdown, no code fences. Keys: "message" (string), "zones" (array), "stand_sites" (array).` },
+                  { role: 'user', content: [
+                    { type: 'text', text: tonyPrompt },
+                    { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
+                  ]},
+                ],
+                max_tokens: 3500,   // capped: Tony's JSON rarely exceeds this — keeps Grok output cost in check
+                temperature: 0.3,
+              }),
+            }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('TonyTimeout')), XAI_TIMEOUT_MS)),
+          ])
+          if (!result.ok) throw new Error(`xAI ${result.status}`)
+          const xaiJson = await result.json()
+          rawText = xaiJson.choices?.[0]?.message?.content?.trim() ?? ''
+          if (rawText) usedVision = true
+          else throw new Error('xAI empty response')
+        } catch (e: unknown) {
+          console.warn('[chat] xAI Grok failed, falling back to Gemini:', e instanceof Error ? e.message : e)
+        }
+      }
+
+      // ── 1. Gemini 2.5 Flash — vision fallback (free), both keys ──────────────
+      if (!usedVision && googleKeys.length) {
         const txt = await tryGeminiModel('gemini-2.5-flash', geminiBody25)
         if (txt) { rawText = txt; usedVision = true }
       }

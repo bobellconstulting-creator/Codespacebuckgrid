@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "eval:tony": "node evals/tony/run.mjs"
+    "eval:tony": "node evals/tony/run.mjs",
+    "post:x": "node tools/social/post-x.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.39.0",
