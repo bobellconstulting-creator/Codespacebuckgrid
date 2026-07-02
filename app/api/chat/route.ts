@@ -1035,6 +1035,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Free tier limit reached', reply: `You've used your ${FREE_TIER_DAILY_LIMIT} free Tony analyses for today. Upgrade to Pro for unlimited access.`, paywallHit: true }, { status: 402 })
     }
 
+    // xAI Grok — PRIMARY (Bo's call 2026-07-02: "wired into grok front line").
+    // Paid, on Bo's credited key; cost stays bounded by the per-IP free-tier
+    // limiter + rate limiter. Vision-capable, ~1s latency, returns raw JSON.
+    const xaiKey = process.env.XAI_API_KEY
+    const xaiModel = process.env.XAI_MODEL || 'grok-4.20-0309-non-reasoning'
     const googleKey = process.env.GOOGLE_AI_KEY || process.env.GOOGLE_API_KEY
     // Second Gemini key — when the primary key hits its free-tier 429 quota, the
     // vision path retries the SAME models on this key before falling to text-only.
@@ -1046,7 +1051,7 @@ export async function POST(req: NextRequest) {
     const ollamaUrl = process.env.OLLAMA_BASE_URL   // e.g., http://localhost:11434
     const ollamaModel = process.env.OLLAMA_MODEL || 'hermes3'
 
-    if (!googleKey && !groqKey && !openaiKey && !anthropicKey && !ollamaUrl) {
+    if (!xaiKey && !googleKey && !groqKey && !openaiKey && !anthropicKey && !ollamaUrl) {
       return NextResponse.json({ error: 'Server configuration error', reply: 'Tony needs a fresh API key — contact support to get Tony back online.' }, { status: 500 })
     }
 
@@ -1297,8 +1302,40 @@ export async function POST(req: NextRequest) {
         return ''
       }
 
-      // ── 1. Gemini 2.5 Flash — PRIMARY vision (best, free), both keys ─────────
-      if (googleKeys.length) {
+      // ── 0. xAI Grok — PRIMARY vision (Bo-approved paid frontline) ────────────
+      if (xaiKey) {
+        try {
+          const grokResult = await Promise.race([
+            fetch('https://api.x.ai/v1/chat/completions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${xaiKey}` },
+              body: JSON.stringify({
+                model: xaiModel,
+                max_tokens: 3072,
+                temperature: 0.3,
+                messages: [{
+                  role: 'user',
+                  content: [
+                    { type: 'image_url', image_url: { url: `data:image/png;base64,${imgBase64}` } },
+                    { type: 'text', text: tonyPrompt },
+                  ],
+                }],
+              }),
+            }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('GrokTimeout')), 25_000)),
+          ])
+          if (!grokResult.ok) throw new Error(`Grok ${grokResult.status}`)
+          const grokJson = await grokResult.json()
+          const txt = grokJson.choices?.[0]?.message?.content?.trim() ?? ''
+          if (txt) { rawText = txt; usedVision = true }
+          else throw new Error('Grok empty response')
+        } catch (e: unknown) {
+          console.warn('[chat] Grok primary failed, falling to Gemini:', e instanceof Error ? e.message : e)
+        }
+      }
+
+      // ── 1. Gemini 2.5 Flash — free vision fallback, both keys ────────────────
+      if (!usedVision && googleKeys.length) {
         const txt = await tryGeminiModel('gemini-2.5-flash', geminiBody25)
         if (txt) { rawText = txt; usedVision = true }
       }

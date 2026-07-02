@@ -37,14 +37,14 @@ If any check fails → STOP, report, ask.
 
 ## TONY AI ROUTING (HARD RULE)
 
-Same rule as global and v2:
+Updated 2026-07-02 — Bo explicitly ordered Grok as the frontline ("he's supposed to be wired into grok front line"):
 
-1. **Primary:** Gemini 2.5 Flash (vision, free)
-2. **Fallback:** Groq / NVIDIA DeepSeek / Fireworks
-3. **Paid Haiku/OpenAI:** opt-in only via `ENABLE_PAID_FALLBACK=1` + Bo's explicit OK. Never the default.
+1. **Primary:** xAI Grok (`XAI_API_KEY`, model `XAI_MODEL` default `grok-4.20-0309-non-reasoning`) — Bo's credited key, vision-capable, ~1s latency. Cost is bounded by the per-IP free-tier limiter + per-minute rate limiter; do NOT remove those limiters while Grok is primary.
+2. **Fallback:** Gemini 2.5 Flash → 2.0 Flash (free, both keys) → Ollama (local dev) → Groq text-only.
+3. **Paid Haiku/Sonnet/OpenAI:** still opt-in only via `ENABLE_PAID_FALLBACK=1` + Bo's explicit OK.
 
-**Previous incident 2026-04-11:** Haiku was wired as primary "for production grade." Bo was furious and paid the bill. Never again.
-Do not swap Tony to a paid API without a local-tested PR + Bo's sign-off.
+**Previous incident 2026-04-11:** Haiku was wired as primary without sign-off. Bo was furious and paid the bill. The Grok frontline above is DIFFERENT — Bo directed it himself on 2026-07-02.
+Do not change Tony's routing (either direction) without Bo's explicit say-so in the session.
 
 ---
 
