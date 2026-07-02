@@ -1,0 +1,56 @@
+[
+  {
+    "id": "01-stop-guessing",
+    "title": "Stop Guessing Where Your Stands Go",
+    "footage": { "start": 2.0, "end": 14.0, "zFrom": 1.05, "zTo": 1.22, "cx": 0.42, "cy": 0.48 },
+    "lines": [
+      { "id": 0, "t": 0.2, "s": "You ever put a stand up and just hope?" },
+      { "id": 1, "t": 3.8, "s": "Hope the wind's right. Hope the buck walks by." },
+      { "id": 2, "t": 7.6, "s": "But you never looked at the terrain." },
+      { "id": 3, "t": 11.0, "s": "BuckGrid Pro maps it and scores every stand." },
+      { "id": 4, "t": 15.2, "s": "Stop guessing. Start knowing." }
+    ],
+    "captions": [
+      { "i": 0, "t0": 0.3, "t1": 3.2, "kicker": "BUCKGRID PRO", "big": "STOP GUESSING", "pos": "mid", "size": 118 },
+      { "i": 1, "t0": 7.4, "t1": 10.8, "big": "READ THE<br/>**TERRAIN**", "pos": "low", "size": 96, "accent": "#E0B43A" },
+      { "i": 2, "t0": 14.8, "t1": 18.5, "big": "GET A<br/>**SCORE**", "pos": "low", "size": 104, "accent": "#7DD88F" }
+    ],
+    "cta": "buckgridpro.com"
+  },
+  {
+    "id": "02-score-100",
+    "title": "This Stand Scored 100",
+    "footage": { "start": 16.0, "end": 25.0, "zFrom": 1.12, "zTo": 1.55, "cx": 0.30, "cy": 0.50 },
+    "lines": [
+      { "id": 0, "t": 0.2, "s": "Look at this setup." },
+      { "id": 1, "t": 2.8, "s": "One hundred score. Perfect wind coverage." },
+      { "id": 2, "t": 6.2, "s": "Funnel drops right into the food plot." },
+      { "id": 3, "t": 9.8, "s": "You're hidden. He's exposed." },
+      { "id": 4, "t": 13.2, "s": "That's not luck. That's terrain math." }
+    ],
+    "captions": [
+      { "i": 0, "t0": 0.3, "t1": 3.0, "kicker": "EVERY STAND SCORES", "big": "**100**", "pos": "mid", "size": 160, "accent": "#7DD88F" },
+      { "i": 1, "t0": 6.0, "t1": 9.4, "big": "PERFECT<br/>**SETUP**", "pos": "low", "size": 100, "accent": "#E0B43A" },
+      { "i": 2, "t0": 12.8, "t1": 16.8, "big": "**TERRAIN** MATH", "pos": "low", "size": 104, "accent": "#7DD88F" }
+    ],
+    "cta": "buckgridpro.com"
+  },
+  {
+    "id": "03-tonights-sit",
+    "title": "Tonight's Sit Wind Re-Rank",
+    "footage": { "start": 26.0, "end": 33.0, "zFrom": 1.15, "zTo": 1.38, "cx": 0.93, "cy": 0.78 },
+    "lines": [
+      { "id": 0, "t": 0.2, "s": "Wind's coming from the east tonight." },
+      { "id": 1, "t": 3.4, "s": "That stand you picked yesterday? Done." },
+      { "id": 2, "t": 6.8, "s": "BuckGrid re-ranks every stand for the new wind." },
+      { "id": 3, "t": 10.6, "s": "Stand three is now your best option." },
+      { "id": 4, "t": 14.0, "s": "Same property. Different wind. Different stand." }
+    ],
+    "captions": [
+      { "i": 0, "t0": 0.3, "t1": 3.2, "kicker": "TONIGHT'S SIT", "big": "WIND<br/>**CHANGED**", "pos": "mid", "size": 110, "accent": "#E0B43A" },
+      { "i": 1, "t0": 6.4, "t1": 10.0, "big": "STANDS<br/>**RE-RANKED**", "pos": "low", "size": 100, "accent": "#E0B43A" },
+      { "i": 2, "t0": 13.6, "t1": 17.2, "big": "HUNT THE<br/>**RIGHT STAND**", "pos": "low", "size": 96, "accent": "#7DD88F" }
+    ],
+    "cta": "buckgridpro.com"
+  }
+]

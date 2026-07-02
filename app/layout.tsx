@@ -11,7 +11,7 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://codespacebuckgrid.vercel.app'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.buckgridpro.com'),
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
@@ -30,6 +30,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
+    site: '@BuckGrid_pro',
+    creator: '@BuckGrid_pro',
     title: 'BuckGrid Pro — Habitat Intelligence for Serious Hunters',
     description: 'Tell Tony what you\'re seeing. Get a tactical game plan built around your actual terrain. Start free.',
   },

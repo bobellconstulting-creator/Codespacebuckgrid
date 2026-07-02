@@ -1,7 +1,8 @@
+/* Google fonts — must precede other rules (CSS @import ordering).
+   HUD skin: Big Shoulders Display (display) + JetBrains Mono (data) + Inter (body),
+   matching the demo render engine. Plus legacy Teko/Barlow/Oswald/Stardos. */
+@import url('https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Big+Shoulders+Display:wght@600;700;800;900&family=Teko:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Share+Tech+Mono&display=swap');
 @import "tailwindcss";
-/* Google fonts — must precede other rules (CSS @import ordering). Stencil
-   display + Inter body + JetBrains data + field-map type (Teko/Barlow/Oswald/Share Tech Mono). */
-@import url('https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Teko:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Share+Tech+Mono&display=swap');
 
 /* ─── BuckGrid Pro — Tactical Heritage ─────────────────────────────────────
    Sitka materiality. Linear-grade grid. Apparel-grade marks.
@@ -33,9 +34,6 @@
   --font-sans:    'Inter', system-ui, -apple-system, sans-serif;
   --font-mono:    'JetBrains Mono', 'Roboto Mono', ui-monospace, monospace;
 }
-
-/* Google fonts — stencil display + Inter body + JetBrains data + field-map type (Teko/Barlow/Oswald/Share Tech Mono) */
-@import url('https://fonts.googleapis.com/css2?family=Stardos+Stencil:wght@400;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Teko:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Share+Tech+Mono&display=swap');
 
 html, body {
   margin: 0;
@@ -77,6 +75,14 @@ html, body {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 .tony-label::before { display: none; }
+
+/* ─── BuckGrid Pro HUD skin animations (match the demo render engine) ─────── */
+@keyframes bgHudSpin { to { transform: rotate(360deg); } }
+.bg-hud-spin { display: inline-block; animation: bgHudSpin 2.2s linear infinite; }
+@keyframes bgHudDots { 0%,20%{content:'';} 40%{content:'.';} 60%{content:'..';} 80%,100%{content:'...';} }
+.bg-hud-dots::after { content: ''; animation: bgHudDots 1.4s steps(1) infinite; }
+@keyframes bgHudPulse { 0%{opacity:.85; transform:scale(1);} 50%{opacity:.35; transform:scale(1.18);} 100%{opacity:.85; transform:scale(1);} }
+.bg-hud-pulse { animation: bgHudPulse 1.8s ease-in-out infinite; }
 
 /* ─── BuckGrid /demo — Apple-keynote glass (investor edition) ───────────────
    Reusable motion + glass primitives for the deterministic-engine showcase.

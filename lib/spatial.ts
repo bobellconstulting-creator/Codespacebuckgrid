@@ -3,6 +3,7 @@ import { fetchSoilData, summarizeSoilForTony, type SoilMapUnit } from './soil-sd
 import { fetchElevationGridDEM } from './elevation-dem'
 import { fetchCanopyGrid, type CanopyGrid } from './satellite-cover'
 import { fetchWorldCover, type CoverGrid } from './worldcover'
+import { fetchBuildings } from './buildings'
 import { fetchNlcdGrid, summarizeNlcdForTony, type NlcdSample } from './nlcd'
 import { fetchWindRose, type WindRoseSummary } from './wind-rose'
 import { fetchDeerPressure, type DeerPressureSummary } from './deer-pressure'
@@ -116,16 +117,38 @@ function buildOverpassQuery(bounds: Bounds): string {
   return lines.join('\n')
 }
 
+// The main Overpass instance is frequently overloaded (503/504), which used to
+// zero out roads/water entirely — and then the engine placed zones (even
+// sanctuary) blind to roads. Hit several mirrors in PARALLEL and take the first
+// that answers, so one busy server can no longer gut the plan.
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.openstreetmap.fr/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+]
+
+async function overpassAny(query: string): Promise<any> {
+  const attempts = OVERPASS_ENDPOINTS.map(async (url) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(11_000),
+    })
+    if (!res.ok) throw new Error(`Overpass ${res.status} @ ${url}`)
+    const json = await res.json()
+    if (!json || !Array.isArray(json.elements)) throw new Error(`Overpass bad payload @ ${url}`)
+    return json
+  })
+  // Promise.any resolves with the first fulfilled attempt; rejects only if ALL fail.
+  return Promise.any(attempts)
+}
+
 async function fetchOsmFeatures(bounds: Bounds): Promise<OsmFeature[]> {
   const query = buildOverpassQuery(bounds)
-  const res = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
-    signal: AbortSignal.timeout(20_000),
-  })
-  if (!res.ok) throw new Error(`Overpass ${res.status}`)
-  const json = await res.json()
+  const json = await overpassAny(query)
 
   const nodeById = new Map<number, { lat: number; lon: number }>()
   for (const el of json.elements) {
@@ -526,7 +549,7 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
   const centerLng = (bounds.east + bounds.west) / 2
 
   // Fetch all data in parallel — all enrichments are optional, fail gracefully
-  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure, canopyGrid, coverGrid] = await Promise.all([
+  const [osmFeatures, elevationSamples, windDirection, soilUnits, landCoverSamples, nwiWetlands, neighboringCrops, windRose, deerPressure, canopyGrid, coverGrid, mlBuildings] = await Promise.all([
     fetchOsmFeatures(bounds).catch((): OsmFeature[] => []),
     fetchElevationGrid(bounds).catch((): ElevationSample[] => []),
     fetchPrevailingWind(bounds).catch((): undefined => undefined),
@@ -538,7 +561,12 @@ export async function fetchSpatialData(bounds: Bounds): Promise<SpatialContext> 
     fetchDeerPressure(centerLat, centerLng).catch((): DeerPressureSummary | null => null),
     fetchCanopyGrid(bounds).catch((): CanopyGrid | null => null),
     fetchWorldCover(bounds).catch((): CoverGrid | null => null),
+    fetchBuildings(bounds).catch((): OsmFeature[] => []),
   ])
+
+  // Merge ML building footprints (Microsoft) — fills the rural gap OSM misses,
+  // so the engine's building buffer keeps stands/plots out of homestead yards.
+  if (mlBuildings.length > 0) osmFeatures.push(...mlBuildings)
 
   const { summary: elevationSummary, highGroundPoints, lowGroundPoints } = summarizeElevation(elevationSamples)
   const terrainDerivatives = computeTerrainDerivatives(elevationSamples, bounds)

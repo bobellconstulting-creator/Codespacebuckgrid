@@ -1411,6 +1411,13 @@ function FinalCTA() {
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
 function Footer() {
+  const contactLinks = [
+    { label: 'Website', href: 'https://www.buckgridpro.com' },
+    { label: 'X', href: 'https://x.com/BuckGrid_pro' },
+    { label: 'TikTok', href: 'https://www.tiktok.com/@buckgridpro' },
+    { label: 'Email', href: 'mailto:bo@buckgrid.pro?subject=BuckGrid%20Pro' },
+  ]
+
   return (
     <footer style={{ background: B.card, borderTop: `1px solid ${B.hairlineSoft}` }}>
       <div className="max-w-6xl mx-auto px-6 py-12">
@@ -1427,23 +1434,54 @@ function Footer() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-x-8 gap-y-3">
-            {[
-              { label: 'Open the Map', href: '/buckgrid' },
-              { label: 'How It Works', href: '#how-it-works' },
-              { label: 'Features', href: '#features' },
-              { label: 'Pricing', href: '#pricing' },
-              { label: 'FAQ', href: '#faq' },
-            ].map(link => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="text-sm transition-colors hover:text-white"
-                style={{ color: B.muted, fontFamily: FONT.body }}
-              >
-                {link.label}
-              </a>
-            ))}
+          <div className="flex flex-col sm:flex-row gap-8 md:gap-12">
+            <div>
+              <div className="mb-3">
+                <MonoLabel size={9.5} color={B.mossLight}>
+                  EXPLORE
+                </MonoLabel>
+              </div>
+              <div className="flex flex-wrap gap-x-8 gap-y-3">
+                {[
+                  { label: 'Open the Map', href: '/buckgrid' },
+                  { label: 'How It Works', href: '#how-it-works' },
+                  { label: 'Features', href: '#features' },
+                  { label: 'Pricing', href: '#pricing' },
+                  { label: 'FAQ', href: '#faq' },
+                ].map(link => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    className="text-sm transition-colors hover:text-white"
+                    style={{ color: B.muted, fontFamily: FONT.body }}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-3">
+                <MonoLabel size={9.5} color={B.mossLight}>
+                  REACH US
+                </MonoLabel>
+              </div>
+              <div className="flex flex-wrap gap-x-8 gap-y-3">
+                {contactLinks.map(link => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    target={link.href.startsWith('http') ? '_blank' : undefined}
+                    rel={link.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+                    className="text-sm transition-colors hover:text-white"
+                    style={{ color: B.muted, fontFamily: FONT.body }}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
