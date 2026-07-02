@@ -587,6 +587,10 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
 
     const chatBody = (
       <>
+        <AnimatePresence mode="popLayout">
+          {analysisDeckCard}
+        </AnimatePresence>
+
         {/* Messages */}
         <div
           ref={containerRef}
@@ -601,9 +605,6 @@ const TonyChat = forwardRef<TonyChatHandle, TonyChatProps>(
             background: '#3A4042',
           }}
         >
-          <AnimatePresence mode="popLayout">
-            {analysisDeckCard}
-          </AnimatePresence>
           {chat.map((m, i) => {
             if (m.text === '__thinking__') {
               return (
