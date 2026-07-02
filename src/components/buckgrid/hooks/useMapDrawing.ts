@@ -497,6 +497,28 @@ export function useMapDrawing({ containerRef, activeTool, brushSize }: UseMapDra
           properties: { layerType: 'boundary', color, fillOpacity: 0.07, lineWidth: 3 },
           geometry: { type: 'Polygon', coordinates: [[...points, points[0]]] },
         })
+        // Warm the spatial cache the moment the boundary closes, so the FIRST
+        // Tony question doesn't lose the cold-fetch race. Must mirror the chat
+        // route's effBounds math exactly (15% padded ring bbox) — same bounds,
+        // same cache key.
+        try {
+          let w = Infinity, e = -Infinity, s = Infinity, n = -Infinity
+          for (const [lng, lat] of points) {
+            if (lng < w) w = lng
+            if (lng > e) e = lng
+            if (lat < s) s = lat
+            if (lat > n) n = lat
+          }
+          if (isFinite(w) && n > s && e > w) {
+            const padLat = (n - s) * 0.15
+            const padLng = (e - w) * 0.15
+            fetch('/api/spatial', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ bounds: { north: n + padLat, south: s - padLat, east: e + padLng, west: w - padLng } }),
+            }).catch(() => {}) // best-effort warmup — Tony works without it, just slower
+          }
+        } catch { /* never let a warmup break drawing */ }
         reset()
         refreshDrawn()
       }

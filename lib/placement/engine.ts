@@ -58,6 +58,10 @@ export interface PlacementCandidate {
   coversBedding?: string
   /** For access routes: id of the stand this route serves */
   servesStand?: string
+  /** For stands: engine-computed hunt wind (compass, wind FROM direction).
+   *  This is geometry, not LLM opinion — the API layer forces it into
+   *  wind_direction so wind calls can never flip-flop between turns. */
+  huntWind?: string
 }
 
 export interface PlacementResult {
@@ -66,6 +70,8 @@ export interface PlacementResult {
   promptBlock: string
   windFromDeg: number | null
   gridInfo: { rows: number; cols: number; cellM: number; insideCells: number; acres: number }
+  /** Honest constraints the LLM must relay (no viable bedding, unreachable stands, …) */
+  notes: string[]
 }
 
 /** A confirmed ground-truth feature the hunter drew — seeded as top-priority truth. */
@@ -533,17 +539,30 @@ export function generatePlacements(opts: {
     cl.waterDistM > WATER_BUFFER_M &&
     cl.buildingDistM > BUILDING_BUFFER_M
 
+  // Prevailing wind is kept ONLY as prompt context for Tony (regional flavor).
+  // It never drives placement — wind is a per-hunt decision the owner makes.
   const windFromDeg = huntingWindFromDeg(spatial)
-  // Unit vector of scent travel (direction wind blows TOWARD)
-  const windTravel: [number, number] | null = windFromDeg != null
-    ? [Math.sin(((windFromDeg + 180) * Math.PI) / 180), Math.cos(((windFromDeg + 180) * Math.PI) / 180)]
-    : null
 
   const parcelCenter: LngLat = [(west + east) / 2, (south + north) / 2]
   const halfW = (east - west) / 2
   const halfH = (north - south) / 2
   const compass = (pt: LngLat) => compassLabel(pt, parcelCenter, halfW, halfH)
   const yd = (m: number) => Math.round(m / 0.9144)
+  // Road-distance factor text — silent when no road exists within the fetch
+  // radius (Infinity), instead of leaking "Infinityyd" into user-facing text.
+  const roadFactor = (m: number): string[] => (isFinite(m) ? [`${yd(m)}yd from nearest road`] : [])
+  // Distance from a point to a candidate's grown polygon EDGE (0 if inside).
+  // Bedding rules are about the edge of the beds, not the centroid — measuring
+  // center-to-center overstated stand clearances by the bedding radius.
+  const distToCandidateEdgeM = (pt: LngLat, cd: PlacementCandidate): number => {
+    const ring = cd.polygon?.[0]
+    if (ring && ring.length >= 2) {
+      const r = ring as unknown as LngLat[]
+      if (pointInRing(pt, r)) return 0
+      return distPointToPolylineM(pt, r, scale)
+    }
+    return haversineM(pt, [cd.center.lng, cd.center.lat])
+  }
 
   // Aspect preference: south-facing bonus late season (thermal bedding),
   // north-facing bonus early season (cool-weather bedding)
@@ -597,6 +616,11 @@ export function generatePlacements(opts: {
   }
 
   const candidates: PlacementCandidate[] = []
+  // Grid cells belonging to each grown zone — the access router treats bedding/
+  // sanctuary cells as walls and plot cells as heavy penalties, and edge-distance
+  // math needs the real footprints.
+  const zoneCells = new Map<string, Set<number>>()
+  const engineNotes: string[] = []
 
   // ── FOOD PLOTS: open ground, gentle slope, sun, near cover edge ─────────────
   {
@@ -627,11 +651,13 @@ export function generatePlacements(opts: {
       const factors = [
         p.cell.cover === 'open' ? 'open ground — land-cover verified (ESA WorldCover)' : 'open ground (unclassified — verify on satellite)',
         `${p.cell.slopeDeg.toFixed(0)}° slope`,
-        `${yd(p.cell.roadDistM)}yd from nearest road`,
+        ...roadFactor(p.cell.roadDistM),
       ]
       if (p.cell.distToCoverM <= cellM * 2) factors.push('on a timber/cover edge')
+      const id = `fp${i + 1}`
+      zoneCells.set(id, cluster)
       candidates.push({
-        id: `fp${i + 1}`, type: 'food_plot',
+        id, type: 'food_plot',
         center: { lat: p.cell.center[1], lng: p.cell.center[0] },
         polygon, acres, score: Math.round(Math.max(0, Math.min(100, p.score))),
         compass: compass(p.cell.center), factors,
@@ -664,17 +690,23 @@ export function generatePlacements(opts: {
       const polygon = clusterToPolygon(cluster)
       if (!polygon) return
       const acres = Math.round(cluster.size * cellAcres * 10) / 10
+      // Viability floor: a grid-noise scrap of cover is not a bedding area.
+      // Emitting one anchors the entire plan (stands, staging, access) to
+      // fiction — better to emit nothing and let the no-bedding note lead.
+      if (acres < 0.8) return
       const coverName = p.cell.cover === 'scrub' ? 'brushy early-successional cover' : p.cell.cover === 'wetland' ? 'wetland thermal cover' : 'timber'
       const factors = [
         `thick ${coverName}`,
-        `${yd(p.cell.roadDistM)}yd from nearest road`,
+        ...roadFactor(p.cell.roadDistM),
       ]
       if (hasElevation && p.cell.slopeDeg > 3) {
         factors.push(`${degreesToCompass8(p.cell.aspectDeg)}-facing slope (${p.cell.slopeDeg.toFixed(0)}°)`)
       }
       if (p.cell.bench) factors.push('on a flat bench — sheltered bedding terrace')
+      const id = `bd${i + 1}`
+      zoneCells.set(id, cluster)
       candidates.push({
-        id: `bd${i + 1}`, type: 'bedding',
+        id, type: 'bedding',
         center: { lat: p.cell.center[1], lng: p.cell.center[0] },
         polygon, acres, score: Math.round(Math.max(0, Math.min(100, p.score))),
         compass: compass(p.cell.center), factors,
@@ -700,12 +732,23 @@ export function generatePlacements(opts: {
     const polygon = ring ? [ring.map(p => [p[0], p[1]])] : undefined
     const acres = ring ? Math.round(ringAcresM(ring) * 10) / 10 : undefined
     const prefix = obs.type === 'bedding' ? 'ubd' : obs.type === 'food_plot' ? 'ufp' : obs.type === 'water' ? 'uwt' : 'ust'
+    const obsId = `${prefix}${++obsN}`
     candidates.push({
-      id: `${prefix}${++obsN}`, type: obs.type,
+      id: obsId, type: obs.type,
       center: { lat: obs.center[1], lng: obs.center[0] },
       polygon, acres, score: 95, compass: compass(obs.center),
       factors: ['confirmed by you on the ground — the plan is anchored to this'],
     })
+    // The owner's real bedding/plots are just as off-limits to access routes
+    // as engine-derived ones — register their footprint cells.
+    if (obs.type === 'bedding' || obs.type === 'food_plot') {
+      const cellSet = new Set<number>()
+      for (const cl of insideCells) {
+        const hit = ring ? pointInRing(cl.center, ring) : haversineM(cl.center, obs.center) < 55
+        if (hit) cellSet.add(cl.idx)
+      }
+      if (cellSet.size > 0) zoneCells.set(obsId, cellSet)
+    }
   }
   // Drop derived bedding/food guesses within 60 m of a same-type confirmed observation
   if (obsN > 0) {
@@ -722,6 +765,14 @@ export function generatePlacements(opts: {
 
   const beddingCandidates = candidates.filter(cd => cd.type === 'bedding')
   const foodCandidates = candidates.filter(cd => cd.type === 'food_plot')
+
+  if (beddingCandidates.length === 0) {
+    engineNotes.push(
+      'NO VIABLE BEDDING COVER on this parcel — no contiguous cover block reaches even ~1 acre. ' +
+      'Security cover is the limiting factor here. Say that plainly: deer are not bedding on this ground today, ' +
+      'and the #1 move is establishing bedding (switchgrass/native-grass blocks on the best aspect, or hinge-cut TSI in any timber) before food or stands matter.'
+    )
+  }
 
   // ── SANCTUARY: largest remote cover block ───────────────────────────────────
   {
@@ -754,22 +805,32 @@ export function generatePlacements(opts: {
       if (polygon) {
         const acres = Math.round(cluster.size * cellAcres * 10) / 10
         const seed = blockCells[0]
+        const factors = [
+          `core of the largest cover block on the parcel (~${Math.round(bestBlock.size * cellAcres)} ac total)`,
+          ...(isFinite(seed.roadDistM) ? [`${yd(seed.roadDistM)}yd from nearest road — never-enter ground`] : ['never-enter ground']),
+        ]
+        // KB: 5 contiguous acres is the minimum a mature buck actually trusts.
+        // Below that, sell it honestly as a small refuge, not a sanctuary.
+        if (acres < 5) {
+          factors.push(`small refuge (~${acres} ac) — under the 5 ac a mature buck really needs; it only works if nobody EVER steps in it, and growing it should be a goal`)
+        }
+        zoneCells.set('sn1', cluster)
         candidates.push({
           id: 'sn1', type: 'sanctuary',
           center: { lat: seed.center[1], lng: seed.center[0] },
           polygon, acres, score: 80,
           compass: compass(seed.center),
-          factors: [
-            `core of the largest cover block on the parcel (~${Math.round(bestBlock.size * cellAcres)} ac total)`,
-            `${yd(seed.roadDistM)}yd from nearest road — never-enter ground`,
-          ],
+          factors,
         })
       }
     }
   }
 
-  // ── STAND SITES: funnels/edges/saddles, downwind of bedding, near food ──────
+  // ── STAND SITES: funnels/edges/saddles, wind-safe against EVERY bedding ─────
   {
+    // Pressure math: more stands than the ground can absorb burns a property
+    // out (KB: 4-5 stands max on 200 ac). Scale count to acreage.
+    const maxStands = parcelAcres < 25 ? 2 : parcelAcres < 90 ? 3 : 4
     const scored = insideCells
       .filter(cl => cl.inside && placeable(cl) && cl.waterDistM > WATER_BUFFER_M)
       .map(cell => {
@@ -779,30 +840,24 @@ export function generatePlacements(opts: {
         if (cell.edge) score += 14
         if (cell.bench) score += 12
         if (cell.distToCoverM <= cellM) score += 6 // huntable from cover
-        // Relationship to bedding: ideal 80–200yd, downwind
+        // Bedding relationships — EDGE distance to the nearest bedding area.
+        // Deliberately NO wind logic here: stands are placed on terrain and
+        // cover merit. Wind is a per-hunt decision, not a placement input —
+        // baking a historical prevailing wind into permanent stand locations
+        // is false precision (the owner hunts whatever wind the day gives).
         let nearestBed: PlacementCandidate | null = null
         let bedD = Infinity
         for (const bd of beddingCandidates) {
-          const d = haversineM(cell.center, [bd.center.lng, bd.center.lat])
+          const d = distToCandidateEdgeM(cell.center, bd)
           if (d < bedD) {
             bedD = d
             nearestBed = bd
           }
         }
         if (nearestBed) {
-          if (bedD >= 70 && bedD <= 220) score += 14
-          else if (bedD < 50) score -= 16 // too tight — bumps deer
-          if (windTravel) {
-            const dx = (cell.center[0] - nearestBed.center.lng) * scale.mLng
-            const dy = (cell.center[1] - nearestBed.center.lat) * scale.mLat
-            const len = Math.hypot(dx, dy)
-            if (len > 0) {
-              // alignment of bedding→stand vector with scent travel:
-              // stand downwind of bedding means scent blows from bedding toward stand
-              const align = (dx / len) * windTravel[0] + (dy / len) * windTravel[1]
-              score += align * 16
-            }
-          }
+          if (bedD < 27) return { cell, score: -1, nearestBed, bedD } // inside/on the beds — never a stand
+          if (bedD >= 60 && bedD <= 200) score += 14
+          else if (bedD < 45) score -= 20 // very tight — bumps deer
         }
         // Relationship to food: within ~150yd of a plot edge is a kill setup
         for (const fp of foodCandidates) {
@@ -814,7 +869,7 @@ export function generatePlacements(opts: {
         }
         return { cell, score, nearestBed, bedD }
       })
-    const picked = pickTop(scored, 4, Math.max(120, cellM * 4))
+    const picked = pickTop(scored, maxStands, Math.max(120, cellM * 4))
     picked.forEach((p, i) => {
       const s = p as { cell: Cell; score: number; nearestBed: PlacementCandidate | null; bedD: number }
       const factors: string[] = []
@@ -822,19 +877,26 @@ export function generatePlacements(opts: {
       if (s.cell.saddle) factors.push('topographic saddle')
       if (s.cell.bench) factors.push('flat bench on the slope face — deer travel benches like trails')
       if (s.cell.edge) factors.push('cover-to-open edge')
+      // Wind is ADVICE, not a placement rule: the geometric relationship
+      // "wind out of the bedding toward the stand keeps your scent out of the
+      // beds" is true any day the owner chooses to hunt it. No weather data,
+      // no vetoes, no "wait for it" — the owner picks the day.
+      let huntWind: string | undefined
       if (s.nearestBed && isFinite(s.bedD)) {
-        const windNote = windTravel && windFromDeg != null
-          ? ` and downwind-checked against the ${degreesToCompass8(windFromDeg)} prevailing wind`
-          : ''
-        factors.push(`${yd(s.bedD)}yd from bedding ${s.nearestBed.id}${windNote}`)
+        const dx = (s.nearestBed.center.lng - s.cell.center[0]) * scale.mLng
+        const dy = (s.nearestBed.center.lat - s.cell.center[1]) * scale.mLat
+        const windFromBearing = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360
+        huntWind = degreesToCompass8(windFromBearing)
+        factors.push(`${yd(s.bedD)}yd off the ${s.nearestBed.id} bedding edge — a ${huntWind}-ish wind favors this stand (blows your scent away from those beds)`)
       }
-      factors.push(`${yd(s.cell.roadDistM)}yd from nearest road`)
+      factors.push(...roadFactor(s.cell.roadDistM))
       candidates.push({
         id: `st${i + 1}`, type: 'stand_site',
         center: { lat: s.cell.center[1], lng: s.cell.center[0] },
         score: Math.round(Math.max(0, Math.min(100, s.score))),
         compass: compass(s.cell.center), factors,
         coversBedding: s.nearestBed?.id,
+        huntWind,
       })
     })
   }
@@ -865,13 +927,15 @@ export function generatePlacements(opts: {
       const cluster = growCluster(p.cell, cl => placeable(cl) && isOpenCell(cl), 0.4)
       const polygon = clusterToPolygon(cluster)
       if (!polygon) return
+      const id = `kp${i + 1}`
+      zoneCells.set(id, cluster)
       candidates.push({
-        id: `kp${i + 1}`, type: 'kill_plot',
+        id, type: 'kill_plot',
         center: { lat: p.cell.center[1], lng: p.cell.center[0] },
         polygon, acres: Math.round(cluster.size * cellAcres * 10) / 10,
         score: Math.round(Math.max(0, Math.min(100, p.score))),
         compass: compass(p.cell.center),
-        factors: ['small open pocket against cover', `${yd(p.cell.roadDistM)}yd from nearest road`],
+        factors: ['small open pocket against cover', ...roadFactor(p.cell.roadDistM)],
       })
     })
   }
@@ -902,6 +966,9 @@ export function generatePlacements(opts: {
       const cluster = growCluster(p.cell, placeableCover, 1)
       const polygon = clusterToPolygon(cluster)
       if (!polygon) return
+      // A staging area smaller than ~0.4 ac is grid noise, not a place bucks
+      // actually hold before entering food.
+      if (cluster.size * cellAcres < 0.4) return
       candidates.push({
         id: `sg${i + 1}`, type: 'staging_area',
         center: { lat: p.cell.center[1], lng: p.cell.center[0] },
@@ -931,16 +998,40 @@ export function generatePlacements(opts: {
     }
   }
 
-  // ── ACCESS ROUTES: Dijkstra from best entry cell to each stand, avoiding bedding ──
+  // ── ACCESS ROUTES: Dijkstra from best entry cell to each stand ──────────────
+  // Bedding and sanctuary are WALLS (the KB rule is "NEVER cross bedding", so
+  // it's not a path cost, it's forbidden ground — plus a one-cell scent buffer).
+  // Food plots are heavily penalized: you don't walk through your own plot.
   {
-    const beddingPenaltyCells = new Set<number>()
-    for (const bd of beddingCandidates) {
-      for (const cl of insideCells) {
-        if (haversineM(cl.center, [bd.center.lng, bd.center.lat]) < 90) beddingPenaltyCells.add(cl.idx)
+    const forbidden = new Set<number>()
+    const plotCells = new Set<number>()
+    for (const [zid, cellSet] of zoneCells) {
+      const cd = candidates.find(c => c.id === zid)
+      if (!cd) continue
+      if (cd.type === 'bedding' || cd.type === 'sanctuary') {
+        for (const idx of cellSet) {
+          forbidden.add(idx)
+          const cl = cells[idx]
+          for (const n of [cellAt(cl.r + 1, cl.c), cellAt(cl.r - 1, cl.c), cellAt(cl.r, cl.c + 1), cellAt(cl.r, cl.c - 1)]) {
+            if (n) forbidden.add(n.idx)
+          }
+        }
+      } else if (cd.type === 'food_plot' || cd.type === 'kill_plot') {
+        // Dilate by one cell: the drawn route line and the smoothed plot
+        // polygon both round corners, so a route hugging a plot's exact edge
+        // still renders as "walking through the plot".
+        for (const idx of cellSet) {
+          plotCells.add(idx)
+          const cl = cells[idx]
+          for (const n of [cellAt(cl.r + 1, cl.c), cellAt(cl.r - 1, cl.c), cellAt(cl.r, cl.c + 1), cellAt(cl.r, cl.c - 1)]) {
+            if (n) plotCells.add(n.idx)
+          }
+        }
       }
     }
     // Entry cells: inside cells on the parcel edge (an adjacent cell is outside), closest to a road
     const entryCells = insideCells.filter(cl =>
+      !forbidden.has(cl.idx) &&
       [cellAt(cl.r + 1, cl.c), cellAt(cl.r - 1, cl.c), cellAt(cl.r, cl.c + 1), cellAt(cl.r, cl.c - 1)]
         .some(n => !n || !n.inside)
     )
@@ -949,9 +1040,9 @@ export function generatePlacements(opts: {
       const entry = entryCells[0]
 
       const cellCost = (cl: Cell): number => {
-        if (!cl.inside || cl.cover === 'water') return Infinity
+        if (!cl.inside || cl.cover === 'water' || forbidden.has(cl.idx)) return Infinity
         let cost = 1
-        if (beddingPenaltyCells.has(cl.idx)) cost += 12 // never walk through bedding
+        if (plotCells.has(cl.idx)) cost += 30 // never walk through your own plot
         if (cl.cover === 'wetland') cost += 4
         if (isCoverCell(cl)) cost += 1.5 // noisy walking
         return cost
@@ -990,12 +1081,18 @@ export function generatePlacements(opts: {
       standCandidates.slice(0, 2).forEach((st, i) => {
         // Find the cell whose center matches the stand
         const target = insideCells.find(cl => cl.center[1] === st.center.lat && cl.center[0] === st.center.lng)
-        if (!target || !isFinite(dist[target.idx])) return
+        if (!target) return
+        if (!isFinite(dist[target.idx])) {
+          engineNotes.push(`No clean walking access to ${st.id} without crossing bedding/sanctuary — that stand needs a new trail cut, or hunt it only on a perfect wind with a long way around.`)
+          return
+        }
         const path: LngLat[] = []
+        let crossesPlot = false
         let cur = target.idx
         let guard = cells.length
         while (cur !== -1 && guard-- > 0) {
           path.push(cells[cur].center)
+          if (plotCells.has(cur)) crossesPlot = true
           if (cur === entry.idx) break
           cur = prev[cur]
         }
@@ -1003,15 +1100,32 @@ export function generatePlacements(opts: {
         path.reverse()
         // light simplification: keep every other point, always keep endpoints
         const line = path.filter((_, j) => j === 0 || j === path.length - 1 || j % 2 === 0)
+        // Honest clearance: measured distance from the route to the nearest
+        // bedding EDGE — stated only because it was actually computed.
+        let minBedM = Infinity
+        for (const bd of beddingCandidates) {
+          for (const pt of path) {
+            const d = distToCandidateEdgeM(pt, bd)
+            if (d < minBedM) minBedM = d
+          }
+        }
+        const factors = [
+          `entry from the ${compass(entry.center)} parcel edge${isFinite(entry.roadDistM) ? ' (closest road access)' : ''}`,
+        ]
+        if (beddingCandidates.length > 0 && isFinite(minBedM)) {
+          factors.push(minBedM >= 73
+            ? `stays ${yd(minBedM)}yd off the nearest bedding edge`
+            : `tight at one point — only ${yd(minBedM)}yd off bedding; walk it silent, and only when the wind blows your scent away from the beds`)
+        }
+        if (crossesPlot) {
+          factors.push('no route avoids the food plot entirely — cross it midday only, never at first or last light')
+        }
         candidates.push({
           id: `ar${i + 1}`, type: 'access_route',
           center: { lat: entry.center[1], lng: entry.center[0] },
           line: line.map(p => [p[0], p[1]]),
           score: 70, compass: compass(entry.center),
-          factors: [
-            `entry from the ${compass(entry.center)} parcel edge (closest road access)`,
-            `routed to avoid bedding by 90+ yds`,
-          ],
+          factors,
           servesStand: st.id,
         })
       })
@@ -1037,6 +1151,11 @@ export function generatePlacements(opts: {
     lines.push(`${cd.id} — ${typeLabel[cd.type]} (${cd.compass}${size}, engine score ${cd.score}/100): ${cd.factors.join('; ')}`)
   }
   lines.push('')
+  if (engineNotes.length > 0) {
+    lines.push('=== ENGINE NOTES (honest constraints — relay these to the owner, do not soften them) ===')
+    for (const n of engineNotes) lines.push(`- ${n}`)
+    lines.push('')
+  }
   lines.push('=== END CANDIDATES ===')
 
   return {
@@ -1044,6 +1163,7 @@ export function generatePlacements(opts: {
     promptBlock: lines.join('\n'),
     windFromDeg,
     gridInfo: { rows, cols, cellM: Math.round(cellM), insideCells: insideCells.length, acres: Math.round(parcelAcres) },
+    notes: engineNotes,
   }
 }
 

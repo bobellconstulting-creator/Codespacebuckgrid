@@ -6,6 +6,7 @@ import { fetchNlcdPoint } from '../../../lib/nlcd'
 import type { PlacementCandidate, PlacementResult, PlacementObservation } from '../../../lib/placement/engine'
 import { generatePlacements, candidateGeometry } from '../../../lib/placement/engine'
 import { parseTonyV2 } from '../../../lib/tonyJson'
+import { premiseCheck, type VerifiedGround } from '../../../lib/premise-check'
 import { get as httpsGet } from 'node:https'
 
 // Raw HTTPS download — bypasses Next's patched fetch, whose internal response
@@ -588,7 +589,11 @@ TERRAIN READING RULES:
 
 ${placement ? placement.promptBlock + '\n\n' : ''}User says: "${message}"
 
-${placement ? `OUTPUT FORMAT (GROUNDED MODE): The placement engine above already computed WHERE everything goes — real coordinates snapped to verified terrain inside the boundary. Your job is to SELECT, RANK, and EXPLAIN. Return JSON with 'message', 'zones', and 'stand_sites' arrays. Every zone and stand MUST reference one of the candidate ids above via "candidate_id". NEVER invent a position, NEVER output lat/lng, NEVER use a candidate id that is not listed above. Pick the 4-8 strongest zones and 2-4 stands for this property and season; skip weak candidates. You MUST return at least one zone or stand whenever candidates are listed above — selecting nothing leaves the map blank and is a failure. Candidate ids that start with "u" are the OWNER'S OWN existing features (already drawn on the map): reference them in your reasoning but do NOT select them as zones/stands — draw only your NEW recommendations (fp/kp/bd/st/sn/sg/ar/wt ids). In each description, explain WHY that computed spot works (wind, terrain, cover, distances from the candidate's evidence) in hunter language.
+${placement ? `OUTPUT FORMAT (GROUNDED MODE): The placement engine above already computed WHERE everything goes — real coordinates snapped to verified terrain inside the boundary. Your job is to SELECT, RANK, and EXPLAIN. Return JSON with 'message', 'zones', and 'stand_sites' arrays. Every zone and stand MUST reference one of the candidate ids above via "candidate_id". NEVER invent a position, NEVER output lat/lng, NEVER use a candidate id that is not listed above. Pick the 4-8 strongest zones and 2-4 stands for this property and season; skip weak candidates. You MUST return at least one zone or stand whenever candidates are listed above — selecting nothing leaves the map blank and is a failure. Candidate ids that start with "u" are the OWNER'S OWN existing features (already drawn on the map): reference them in your reasoning but do NOT select them as zones/stands — draw only your NEW recommendations (fp/kp/bd/st/sn/sg/ar/wt ids). In each description, explain WHY that computed spot works (terrain, cover, distances from the candidate's evidence) in hunter language.
+
+WIND RULE: wind guidance in a stand's evidence is geometric ADVICE ("a NE-ish wind favors this stand because the beds sit NE of it"). Pass it on as advice about which winds favor the setup — the owner hunts whatever wind the day gives. NEVER present a stand as huntable on only one wind, never grade a wind by "prevailing" statistics, and never invent a wind call that is not in the candidate's evidence.
+
+ENGINE NOTES RULE: if an ENGINE NOTES section appears above, open your message by relaying those constraints in plain hunter language — do not soften them, do not skip them.
 
 Exact JSON format:
 {
@@ -836,6 +841,9 @@ function groundResponse(
     if (cd.type === 'stand_site') {
       // A stand picked in the zones array — keep it as a zone point
     }
+    // If the id fell back to a different candidate, Tony's prose was written
+    // for ANOTHER spot — use the engine's evidence so text matches the map.
+    const substituted = cd.id !== z.candidate_id
     groundedZones.push({
       ...z,
       id: cd.id,
@@ -846,7 +854,7 @@ function groundResponse(
       candidate_id: cd.id,
       geometry: candidateGeometry(cd),
       grounded: true,
-      description: z.description || cd.factors.join('; '),
+      description: substituted ? cd.factors.join('; ') : (z.description || cd.factors.join('; ')),
     })
   }
 
@@ -854,14 +862,44 @@ function groundResponse(
   for (const s of stands) {
     const cd = claim(s.candidate_id, 'stand_site')
     if (!cd) continue
+    const substituted = cd.id !== s.candidate_id
     groundedStands.push({
       ...s,
       id: cd.id,
       relative_position: normalizePosition(cd.compass),
+      // Wind guidance is engine geometry, never LLM opinion — this is what
+      // stops wind calls flip-flopping between turns for the same stand.
+      wind_direction: cd.huntWind ?? (substituted ? '' : s.wind_direction),
       candidate_id: cd.id,
       geometry: candidateGeometry(cd),
       grounded: true,
-      description: s.description || cd.factors.join('; '),
+      description: substituted ? cd.factors.join('; ') : (s.description || cd.factors.join('; ')),
+    })
+  }
+
+  // Auto-include the bedding each selected stand covers — a stand whose
+  // evidence says "89yd off the bd2 edge" with no bd2 on the map reads as a
+  // dangling reference the owner can't check.
+  for (const st of groundedStands) {
+    const stCd = st.candidate_id ? byId.get(st.candidate_id) : undefined
+    const bedId = stCd?.coversBedding
+    if (!bedId || used.has(bedId) || groundedZones.length >= 12) continue
+    const bed = placement.candidates.find(cd => cd.id === bedId && !cd.id.startsWith('u'))
+    if (!bed) continue // owner's own bedding is already on the map
+    used.add(bed.id)
+    groundedZones.push({
+      id: bed.id,
+      name: defaultZoneName(bed),
+      type: 'bedding',
+      relative_position: normalizePosition(bed.compass),
+      relative_size: acresToSize(bed.acres),
+      description: bed.factors.join('; '),
+      confidence: scoreToConfidence(bed.score),
+      season: 'all',
+      acres: bed.acres,
+      candidate_id: bed.id,
+      geometry: candidateGeometry(bed),
+      grounded: true,
     })
   }
 
@@ -907,7 +945,7 @@ function deterministicFallback(placement: PlacementResult): {
         id: cd.id,
         name: defaultZoneName(cd),
         relative_position: normalizePosition(cd.compass),
-        wind_direction: placement.windFromDeg != null ? `${Math.round(placement.windFromDeg)}°` : '',
+        wind_direction: cd.huntWind ?? '',
         rating: Math.max(1, Math.min(10, Math.round(cd.score / 10))),
         description: cd.factors.join('; '),
         candidate_id: cd.id,
@@ -994,7 +1032,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Too many requests', reply: 'Slow down — Tony can only handle so many questions per minute. Try again shortly.' }, { status: 429 })
     }
     if (!freeTierOk) {
-      return NextResponse.json({ error: 'Free tier limit reached', reply: "You've used your 3 free Tony analyses for today. Upgrade to Pro for unlimited access.", paywallHit: true }, { status: 402 })
+      return NextResponse.json({ error: 'Free tier limit reached', reply: `You've used your ${FREE_TIER_DAILY_LIMIT} free Tony analyses for today. Upgrade to Pro for unlimited access.`, paywallHit: true }, { status: 402 })
     }
 
     const googleKey = process.env.GOOGLE_AI_KEY || process.env.GOOGLE_API_KEY
@@ -1062,7 +1100,13 @@ export async function POST(req: NextRequest) {
       `?bbox=${effBounds.west},${effBounds.south},${effBounds.east},${effBounds.north}` +
       `&bboxSR=4326&imageSR=4326&size=640,480&format=png&f=image`
 
-    const SPATIAL_TIMEOUT_MS = 12_000
+    // Cold parcels take 15-19s to assemble (DEM + WorldCover + OSM + soil +
+    // NWI + CropScape + wind). Racing that against 12s guaranteed the FIRST
+    // analysis of every new property failed. Vercel allows 120s; give the
+    // fetch room and keep the global deadline as the real backstop.
+    // (55s: heavy parcels — e.g. national-forest OSM polygons — measured >45s
+    // cold. The boundary-draw prefetch usually makes this moot.)
+    const SPATIAL_TIMEOUT_MS = 55_000
 
     const [imgResult, spatialResult] = await Promise.allSettled([
       fetchBinary(esriUrl, ESRI_TIMEOUT_MS),
@@ -1145,7 +1189,7 @@ export async function POST(req: NextRequest) {
           }).filter(m => m.text)
         : undefined
 
-      const tonyPrompt = buildTonyPrompt(
+      let tonyPrompt = buildTonyPrompt(
         trimmedMsg, effBounds, zoom ?? 14, safeFeatures,
         typeof season === 'string' ? season : '',
         safePropertyName,
@@ -1155,6 +1199,53 @@ export async function POST(req: NextRequest) {
         safeChatHistory,
         placement,
       )
+
+      // ── Premise check: block feature hallucination ─────────────────────────
+      // Cross-check every terrain feature the user mentions against verified
+      // layers; unverifiable claims get a hard "do not confirm this" block.
+      if (resolvedSpatial) {
+        const cLat = (effBounds.north + effBounds.south) / 2
+        const cLng = (effBounds.east + effBounds.west) / 2
+        const quad = (lat: number, lng: number): string => {
+          const latFrac = (lat - cLat) / ((effBounds.north - effBounds.south) / 2 || 1)
+          const lngFrac = (lng - cLng) / ((effBounds.east - effBounds.west) / 2 || 1)
+          if (Math.abs(latFrac) < 0.25 && Math.abs(lngFrac) < 0.25) return 'center'
+          const ns = latFrac > 0 ? 'north' : 'south'
+          const ew = lngFrac > 0 ? 'east' : 'west'
+          if (Math.abs(latFrac) > Math.abs(lngFrac) * 1.5) return ns
+          if (Math.abs(lngFrac) > Math.abs(latFrac) * 1.5) return ew
+          return `${ns}${ew}`
+        }
+        const ground: VerifiedGround = {
+          water: [], streams: [], wetland: [], forest: [], scrub: [],
+          buildings: [], roads: [], farmland: [],
+          userDrawn: safeFeatures.map((f: any) => String(f?.properties?.layerType ?? f?.type ?? '')).filter(Boolean),
+        }
+        for (const f of resolvedSpatial.osmFeatures) {
+          const q = quad(f.point[1], f.point[0])
+          if (f.kind === 'water') (f.closed ? ground.water : ground.streams).push(q)
+          else if (f.kind === 'wetland') ground.wetland.push(q)
+          else if (f.kind === 'forest') ground.forest.push(q)
+          else if (f.kind === 'scrub') ground.scrub.push(q)
+          else if (f.kind === 'building') ground.buildings.push(q)
+          else if (f.kind === 'road') ground.roads.push(q)
+          else if (f.kind === 'farmland') ground.farmland.push(q)
+        }
+        for (const s of resolvedSpatial.landCoverSamples ?? []) {
+          const q = quad(s.lat, s.lng)
+          const c = s.landCoverCode
+          if (c === 11) ground.water.push(q)
+          else if (c === 90 || c === 95) ground.wetland.push(q)
+          else if (c === 41 || c === 42 || c === 43) ground.forest.push(q)
+          else if (c === 52) ground.scrub.push(q)
+          else if (c === 81 || c === 82) ground.farmland.push(q)
+        }
+        if (resolvedSpatial.nwiWetlands && resolvedSpatial.nwiWetlands.totalAcres > 0) ground.wetland.push('center')
+        const premiseBlock = premiseCheck(trimmedMsg, ground)
+        if (premiseBlock) {
+          tonyPrompt = tonyPrompt.split('User says:').join(`${premiseBlock}\n\nUser says:`)
+        }
+      }
 
       let usedVision = false
       let usedFallback = false
