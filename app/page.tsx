@@ -1448,9 +1448,13 @@ function Footer() {
         </div>
 
         <div style={{ borderTop: `1px solid ${B.hairlineSoft}` }} className="mt-10 pt-6 flex flex-col md:flex-row items-center justify-between gap-3">
-          <MonoLabel size={9.5} color={B.muted}>
-            © {new Date().getFullYear()} BUCKGRID PRO
-          </MonoLabel>
+          <div className="flex items-center gap-4">
+            <MonoLabel size={9.5} color={B.muted}>
+              © {new Date().getFullYear()} BUCKGRID PRO
+            </MonoLabel>
+            <a href="/privacy" className="text-xs hover:text-white" style={{ color: B.muted }}>Privacy Policy</a>
+            <a href="/terms" className="text-xs hover:text-white" style={{ color: B.muted }}>Terms</a>
+          </div>
           <MonoLabel size={9.5} color={B.muted}>
             POWERED BY <span style={{ color: B.mossLight }}>TONY</span> · BUILT BY NEURADEX AI
           </MonoLabel>
